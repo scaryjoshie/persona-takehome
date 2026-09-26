@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 from pydantic_ai.realtime.openai_live import OpenAILiveModel
 
-from app.agent.deps import AgentEnv
+from app.agent.deps import AgentEnv, Messenger
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
 from app.jev import Jev
@@ -26,7 +26,6 @@ from app.previews import routes as preview_routes
 from app.services import Services
 from app.settings import Settings, get_settings
 from app.text import voice_notes as voice_note_routes
-from app.text.messenger import Messenger
 from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.text.voice_notes import Transcriber

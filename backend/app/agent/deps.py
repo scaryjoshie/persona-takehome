@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from pydantic_ai.models import Model
 
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.text.messenger import Messenger
 from app.users.user import Medium, User
+
+
+class Messenger(Protocol):
+    """How bubbles reach the user's phone: the web socket now; iMessage or Twilio later."""
+
+    async def send(self, phone: str, text: str) -> None: ...
+    async def set_typing(self, phone: str, active: bool) -> None: ...
 
 
 @dataclass(frozen=True)

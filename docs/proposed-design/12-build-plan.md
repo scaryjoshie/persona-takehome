@@ -19,9 +19,9 @@ backend/app/
   events/   payload.py  event.py  decision.py  models.py  service.py
   users/    models.py  user.py (User, Medium)  service.py
   gmail/    events.py
-  text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  messenger.py
+  text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  voice_notes.py
   voice/    events.py  call_state.py (CallEvent, CallState, next_state)  responder.py (VoiceResponder, LiveCall, call_note)  call.py (one call: audio, captions, listener)
-  agent/    agent.py  deps.py  prompts.py + prompts/*.md  context.py  slots.py  events.py  model.py
+  agent/    agent.py  deps.py (incl. Messenger)  prompts.py + prompts/*.md  context.py  slots.py  events.py  model.py
   web/      protocol.py  routes.py  sockets.py  schema.py
 ```
 
