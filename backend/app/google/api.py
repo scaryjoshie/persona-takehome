@@ -165,19 +165,26 @@ def _plain_text(part: dict[str, Any]) -> str:
     return ""
 
 
-async def create_draft(
-    client: httpx.AsyncClient, token: str, *, to: str, subject: str, body: str
+async def save_draft(
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    to: str,
+    subject: str,
+    body: str,
+    draft_id: str | None = None,
 ) -> str:
-    """A draft in their Gmail. Returns the draft id."""
+    """A draft in their Gmail, new or replacing `draft_id`. Returns the draft id."""
     message = EmailMessage()
     message["To"], message["Subject"] = to, subject
     message.set_content(body)
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    response = await client.post(
-        f"{GMAIL}/drafts",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"message": {"raw": raw}},
-    )
+    url, payload = f"{GMAIL}/drafts", {"message": {"raw": raw}}
+    auth = {"Authorization": f"Bearer {token}"}
+    if draft_id:
+        response = await client.put(f"{url}/{draft_id}", headers=auth, json=payload)
+    else:
+        response = await client.post(url, headers=auth, json=payload)
     response.raise_for_status()
     return response.json()["id"]
 

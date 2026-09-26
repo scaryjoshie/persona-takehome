@@ -99,9 +99,11 @@ class Account:
     async def read(self, message_id: str) -> str:
         return await api.read(self.google.client, await self._token(), message_id)
 
-    async def draft(self, *, to: str, subject: str, body: str) -> str:
+    async def draft(self, *, to: str, subject: str, body: str, draft_id: str | None = None) -> str:
         token = await self._token()
-        return await api.create_draft(self.google.client, token, to=to, subject=subject, body=body)
+        return await api.save_draft(
+            self.google.client, token, to=to, subject=subject, body=body, draft_id=draft_id
+        )
 
     async def send(self, draft_id: str) -> None:
         await api.send_draft(self.google.client, await self._token(), draft_id)

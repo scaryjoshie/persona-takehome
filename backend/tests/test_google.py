@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 from cryptography.fernet import Fernet
 from pydantic_ai.messages import ToolCallPart
 
@@ -13,10 +14,12 @@ from app.agent.agent import agent
 from app.agent.deps import AgentEnv, Deps
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
+from app.google import drafts
 from app.google.accounts import Google
-from app.google.events import GmailEvent, GmailPhase
+from app.google.events import EmailDraft, GmailEvent, GmailPhase
 from app.google.models import GoogleAccountRow
 from app.pipeline import Pipeline
+from app.text.events import UserMessage
 from app.text.reply import Replier
 from app.users.user import User
 from tests.conftest import PHONE, CapturingMessenger
@@ -43,7 +46,7 @@ class FakeGoogle:
             return httpx.Response(
                 200, json={"snippet": "next week", "payload": {"headers": headers}}
             )
-        if path.endswith("/drafts"):
+        if path.endswith("/drafts") or "/drafts/d" in path:
             return httpx.Response(200, json={"id": "d1"})
         if path.endswith("/drafts/send"):
             self.sent.append(json.loads(request.content)["id"])
@@ -91,11 +94,39 @@ async def test_search_draft_send_and_schedule(
         google,
         [ToolCallPart("search_email", {"query": "from:maria"})],
         [ToolCallPart("draft_email", draft)],
-        [ToolCallPart("send_draft", {"draft_id": "d1"})],
         [ToolCallPart("create_event", {"title": "Dentist", "start": "2026-10-02 15:00"})],
     )
-    assert fake.sent == ["d1"] and fake.events == ["Dentist"]
-    assert fake.calls.count("POST /token") == 1  # the access token is reused
+    card = [e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, EmailDraft)]
+    assert len(card) == 1 and card[0].gmail_id == "d1" and not card[0].missing
+    assert fake.events == ["Dentist"] and fake.calls.count("POST /token") == 1  # token reused
+
+    ref = card[0].ref
+    await reply(pipeline, messenger, google, [ToolCallPart("send_draft", {"ref": ref})])
+    assert fake.sent == []  # they haven't answered since seeing the card
+    yes = UserMessage(text="yes send it")
+    await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, yes, route=False)
+    await reply(pipeline, messenger, google, [ToolCallPart("send_draft", {"ref": ref})])
+    await reply(pipeline, messenger, google, [ToolCallPart("send_draft", {"ref": ref})])
+    assert fake.sent == ["d1"]  # once, by the stored draft's id
+
+
+async def test_editing_a_draft_updates_the_same_one_and_gaps_block_sending(
+    db: SessionFactory, pipeline: Pipeline
+) -> None:
+    fake = FakeGoogle()
+    google = await connected(db, pipeline, fake)
+    account = await google.account(PHONE, (await pipeline.user(PHONE)).slots)
+    assert account is not None
+    first = await drafts.save(pipeline, PHONE, account, ref=None, to="", subject="hi", body="yo")
+    assert first.missing == ["to"]
+    with pytest.raises(ValueError, match="missing"):
+        await drafts.send(pipeline, PHONE, account, first.ref, need_reply=False)
+    fixed = await drafts.save(
+        pipeline, PHONE, account, ref=first.ref, to="a@b.c", subject="hi", body="yo"
+    )
+    assert fixed.ref == first.ref and "PUT /gmail/v1/users/me/drafts/d1" in fake.calls
+    await drafts.send(pipeline, PHONE, account, first.ref, need_reply=False)  # the Send button
+    assert fake.sent == ["d1"]
 
 
 async def test_the_tools_appear_only_once_google_is_connected(
