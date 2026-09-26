@@ -11,7 +11,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from app.calls.events import CallEvent, CallTransition, Initiator
+from app.voice.call_events import CallEvent, CallTransition, Initiator
 
 
 class CallPhase(StrEnum):

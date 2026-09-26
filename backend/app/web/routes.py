@@ -1,22 +1,21 @@
-"""HTTP and WebSocket endpoints for the browser. Thin: every change goes through the pipeline."""
+"""The browser's endpoints: start a session, and the main socket. Every change goes
+through the pipeline; this file only turns requests into events."""
 
 from __future__ import annotations
 
 import contextlib
 import logging
 import time
-from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
-from app.calls.events import CallEvent, CallTransition, Initiator
-from app.calls.state import CallPhase
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
+from app.services import ServicesDep
 from app.text.events import Typing, UserMessage
-from app.voice.responder import VoiceResponder
+from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.web.protocol import (
     CLIENT_MESSAGE,
     CallAction,
@@ -30,112 +29,81 @@ from app.web.protocol import (
     Snapshot,
     WireEvent,
 )
-from app.web.sockets import Sockets
 
 log = logging.getLogger(__name__)
+router = APIRouter()
 
-STATE_KINDS = {"slot_changed", "call"}  # events after which the browser needs fresh state
+STATE_KINDS = {"slot_changed", "call", "gmail", "graduated"}  # the browser needs fresh state
 
 
 class SessionRequest(BaseModel):
     phone: str
 
 
-CallRunner = Callable[[WebSocket, str], Awaitable[None]]
+@router.post("/api/session")
+async def session(body: SessionRequest, svc: ServicesDep) -> Snapshot:
+    return await snapshot(svc.pipeline, normalize(body.phone))
 
-AUDIO_BUSY = 4409  # a call is already running for this user (another tab)
-AUDIO_NO_CALL = 4400  # no call is being connected; send accept or start first
+
+@router.websocket("/ws")
+async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
+    phone, pipeline = normalize(phone), svc.pipeline
+    await websocket.accept()
+    svc.sockets.add(phone, websocket)
+
+    async def send(message: BaseModel) -> None:
+        with contextlib.suppress(Exception):  # this socket closed; its finally cleans up
+            await websocket.send_text(message.model_dump_json())
+
+    async def on_event(event: Event) -> None:
+        # Each socket has its own subscription and sends only to itself.
+        await send(EventMessage(event=WireEvent.of(event)))
+        if event.kind in STATE_KINDS:
+            user = await pipeline.user(phone)
+            await send(SlotsMessage(slots=user.slots))
+            await send(CallMessage(call=user.call))
+
+    unsubscribe = pipeline.subscribe(phone, on_event)
+    typing_since: float | None = None
+    try:
+        await send(await snapshot(pipeline, phone))
+        while True:
+            try:
+                message = CLIENT_MESSAGE.validate_json(await websocket.receive_text())
+            except ValidationError as exc:
+                log.info("%s: bad message %s", phone, exc.errors()[:1])
+                continue
+            match message:
+                case SendMessage(text=text):
+                    typing_since = None
+                    await pipeline.submit(phone, Origin.USER, Channel.TEXT, UserMessage(text=text))
+                case SetTyping(active=active):
+                    now = time.monotonic()
+                    typing_since = (typing_since or now) if active else None
+                    typing = Typing(
+                        active=active, seconds=now - typing_since if typing_since else 0
+                    )
+                    await pipeline.submit(phone, Origin.USER, Channel.TEXT, typing)
+                case CallCommand():
+                    await pipeline.submit(phone, Origin.USER, Channel.SYSTEM, call_event(message))
+                case Reset():
+                    await pipeline.reset(phone)
+                    await send(await snapshot(pipeline, phone))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        unsubscribe()
+        svc.sockets.remove(phone, websocket)
 
 
-def make_router(
-    pipeline: Pipeline, sockets: Sockets, run_call: CallRunner, voice: VoiceResponder
-) -> APIRouter:
-    router = APIRouter()
-
-    async def snapshot(phone: str) -> Snapshot:
-        user = await pipeline.user(phone)
-        history = await pipeline.history(phone)
-        return Snapshot(
-            events=[WireEvent.of(e) for e in history],
-            slots=user.slots,
-            call=user.call,
-            floor=user.floor,
-        )
-
-    @router.post("/api/session")
-    async def session(body: SessionRequest) -> Snapshot:
-        return await snapshot(normalize(body.phone))
-
-    @router.websocket("/ws")
-    async def ws(websocket: WebSocket, phone: str) -> None:
-        phone = normalize(phone)
-        await websocket.accept()
-        sockets.add(phone, websocket)
-
-        async def send(message: BaseModel) -> None:
-            with contextlib.suppress(Exception):  # this socket closed; its finally cleans up
-                await websocket.send_text(message.model_dump_json())
-
-        async def on_event(event: Event) -> None:
-            # Each socket has its own subscription, so it sends only to itself. (Broadcasting
-            # here sent every event once per open socket.)
-            await send(EventMessage(event=WireEvent.of(event)))
-            if event.kind in STATE_KINDS:
-                user = await pipeline.user(phone)
-                await send(SlotsMessage(slots=user.slots))
-                await send(CallMessage(call=user.call))
-
-        unsubscribe = pipeline.subscribe(phone, on_event)
-        typing_since: float | None = None
-        try:
-            await websocket.send_text((await snapshot(phone)).model_dump_json())
-            while True:
-                raw = await websocket.receive_text()
-                try:
-                    message = CLIENT_MESSAGE.validate_json(raw)
-                except ValidationError as exc:
-                    log.info("%s: bad message %s", phone, exc.errors()[:1])
-                    continue
-                match message:
-                    case SendMessage(text=text):
-                        typing_since = None
-                        await pipeline.submit(
-                            phone, Origin.USER, Channel.TEXT, UserMessage(text=text)
-                        )
-                    case SetTyping(active=active):
-                        now = time.monotonic()
-                        typing_since = (typing_since or now) if active else None
-                        seconds = now - typing_since if typing_since else 0.0
-                        typing = Typing(active=active, seconds=seconds)
-                        await pipeline.submit(phone, Origin.USER, Channel.TEXT, typing)
-                    case CallCommand():
-                        await pipeline.submit(
-                            phone, Origin.USER, Channel.SYSTEM, call_event(message)
-                        )
-                    case Reset():
-                        await pipeline.reset(phone)
-                        await websocket.send_text((await snapshot(phone)).model_dump_json())
-        except WebSocketDisconnect:
-            pass
-        finally:
-            unsubscribe()
-            sockets.remove(phone, websocket)
-
-    @router.websocket("/ws/audio")
-    async def audio(websocket: WebSocket, phone: str) -> None:
-        """The call itself: PCM16 mono 24 kHz both ways. Closing this socket hangs up."""
-        phone = normalize(phone)
-        user = await pipeline.user(phone)
-        if phone in voice.calls:
-            await websocket.close(code=AUDIO_BUSY)
-            return
-        if user.call.phase is not CallPhase.CONNECTING:
-            await websocket.close(code=AUDIO_NO_CALL)
-            return
-        await websocket.accept()
-        await run_call(websocket, phone)
-
-    return router
+async def snapshot(pipeline: Pipeline, phone: str) -> Snapshot:
+    user = await pipeline.user(phone)
+    return Snapshot(
+        events=[WireEvent.of(e) for e in await pipeline.history(phone)],
+        slots=user.slots,
+        call=user.call,
+        floor=user.floor,
+    )
 
 
 def call_event(command: CallCommand) -> CallEvent:

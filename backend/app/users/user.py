@@ -8,11 +8,11 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from app.agent.slots import Slots
-from app.calls.events import Initiator
-from app.calls.state import CallPhase, CallState
 from app.database import aware
 from app.gmail.events import GmailPhase
 from app.users.models import UserRow
+from app.voice.call_events import Initiator
+from app.voice.call_state import CallPhase, CallState
 
 
 class Medium(StrEnum):

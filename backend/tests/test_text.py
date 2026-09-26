@@ -9,7 +9,6 @@ from datetime import timedelta
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from app.calls.events import CallEvent, CallTransition
 from app.events.decision import Decision
 from app.events.payload import Channel, Origin
 from app.main import App
@@ -19,6 +18,7 @@ from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.text.timing import Timing, delay, waiting
 from app.users.user import Medium
+from app.voice.call_events import CallEvent, CallTransition
 from tests.conftest import (
     PHONE,
     CapturingMessenger,

@@ -19,7 +19,10 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.database import create_schema, make_engine, make_sessions
 from app.main import assemble
-from app.web.routes import make_router, normalize
+from app.services import Services
+from app.voice import routes as voice_routes
+from app.web import routes as web_routes
+from app.web.routes import normalize
 from app.web.sockets import Sockets, WebMessenger
 
 
@@ -56,7 +59,15 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         await engine.dispose()
 
     web = FastAPI(lifespan=lifespan)
-    web.include_router(make_router(built.pipeline, sockets, fake_call, built.voice))
+    web.state.services = Services(
+        pipeline=built.pipeline,
+        voice=built.voice,
+        sockets=sockets,
+        run_call=fake_call,
+        app_base_url="http://x",
+    )
+    web.include_router(web_routes.router)
+    web.include_router(voice_routes.router)
     with TestClient(web) as c:
         yield c
 

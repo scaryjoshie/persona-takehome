@@ -13,11 +13,11 @@ from app.agent import prompts
 from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import Graduated, SlotChanged, ToolCall
-from app.calls.events import CallEvent, CallTransition, Initiator
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage
 from app.users.user import Medium
+from app.voice.call_events import CallEvent, CallTransition, Initiator
 
 
 class Bubbles(BaseModel):

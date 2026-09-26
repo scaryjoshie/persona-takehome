@@ -10,12 +10,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from app.agent.slots import Slots
-from app.calls.state import CallState
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.payloads import AnyPayload
 from app.users.user import Medium
 from app.voice.call import TranscriptPartial
+from app.voice.call_state import CallState
 
 
 class Message(BaseModel):

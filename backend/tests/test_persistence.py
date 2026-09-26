@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from app.calls.state import CallPhase, CallState
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.payload import Channel, Origin
@@ -8,6 +7,7 @@ from app.gmail.events import GmailPhase
 from app.payloads import PAYLOADS
 from app.text.events import AgentMessage, UserMessage
 from app.users import service as users
+from app.voice.call_state import CallPhase, CallState
 from tests.conftest import PHONE, FakeClock
 
 

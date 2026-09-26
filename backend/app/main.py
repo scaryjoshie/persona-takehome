@@ -24,16 +24,18 @@ from app.database import SessionFactory, create_schema, make_engine, make_sessio
 from app.jev import Jev
 from app.payloads import PAYLOADS
 from app.pipeline import Pipeline
-from app.previews.routes import make_router as make_preview_router
+from app.previews import routes as preview_routes
+from app.services import Services
 from app.settings import Settings, get_settings
 from app.text.messenger import Messenger
 from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.timers import AsyncioTimers, Clock, Timers
 from app.users.user import Medium
+from app.voice import routes as voice_routes
 from app.voice.call import run_call
 from app.voice.responder import VoiceResponder
-from app.web.routes import make_router
+from app.web import routes as web_routes
 from app.web.sockets import Sockets, WebMessenger
 
 
@@ -104,8 +106,15 @@ def create_app() -> FastAPI:
         yield
 
     web = FastAPI(lifespan=lifespan)
-    web.include_router(make_router(built.pipeline, sockets, start_call, built.voice))
-    web.include_router(make_preview_router(settings.app_base_url))
+    web.state.services = Services(
+        pipeline=built.pipeline,
+        voice=built.voice,
+        sockets=sockets,
+        run_call=start_call,
+        app_base_url=settings.app_base_url,
+    )
+    for router in (web_routes.router, voice_routes.router, preview_routes.router):
+        web.include_router(router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

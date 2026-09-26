@@ -23,8 +23,6 @@ from pydantic import TypeAdapter
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.agent.events import Graduated, SlotChanged
-from app.calls.events import CallEvent
-from app.calls.state import next_state
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -35,6 +33,8 @@ from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
 from app.users.user import Medium, User
+from app.voice.call_events import CallEvent
+from app.voice.call_state import next_state
 
 log = logging.getLogger(__name__)
 

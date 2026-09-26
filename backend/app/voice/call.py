@@ -31,11 +31,11 @@ from app.agent import prompts
 from app.agent.agent import agent
 from app.agent.context import to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
-from app.calls.events import CallEvent, CallTransition
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.users.user import Medium
+from app.voice.call_events import CallEvent, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
 

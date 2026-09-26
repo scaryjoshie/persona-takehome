@@ -30,7 +30,7 @@ class FakeSession:
 async def on_a_call(app: App, voice: VoiceResponder) -> tuple[Pipeline, LiveCall, FakeSession]:
     pipeline = app.pipeline
     pipeline.responders[Medium.VOICE] = voice
-    from app.calls.events import CallEvent, CallTransition
+    from app.voice.call_events import CallEvent, CallTransition
 
     for t in (CallTransition.CONNECTING, CallTransition.CONNECTED):
         await pipeline.submit(PHONE, Origin.CALL, Channel.SYSTEM, CallEvent(transition=t))

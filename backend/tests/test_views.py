@@ -5,13 +5,13 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, User
 from app.agent.context import to_model_messages, trim_history, turns, what_you_know
 from app.agent.events import ToolCall
 from app.agent.slots import Slots
-from app.calls.events import CallEvent, CallTransition
-from app.calls.state import CallPhase, CallState
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Role
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage, UserMessage
+from app.voice.call_events import CallEvent, CallTransition
+from app.voice.call_state import CallPhase, CallState
 from app.voice.events import Speaker, VoiceUtterance
 from tests.conftest import ev
 

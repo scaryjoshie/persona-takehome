@@ -9,9 +9,9 @@ from typing import Any
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.calls.state import CallPhase, CallState
 from app.users.models import UserRow
 from app.users.user import Medium, User
+from app.voice.call_state import CallPhase, CallState
 
 
 async def ensure_user(session: AsyncSession, phone: str, *, now: datetime) -> User:

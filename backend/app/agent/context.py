@@ -5,10 +5,10 @@ from __future__ import annotations
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from app.agent.slots import Slots
-from app.calls.state import CallPhase, CallState
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.gmail.events import GmailPhase
+from app.voice.call_state import CallPhase, CallState
 
 
 def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:

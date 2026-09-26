@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from app.calls.events import CallEvent
 from app.events.event import Event
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import Typing, UserMessage
+from app.voice.call_events import CallEvent
 from app.voice.responder import Note
 
 
