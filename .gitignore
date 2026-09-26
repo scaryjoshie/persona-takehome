@@ -30,3 +30,6 @@ dist/
 # uploaded voice messages
 backend/data/
 *.db.bak*
+
+# eval reports
+backend/evals/out/
