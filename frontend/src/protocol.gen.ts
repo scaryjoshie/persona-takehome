@@ -24,6 +24,7 @@ export type Payload =
   | Reaction
   | ContactCard
   | ContactSaved
+  | CallOptOut
   | VoiceUtterance
   | ToolCall
   | SlotChanged
@@ -90,6 +91,7 @@ export interface WireEvent {
     | Reaction
     | ContactCard
     | ContactSaved
+    | CallOptOut
     | VoiceUtterance
     | ToolCall
     | SlotChanged
@@ -172,6 +174,12 @@ export interface ContactSaved {
   name: string;
 }
 /**
+ * They'd rather not talk on the phone. The agent stops offering a call.
+ */
+export interface CallOptOut {
+  kind: "call_opt_out";
+}
+/**
  * One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.
  */
 export interface VoiceUtterance {
@@ -231,6 +239,7 @@ export interface Slots {
   gmail: GmailPhase | null;
   gmail_email: string | null;
   graduated: boolean;
+  no_calls: boolean;
   contact_name: string | null;
 }
 export interface CallState {
