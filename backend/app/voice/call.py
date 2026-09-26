@@ -163,8 +163,9 @@ def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
     next_step = (
-        "ask what they want to call you, with a light reason (you can't really be "
-        "their assistant without a name)"
+        "ease into naming you: to be a helpful assistant you need a name, so suggest "
+        "coming up with one together, then ask what they want to call you. A short, warm "
+        "lead-in, never a cold question"
         if user.slots.agent_name is None
         else "ask their name"
         if user.slots.user_name is None
