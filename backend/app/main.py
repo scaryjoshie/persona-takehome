@@ -126,9 +126,8 @@ def create_app() -> FastAPI:
         voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
     )
-    routers = (web_routes.router, voice_routes.router, voice_note_routes.router)
-    for router in (*routers, preview_routes.router):
-        web.include_router(router)
+    for module in (web_routes, voice_routes, voice_note_routes, preview_routes):
+        web.include_router(module.router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

@@ -36,13 +36,8 @@ from app.web.protocol import (
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-STATE_KINDS = {
-    "slot_changed",
-    "call",
-    "gmail",
-    "graduated",
-    "contact_saved",
-}  # the browser needs fresh state
+# After these, the browser needs fresh state.
+STATE_KINDS = {"slot_changed", "call", "gmail", "graduated", "contact_saved"}
 
 
 class SessionRequest(BaseModel):
