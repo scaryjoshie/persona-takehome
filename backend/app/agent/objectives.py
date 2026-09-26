@@ -234,11 +234,6 @@ def variants(script: str) -> list[str]:
     return [ln[2:].strip() for ln in script.splitlines() if ln.startswith("- ")] or [script]
 
 
-def pick(script: str, seed: str) -> str:
-    """One variant per seed, stable across runs."""
-    return pick_from(variants(script), seed)
-
-
 def pick_from(options: Sequence[str], seed: str) -> str:
     return options[zlib.crc32(seed.encode()) % len(options)]
 
