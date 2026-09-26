@@ -21,7 +21,6 @@ class VoiceUtterance(Payload):
     speaker: Speaker
     text: str | None
     turn_id: str
-    inferred: bool = True
 
     def turn(self, at: datetime) -> Turn | None:
         if not self.text:

@@ -31,7 +31,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   else if (call.phase === "connecting") callPhase = "calling";
   else if (call.phase === "connected") callPhase = "active";
 
-  const contactName = state.slots.contact_name;
+  const contactName = state.device.contact_name;
 
   return {
     agentName: state.slots.agent_name,

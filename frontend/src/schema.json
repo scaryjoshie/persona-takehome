@@ -2,7 +2,13 @@
   "client_message": {
     "$defs": {
       "CallAction": {
-        "enum": ["start", "accept", "decline", "hangup", "failed"],
+        "enum": [
+          "start",
+          "accept",
+          "decline",
+          "hangup",
+          "failed"
+        ],
         "title": "CallAction",
         "type": "string"
       },
@@ -30,7 +36,11 @@
             "title": "Reason"
           }
         },
-        "required": ["type", "action", "reason"],
+        "required": [
+          "type",
+          "action",
+          "reason"
+        ],
         "title": "CallCommand",
         "type": "object"
       },
@@ -57,7 +67,12 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "target_seq", "emoji", "remove"],
+        "required": [
+          "type",
+          "target_seq",
+          "emoji",
+          "remove"
+        ],
         "title": "ReactCommand",
         "type": "object"
       },
@@ -70,7 +85,9 @@
             "type": "string"
           }
         },
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "title": "Reset",
         "type": "object"
       },
@@ -90,7 +107,10 @@
             "type": "string"
           }
         },
-        "required": ["type", "action"],
+        "required": [
+          "type",
+          "action"
+        ],
         "title": "SaveContact",
         "type": "object"
       },
@@ -119,7 +139,11 @@
             "title": "Reply To"
           }
         },
-        "required": ["type", "text", "reply_to"],
+        "required": [
+          "type",
+          "text",
+          "reply_to"
+        ],
         "title": "SendMessage",
         "type": "object"
       },
@@ -136,7 +160,10 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "active"],
+        "required": [
+          "type",
+          "active"
+        ],
         "title": "SetTyping",
         "type": "object"
       }
@@ -207,7 +234,12 @@
             "title": "Reply To"
           }
         },
-        "required": ["kind", "text", "from_call", "reply_to"],
+        "required": [
+          "kind",
+          "text",
+          "from_call",
+          "reply_to"
+        ],
         "title": "AgentMessage",
         "type": "object"
       },
@@ -259,7 +291,13 @@
             "default": null
           }
         },
-        "required": ["kind", "transition", "reason", "call_id", "initiated_by"],
+        "required": [
+          "kind",
+          "transition",
+          "reason",
+          "call_id",
+          "initiated_by"
+        ],
         "title": "CallEvent",
         "type": "object"
       },
@@ -275,7 +313,10 @@
             "$ref": "#/$defs/CallState"
           }
         },
-        "required": ["type", "call"],
+        "required": [
+          "type",
+          "call"
+        ],
         "title": "CallMessage",
         "type": "object"
       },
@@ -290,12 +331,20 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "CallOptOut",
         "type": "object"
       },
       "CallPhase": {
-        "enum": ["none", "ringing", "connecting", "connected", "ended"],
+        "enum": [
+          "none",
+          "ringing",
+          "connecting",
+          "connected",
+          "ended"
+        ],
         "title": "CallPhase",
         "type": "string"
       },
@@ -367,17 +416,35 @@
             "title": "Ended At"
           }
         },
-        "required": ["phase", "reason", "call_id", "initiated_by", "started_at", "ended_at"],
+        "required": [
+          "phase",
+          "reason",
+          "call_id",
+          "initiated_by",
+          "started_at",
+          "ended_at"
+        ],
         "title": "CallState",
         "type": "object"
       },
       "CallTransition": {
-        "enum": ["ringing", "connecting", "connected", "declined", "failed", "ended"],
+        "enum": [
+          "ringing",
+          "connecting",
+          "connected",
+          "declined",
+          "failed",
+          "ended"
+        ],
         "title": "CallTransition",
         "type": "string"
       },
       "Channel": {
-        "enum": ["text", "voice", "system"],
+        "enum": [
+          "text",
+          "voice",
+          "system"
+        ],
         "title": "Channel",
         "type": "string"
       },
@@ -396,13 +463,16 @@
             "type": "string"
           }
         },
-        "required": ["kind", "name"],
+        "required": [
+          "kind",
+          "name"
+        ],
         "title": "ContactCard",
         "type": "object"
       },
       "ContactSaved": {
         "additionalProperties": false,
-        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.",
+        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.\n\nIt happens on their phone, so the agent never learns of it: not routed, not in any\nprompt. Only the phone's own display uses it.",
         "properties": {
           "kind": {
             "const": "contact_saved",
@@ -415,7 +485,10 @@
             "type": "string"
           }
         },
-        "required": ["kind", "name"],
+        "required": [
+          "kind",
+          "name"
+        ],
         "title": "ContactSaved",
         "type": "object"
       },
@@ -466,8 +539,56 @@
             "title": "Note"
           }
         },
-        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "note"],
+        "required": [
+          "kind",
+          "trigger_kind",
+          "verb",
+          "by",
+          "confidence",
+          "note"
+        ],
         "title": "Decision",
+        "type": "object"
+      },
+      "Device": {
+        "description": "What only their phone knows, like what they saved the agent's contact as. The agent\nnever sees this; it drives the phone's display.",
+        "properties": {
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Contact Name"
+          }
+        },
+        "required": [
+          "contact_name"
+        ],
+        "title": "Device",
+        "type": "object"
+      },
+      "DeviceMessage": {
+        "properties": {
+          "type": {
+            "const": "device",
+            "default": "device",
+            "title": "Type",
+            "type": "string"
+          },
+          "device": {
+            "$ref": "#/$defs/Device"
+          }
+        },
+        "required": [
+          "type",
+          "device"
+        ],
+        "title": "DeviceMessage",
         "type": "object"
       },
       "EventMessage": {
@@ -482,7 +603,10 @@
             "$ref": "#/$defs/WireEvent"
           }
         },
-        "required": ["type", "event"],
+        "required": [
+          "type",
+          "event"
+        ],
         "title": "EventMessage",
         "type": "object"
       },
@@ -511,12 +635,21 @@
             "title": "Email"
           }
         },
-        "required": ["kind", "phase", "email"],
+        "required": [
+          "kind",
+          "phase",
+          "email"
+        ],
         "title": "GmailEvent",
         "type": "object"
       },
       "GmailPhase": {
-        "enum": ["link_sent", "connected", "failed", "skipped"],
+        "enum": [
+          "link_sent",
+          "connected",
+          "failed",
+          "skipped"
+        ],
         "title": "GmailPhase",
         "type": "string"
       },
@@ -530,23 +663,38 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "Graduated",
         "type": "object"
       },
       "Initiator": {
-        "enum": ["agent", "user"],
+        "enum": [
+          "agent",
+          "user"
+        ],
         "title": "Initiator",
         "type": "string"
       },
       "Medium": {
         "description": "Which medium has the floor: voice while a call is connected, text otherwise.",
-        "enum": ["text", "voice"],
+        "enum": [
+          "text",
+          "voice"
+        ],
         "title": "Medium",
         "type": "string"
       },
       "Origin": {
-        "enum": ["user", "text_agent", "voice_agent", "call", "google", "system"],
+        "enum": [
+          "user",
+          "text_agent",
+          "voice_agent",
+          "call",
+          "google",
+          "system"
+        ],
         "title": "Origin",
         "type": "string"
       },
@@ -581,7 +729,10 @@
             "type": "string"
           },
           "by": {
-            "enum": ["user", "agent"],
+            "enum": [
+              "user",
+              "agent"
+            ],
             "title": "By",
             "type": "string"
           },
@@ -591,7 +742,14 @@
             "type": "boolean"
           }
         },
-        "required": ["kind", "target_seq", "target_text", "emoji", "by", "removed"],
+        "required": [
+          "kind",
+          "target_seq",
+          "target_text",
+          "emoji",
+          "by",
+          "removed"
+        ],
         "title": "Reaction",
         "type": "object"
       },
@@ -606,7 +764,9 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "ReplyDue",
         "type": "object"
       },
@@ -625,7 +785,10 @@
             "type": "integer"
           }
         },
-        "required": ["kind", "through_seq"],
+        "required": [
+          "kind",
+          "through_seq"
+        ],
         "title": "ReplyStarted",
         "type": "object"
       },
@@ -640,7 +803,11 @@
             "type": "string"
           },
           "slot": {
-            "enum": ["agent_name", "user_name", "help_need"],
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
             "title": "Slot",
             "type": "string"
           },
@@ -661,7 +828,12 @@
             "title": "Old"
           }
         },
-        "required": ["kind", "slot", "new", "old"],
+        "required": [
+          "kind",
+          "slot",
+          "new",
+          "old"
+        ],
         "title": "SlotChanged",
         "type": "object"
       },
@@ -735,18 +907,6 @@
             "default": false,
             "title": "No Calls",
             "type": "boolean"
-          },
-          "contact_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Contact Name"
           }
         },
         "required": [
@@ -756,8 +916,7 @@
           "gmail",
           "gmail_email",
           "graduated",
-          "no_calls",
-          "contact_name"
+          "no_calls"
         ],
         "title": "Slots",
         "type": "object"
@@ -774,7 +933,10 @@
             "$ref": "#/$defs/Slots"
           }
         },
-        "required": ["type", "slots"],
+        "required": [
+          "type",
+          "slots"
+        ],
         "title": "SlotsMessage",
         "type": "object"
       },
@@ -796,6 +958,9 @@
           "slots": {
             "$ref": "#/$defs/Slots"
           },
+          "device": {
+            "$ref": "#/$defs/Device"
+          },
           "call": {
             "$ref": "#/$defs/CallState"
           },
@@ -803,12 +968,22 @@
             "$ref": "#/$defs/Medium"
           }
         },
-        "required": ["type", "events", "slots", "call", "floor"],
+        "required": [
+          "type",
+          "events",
+          "slots",
+          "device",
+          "call",
+          "floor"
+        ],
         "title": "Snapshot",
         "type": "object"
       },
       "Speaker": {
-        "enum": ["user", "agent"],
+        "enum": [
+          "user",
+          "agent"
+        ],
         "title": "Speaker",
         "type": "string"
       },
@@ -844,7 +1019,12 @@
             "title": "Result"
           }
         },
-        "required": ["kind", "name", "args", "result"],
+        "required": [
+          "kind",
+          "name",
+          "args",
+          "result"
+        ],
         "title": "ToolCall",
         "type": "object"
       },
@@ -873,7 +1053,13 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "speaker", "turn_id", "text", "final"],
+        "required": [
+          "type",
+          "speaker",
+          "turn_id",
+          "text",
+          "final"
+        ],
         "title": "TranscriptPartial",
         "type": "object"
       },
@@ -897,7 +1083,11 @@
             "type": "number"
           }
         },
-        "required": ["kind", "active", "seconds"],
+        "required": [
+          "kind",
+          "active",
+          "seconds"
+        ],
         "title": "Typing",
         "type": "object"
       },
@@ -914,7 +1104,10 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "active"],
+        "required": [
+          "type",
+          "active"
+        ],
         "title": "TypingMessage",
         "type": "object"
       },
@@ -956,7 +1149,12 @@
             "title": "Reply To Text"
           }
         },
-        "required": ["kind", "text", "reply_to", "reply_to_text"],
+        "required": [
+          "kind",
+          "text",
+          "reply_to",
+          "reply_to_text"
+        ],
         "title": "UserMessage",
         "type": "object"
       },
@@ -999,7 +1197,12 @@
             "title": "Transcript"
           }
         },
-        "required": ["kind", "audio_id", "duration_ms", "transcript"],
+        "required": [
+          "kind",
+          "audio_id",
+          "duration_ms",
+          "transcript"
+        ],
         "title": "VoiceNote",
         "type": "object"
       },
@@ -1030,14 +1233,14 @@
           "turn_id": {
             "title": "Turn Id",
             "type": "string"
-          },
-          "inferred": {
-            "default": true,
-            "title": "Inferred",
-            "type": "boolean"
           }
         },
-        "required": ["kind", "speaker", "text", "turn_id", "inferred"],
+        "required": [
+          "kind",
+          "speaker",
+          "text",
+          "turn_id"
+        ],
         "title": "VoiceUtterance",
         "type": "object"
       },
@@ -1138,7 +1341,13 @@
             "title": "Payload"
           }
         },
-        "required": ["seq", "ts", "origin", "channel", "payload"],
+        "required": [
+          "seq",
+          "ts",
+          "origin",
+          "channel",
+          "payload"
+        ],
         "title": "WireEvent",
         "type": "object"
       }
@@ -1146,6 +1355,7 @@
     "discriminator": {
       "mapping": {
         "call": "#/$defs/CallMessage",
+        "device": "#/$defs/DeviceMessage",
         "event": "#/$defs/EventMessage",
         "partial": "#/$defs/TranscriptPartial",
         "slots": "#/$defs/SlotsMessage",
@@ -1163,6 +1373,9 @@
       },
       {
         "$ref": "#/$defs/SlotsMessage"
+      },
+      {
+        "$ref": "#/$defs/DeviceMessage"
       },
       {
         "$ref": "#/$defs/CallMessage"
@@ -1209,7 +1422,12 @@
             "title": "Reply To"
           }
         },
-        "required": ["kind", "text", "from_call", "reply_to"],
+        "required": [
+          "kind",
+          "text",
+          "from_call",
+          "reply_to"
+        ],
         "title": "AgentMessage",
         "type": "object"
       },
@@ -1261,7 +1479,13 @@
             "default": null
           }
         },
-        "required": ["kind", "transition", "reason", "call_id", "initiated_by"],
+        "required": [
+          "kind",
+          "transition",
+          "reason",
+          "call_id",
+          "initiated_by"
+        ],
         "title": "CallEvent",
         "type": "object"
       },
@@ -1276,12 +1500,21 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "CallOptOut",
         "type": "object"
       },
       "CallTransition": {
-        "enum": ["ringing", "connecting", "connected", "declined", "failed", "ended"],
+        "enum": [
+          "ringing",
+          "connecting",
+          "connected",
+          "declined",
+          "failed",
+          "ended"
+        ],
         "title": "CallTransition",
         "type": "string"
       },
@@ -1300,13 +1533,16 @@
             "type": "string"
           }
         },
-        "required": ["kind", "name"],
+        "required": [
+          "kind",
+          "name"
+        ],
         "title": "ContactCard",
         "type": "object"
       },
       "ContactSaved": {
         "additionalProperties": false,
-        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.",
+        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.\n\nIt happens on their phone, so the agent never learns of it: not routed, not in any\nprompt. Only the phone's own display uses it.",
         "properties": {
           "kind": {
             "const": "contact_saved",
@@ -1319,7 +1555,10 @@
             "type": "string"
           }
         },
-        "required": ["kind", "name"],
+        "required": [
+          "kind",
+          "name"
+        ],
         "title": "ContactSaved",
         "type": "object"
       },
@@ -1370,7 +1609,14 @@
             "title": "Note"
           }
         },
-        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "note"],
+        "required": [
+          "kind",
+          "trigger_kind",
+          "verb",
+          "by",
+          "confidence",
+          "note"
+        ],
         "title": "Decision",
         "type": "object"
       },
@@ -1399,12 +1645,21 @@
             "title": "Email"
           }
         },
-        "required": ["kind", "phase", "email"],
+        "required": [
+          "kind",
+          "phase",
+          "email"
+        ],
         "title": "GmailEvent",
         "type": "object"
       },
       "GmailPhase": {
-        "enum": ["link_sent", "connected", "failed", "skipped"],
+        "enum": [
+          "link_sent",
+          "connected",
+          "failed",
+          "skipped"
+        ],
         "title": "GmailPhase",
         "type": "string"
       },
@@ -1418,12 +1673,17 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "Graduated",
         "type": "object"
       },
       "Initiator": {
-        "enum": ["agent", "user"],
+        "enum": [
+          "agent",
+          "user"
+        ],
         "title": "Initiator",
         "type": "string"
       },
@@ -1458,7 +1718,10 @@
             "type": "string"
           },
           "by": {
-            "enum": ["user", "agent"],
+            "enum": [
+              "user",
+              "agent"
+            ],
             "title": "By",
             "type": "string"
           },
@@ -1468,7 +1731,14 @@
             "type": "boolean"
           }
         },
-        "required": ["kind", "target_seq", "target_text", "emoji", "by", "removed"],
+        "required": [
+          "kind",
+          "target_seq",
+          "target_text",
+          "emoji",
+          "by",
+          "removed"
+        ],
         "title": "Reaction",
         "type": "object"
       },
@@ -1483,7 +1753,9 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "title": "ReplyDue",
         "type": "object"
       },
@@ -1502,7 +1774,10 @@
             "type": "integer"
           }
         },
-        "required": ["kind", "through_seq"],
+        "required": [
+          "kind",
+          "through_seq"
+        ],
         "title": "ReplyStarted",
         "type": "object"
       },
@@ -1517,7 +1792,11 @@
             "type": "string"
           },
           "slot": {
-            "enum": ["agent_name", "user_name", "help_need"],
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
             "title": "Slot",
             "type": "string"
           },
@@ -1538,12 +1817,20 @@
             "title": "Old"
           }
         },
-        "required": ["kind", "slot", "new", "old"],
+        "required": [
+          "kind",
+          "slot",
+          "new",
+          "old"
+        ],
         "title": "SlotChanged",
         "type": "object"
       },
       "Speaker": {
-        "enum": ["user", "agent"],
+        "enum": [
+          "user",
+          "agent"
+        ],
         "title": "Speaker",
         "type": "string"
       },
@@ -1579,7 +1866,12 @@
             "title": "Result"
           }
         },
-        "required": ["kind", "name", "args", "result"],
+        "required": [
+          "kind",
+          "name",
+          "args",
+          "result"
+        ],
         "title": "ToolCall",
         "type": "object"
       },
@@ -1603,7 +1895,11 @@
             "type": "number"
           }
         },
-        "required": ["kind", "active", "seconds"],
+        "required": [
+          "kind",
+          "active",
+          "seconds"
+        ],
         "title": "Typing",
         "type": "object"
       },
@@ -1645,7 +1941,12 @@
             "title": "Reply To Text"
           }
         },
-        "required": ["kind", "text", "reply_to", "reply_to_text"],
+        "required": [
+          "kind",
+          "text",
+          "reply_to",
+          "reply_to_text"
+        ],
         "title": "UserMessage",
         "type": "object"
       },
@@ -1688,7 +1989,12 @@
             "title": "Transcript"
           }
         },
-        "required": ["kind", "audio_id", "duration_ms", "transcript"],
+        "required": [
+          "kind",
+          "audio_id",
+          "duration_ms",
+          "transcript"
+        ],
         "title": "VoiceNote",
         "type": "object"
       },
@@ -1719,14 +2025,14 @@
           "turn_id": {
             "title": "Turn Id",
             "type": "string"
-          },
-          "inferred": {
-            "default": true,
-            "title": "Inferred",
-            "type": "boolean"
           }
         },
-        "required": ["kind", "speaker", "text", "turn_id", "inferred"],
+        "required": [
+          "kind",
+          "speaker",
+          "text",
+          "turn_id"
+        ],
         "title": "VoiceUtterance",
         "type": "object"
       }
@@ -1874,7 +2180,14 @@
         "title": "Icon"
       }
     },
-    "required": ["url", "title", "description", "image", "site_name", "icon"],
+    "required": [
+      "url",
+      "title",
+      "description",
+      "image",
+      "site_name",
+      "icon"
+    ],
     "title": "Preview",
     "type": "object"
   }

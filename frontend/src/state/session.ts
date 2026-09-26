@@ -3,6 +3,7 @@ import type {
   CallAction,
   CallFailReason,
   CallState,
+  Device,
   ServerMessage,
   Medium,
   TranscriptPartial,
@@ -18,6 +19,8 @@ export interface SessionState {
   status: ConnectionStatus;
   events: WireEvent[];
   slots: Slots;
+  /** What only the phone knows (the saved contact name); the agent never sees it. */
+  device: Device;
   call: CallState;
   floor: Medium;
   agentTyping: boolean;
@@ -28,7 +31,16 @@ export interface SessionState {
 type Action = { type: "status"; status: ConnectionStatus } | { type: "message"; message: ServerMessage };
 
 function fromSnapshot(s: Snapshot, status: ConnectionStatus): SessionState {
-  return { status, events: s.events, slots: s.slots, call: s.call, floor: s.floor, agentTyping: false, partials: {} };
+  return {
+    status,
+    events: s.events,
+    slots: s.slots,
+    device: s.device,
+    call: s.call,
+    floor: s.floor,
+    agentTyping: false,
+    partials: {},
+  };
 }
 
 function reduce(state: SessionState, action: Action): SessionState {
@@ -50,6 +62,8 @@ function reduce(state: SessionState, action: Action): SessionState {
     }
     case "slots":
       return { ...state, slots: m.slots };
+    case "device":
+      return { ...state, device: m.device };
     case "call":
       return {
         ...state,

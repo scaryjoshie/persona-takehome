@@ -181,8 +181,8 @@ def test_two_sockets_each_get_every_event_once(client: TestClient) -> None:
         receive(b)
         a.send_text(json.dumps({"type": "call", "action": "start"}))
         for ws in (a, b):
-            seen = receive_until(ws, "call")  # the call event, then slots and call state
-            seen += [receive(ws), receive(ws)]
+            seen = receive_until(ws, "call")  # the call event, then slots, device and call state
+            seen += [receive(ws), receive(ws), receive(ws)]
             kinds = [m["type"] for m in seen]
             assert kinds.count("event") == 1 and kinds.count("call") == 1, kinds
 

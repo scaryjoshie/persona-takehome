@@ -33,7 +33,7 @@ async def get_user(session: AsyncSession, phone: str) -> User | None:
 
 
 async def set_slots(session: AsyncSession, phone: str, **values: Any) -> User:
-    """Write slot columns by name. Enum values are stored as their string value."""
+    """Write slot (or device) columns by name. Enum values are stored as their string value."""
     row = await _row(session, phone)
     for slot, value in values.items():
         setattr(row, slot, value.value if isinstance(value, StrEnum) else value)

@@ -13,7 +13,7 @@ from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.payloads import AnyPayload
-from app.users.user import Medium
+from app.users.user import Device, Medium
 from app.voice.call import TranscriptPartial
 from app.voice.call_state import CallState
 
@@ -101,6 +101,7 @@ class Snapshot(Message):
     type: Literal["snapshot"] = "snapshot"
     events: list[WireEvent]
     slots: Slots
+    device: Device
     call: CallState
     floor: Medium
 
@@ -115,6 +116,11 @@ class SlotsMessage(Message):
     slots: Slots
 
 
+class DeviceMessage(Message):
+    type: Literal["device"] = "device"
+    device: Device
+
+
 class CallMessage(Message):
     type: Literal["call"] = "call"
     call: CallState
@@ -126,6 +132,12 @@ class TypingMessage(Message):
 
 
 ServerMessage = Annotated[
-    Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial,
+    Snapshot
+    | EventMessage
+    | SlotsMessage
+    | DeviceMessage
+    | CallMessage
+    | TypingMessage
+    | TranscriptPartial,
     Field(discriminator="type"),
 ]
