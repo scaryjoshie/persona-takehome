@@ -56,7 +56,10 @@ log = logging.getLogger(__name__)
 
 SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 # An agent turn wakes the back office only if it may have promised something a tool does.
-PROMISE = re.compile(r"\b(text|texting|texted|send|sending|link|spell|spelled|bye|goodbye)\b", re.I)
+PROMISE = re.compile(
+    r"\b(text|texting|texted|send|sending|link|spell|spelled|bye|goodbye|later|talk soon)\b",
+    re.I,
+)
 NOW = "Where things stand now:"
 STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
