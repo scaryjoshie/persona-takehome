@@ -1,10 +1,9 @@
 """Email drafts as things in the conversation, not words about them.
 
 A draft is an `email_draft` event: what it says, its Gmail draft id, and whether it's been
-sent. Each edit posts a new version under the same `ref`, and the phone shows the latest as
-a card (missing fields visible). Sending always sends the stored Gmail draft by id, never
-text the model retyped, and goes through one function whether it came from the card's Send
-button or from the agent.
+sent. Each version is texted to them as an image of the draft (preview.py), missing fields
+marked, and each edit posts a new version under the same `ref`. Sending sends the stored
+Gmail draft by id, never text the model retyped, and only after they've answered.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ async def save(
     subject: str,
     body: str,
 ) -> EmailDraft:
-    """Create a draft, or update one (same ref, same Gmail draft), and show it as a card."""
+    """Create a draft, or update one (same ref, same Gmail draft), and text them a picture of it."""
     previous = latest(await pipeline.history(phone), ref) if ref else None
     if previous and previous[1].status == "sent":
         raise ValueError(f"email {ref} was already sent; start a new draft")
@@ -51,11 +50,8 @@ async def save(
     return draft
 
 
-async def send(
-    pipeline: Pipeline, phone: str, account: Account, ref: str, *, need_reply: bool
-) -> EmailDraft:
-    """Send the stored draft. `need_reply`: the agent may only send once they've answered
-    since this version was shown (the Send button is itself the yes)."""
+async def send(pipeline: Pipeline, phone: str, account: Account, ref: str) -> EmailDraft:
+    """Send the stored draft, once they've answered since this version was shown."""
     events = await pipeline.history(phone)
     found = latest(events, ref)
     if found is None:
@@ -65,7 +61,7 @@ async def send(
         raise ValueError(f"email {ref} was already sent")
     if draft.missing:
         raise ValueError(f"draft {ref} is missing {', '.join(draft.missing)}")
-    if need_reply and not any(e.seq > seq and isinstance(e.payload, UserMessage) for e in events):
+    if not any(e.seq > seq and isinstance(e.payload, UserMessage) for e in events):
         raise ValueError(f"they haven't answered since you showed draft {ref}; ask first")
     await account.send(draft.gmail_id)
     sent = draft.model_copy(update={"status": "sent"})

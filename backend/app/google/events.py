@@ -88,6 +88,6 @@ class EmailDraft(Payload):
         gaps = f" (missing: {', '.join(self.missing)})" if self.missing else ""
         return Turn(
             Role.NOTE,
-            f"you showed them email draft {self.ref}{gaps} as a card:\n"
+            f"you texted them a picture of email draft {self.ref}{gaps}:\n"
             f"To: {self.to}\nSubject: {self.subject}\n{self.body}",
         )

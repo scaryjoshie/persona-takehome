@@ -302,8 +302,8 @@ async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
 async def draft_email(
     ctx: RunContext[Deps], to: str = "", subject: str = "", body: str = "", ref: str = ""
 ) -> str:
-    """Draft an email in their Gmail and show it to them as a card (they see exactly what's
-    saved, gaps included; nothing is sent). To change a draft, call again with its ref."""
+    """Draft an email in their Gmail; they get a picture of it (exactly what's saved, gaps
+    included; nothing is sent). To change a draft, call again with its ref."""
     d = ctx.deps
     try:
         draft = await drafts.save(
@@ -320,7 +320,7 @@ async def draft_email(
     await _record(ctx, "draft_email", {"ref": draft.ref, "subject": subject}, {})
     gaps = f"; it's missing {', '.join(draft.missing)}" if draft.missing else ""
     return (
-        f"draft {draft.ref} is on their screen as a card{gaps}. don't retype it; ask whether "
+        f"draft {draft.ref} was texted to them as an image{gaps}. don't retype it; ask whether "
         f"to send it or what to change (then call draft_email again with ref={draft.ref})"
     )
 
@@ -337,7 +337,7 @@ async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
     """Send a draft you showed them, by its ref, once they've said yes to it."""
     d = ctx.deps
     try:
-        sent = await drafts.send(d.pipeline, d.phone, await _account(ctx), ref, need_reply=True)
+        sent = await drafts.send(d.pipeline, d.phone, await _account(ctx), ref)
     except ValueError as exc:
         return f"not sent: {exc}"
     await _record(ctx, "send_draft", {"ref": ref}, {})

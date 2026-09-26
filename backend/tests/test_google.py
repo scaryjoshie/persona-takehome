@@ -14,7 +14,7 @@ from app.agent.agent import agent
 from app.agent.deps import AgentEnv, Deps
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
-from app.google import drafts
+from app.google import drafts, preview
 from app.google.accounts import Google
 from app.google.events import EmailDraft, GmailEvent, GmailPhase
 from app.google.models import GoogleAccountRow
@@ -119,14 +119,25 @@ async def test_editing_a_draft_updates_the_same_one_and_gaps_block_sending(
     assert account is not None
     first = await drafts.save(pipeline, PHONE, account, ref=None, to="", subject="hi", body="yo")
     assert first.missing == ["to"]
+    yes = UserMessage(text="yes send it")
+    await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, yes, route=False)
     with pytest.raises(ValueError, match="missing"):
-        await drafts.send(pipeline, PHONE, account, first.ref, need_reply=False)
+        await drafts.send(pipeline, PHONE, account, first.ref)
     fixed = await drafts.save(
         pipeline, PHONE, account, ref=first.ref, to="a@b.c", subject="hi", body="yo"
     )
     assert fixed.ref == first.ref and "PUT /gmail/v1/users/me/drafts/d1" in fake.calls
-    await drafts.send(pipeline, PHONE, account, first.ref, need_reply=False)  # the Send button
+    with pytest.raises(ValueError, match="answered"):  # the new version hasn't been answered
+        await drafts.send(pipeline, PHONE, account, first.ref)
+    await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, yes, route=False)
+    await drafts.send(pipeline, PHONE, account, first.ref)
     assert fake.sent == ["d1"]
+
+
+def test_a_draft_picture_shows_what_is_missing() -> None:
+    picture = preview.render(EmailDraft(ref="r", subject="Heater <3", body="Hi Maria"))
+    assert picture.startswith("<svg") and ">missing<" in picture
+    assert "Heater &lt;3" in picture and "Still needs: who it&#x27;s to" in picture
 
 
 async def test_the_tools_appear_only_once_google_is_connected(

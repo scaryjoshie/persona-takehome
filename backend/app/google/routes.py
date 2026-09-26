@@ -2,6 +2,7 @@
 
 GET /api/auth/google/start?phone=…   straight to Google's consent screen
 GET /api/auth/google/callback        back from Google: keep the connection, peek at the inbox
+GET /api/drafts/{phone}/{ref}.svg     a draft email as a picture, texted to them as an image
 
 The Google project is in Testing mode, so only accounts on its test-user list can connect.
 A successful connect sends one "connected" event through the pipeline with a look at the
@@ -15,12 +16,12 @@ import logging
 import secrets
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.events.payload import Channel, Origin
-from app.google import api
-from app.google.events import GmailEvent, GmailPhase
+from app.google import api, preview
+from app.google.events import EmailDraft, GmailEvent, GmailPhase
 from app.services import ServicesDep
 from app.web.routes import normalize
 
@@ -93,3 +94,18 @@ async def callback(
 async def _failed(svc: ServicesDep, phone: str) -> None:
     failed = GmailEvent(phase=GmailPhase.FAILED)
     await svc.pipeline.submit(phone, Origin.GOOGLE, Channel.SYSTEM, failed)
+
+
+@router.get("/api/drafts/{phone}/{ref}.svg")
+async def draft_image(phone: str, ref: str, svc: ServicesDep, v: int | None = None) -> Response:
+    """The picture of one version of a draft (the latest if no version is given)."""
+    versions = [
+        e
+        for e in await svc.pipeline.history(normalize(phone))
+        if isinstance(e.payload, EmailDraft) and e.payload.ref == ref and (v is None or e.seq <= v)
+    ]
+    if not versions:
+        return Response(status_code=404)
+    draft = versions[-1].payload
+    assert isinstance(draft, EmailDraft)
+    return Response(preview.render(draft), media_type="image/svg+xml")

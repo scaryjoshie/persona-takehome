@@ -56,14 +56,6 @@ class SendMessage(Message):
     reply_to: int | None = None  # seq of the bubble being replied to
 
 
-class SendDraft(Message):
-    """The Send button on an email draft card."""
-
-    type: Literal["draft"] = "draft"
-    action: Literal["send"] = "send"
-    ref: str
-
-
 class ReactCommand(Message):
     """A tapback on a bubble; `remove` takes it back."""
 
@@ -96,7 +88,7 @@ class Reset(Message):
 
 
 ClientMessage = Annotated[
-    SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | SendDraft | Reset,
+    SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset,
     Field(discriminator="type"),
 ]
 CLIENT_MESSAGE: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
