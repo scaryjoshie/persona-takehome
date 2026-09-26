@@ -1,76 +1,80 @@
-"""Per-user actor: one queue, one consumer, and everything per-user behind it.
-
-Producers (browser socket, voice handler, OAuth callback, timers) only enqueue.
-The consumer appends to the store, applies call transitions, then routes. That
-is what gives "before" and "after" a meaning (docs 03, 08).
-"""
+"""One user, one queue, one consumer. Everything enters through `submit`."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
-from app.core.calls import apply_call_event
-from app.core.router import Head, Router
-from app.core.store import Store
-from app.core.types import CallEvent, Inbound, Medium, Typing
+from app.events.base import Channel, Origin, Payload
+from app.events.envelope import Event
+from app.routing.router import Router
+from app.user import User
 
 log = logging.getLogger(__name__)
 
+Hook = Callable[[User, Event], Awaitable[bool]]  # False drops the event before routing
+
+
+@dataclass(frozen=True)
+class Submission:
+    origin: Origin
+    channel: Channel
+    payload: Payload
+    route: bool | None  # None = the payload's default
+
 
 class Actor:
-    def __init__(self, store: Store, heads: dict[Medium, Head], router: Router) -> None:
-        self.store = store
-        self.heads = heads
+    def __init__(self, user: User, router: Router, *, hooks: list[Hook] | None = None) -> None:
+        self.user = user
         self.router = router
-        self._queue: asyncio.Queue[Inbound | None] = asyncio.Queue()
+        self._hooks = hooks or []
+        self._queue: asyncio.Queue[Submission | None] = asyncio.Queue()
         self._task: asyncio.Task[None] | None = None
 
     @property
     def phone(self) -> str:
-        return self.store.phone
+        return self.user.phone
+
+    def submit(
+        self, origin: Origin, channel: Channel, payload: Payload, *, route: bool | None = None
+    ) -> None:
+        self._queue.put_nowait(Submission(origin, channel, payload, route))
 
     def start(self) -> None:
         if self._task is None:
             self._task = asyncio.create_task(self._consume(), name=f"actor:{self.phone}")
 
     async def stop(self) -> None:
-        if self._task is None:
-            return
-        await self._queue.put(None)
-        await self._task
-        self._task = None
-
-    def enqueue(self, inbound: Inbound) -> None:
-        self._queue.put_nowait(inbound)
+        if self._task:
+            await self._queue.put(None)
+            await self._task
+            self._task = None
 
     async def drain(self) -> None:
-        """Test helper: wait until everything enqueued so far has been processed."""
         await self._queue.join()
 
     async def _consume(self) -> None:
         while True:
-            inbound = await self._queue.get()
+            item = await self._queue.get()
             try:
-                if inbound is None:
+                if item is None:
                     return
-                await self._handle(inbound)
+                await self._handle(item)
             except Exception:
-                log.exception("actor %s: failed handling %s", self.phone, inbound)
+                log.exception("actor %s: failed on %s", self.phone, item)
             finally:
                 self._queue.task_done()
 
-    async def _handle(self, inbound: Inbound) -> None:
-        delta = inbound.delta
-        if isinstance(delta, CallEvent):
-            if not await apply_call_event(self.store, delta):
-                log.info(
-                    "actor %s: ignored call event %s from %s",
-                    self.phone,
-                    delta.phase,
-                    self.store.call.phase,
-                )
+    async def _handle(self, s: Submission) -> None:
+        store = self.user.store
+        if s.payload.persists:
+            event = await store.append(s.origin, s.channel, s.payload)
+        else:
+            event = store.transient(s.origin, s.channel, s.payload)
+        for hook in self._hooks:
+            if not await hook(self.user, event):
                 return
-        if not isinstance(delta, Typing):  # typing is ephemeral: routed, never stored
-            await self.store.append(inbound.origin, inbound.channel, delta)
-        await self.router.route(inbound)
+        if s.route if s.route is not None else s.payload.should_route():
+            await self.router.route(event)
