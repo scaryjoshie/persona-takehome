@@ -14,4 +14,5 @@ Decisions still to make, with the current default where one exists.
 | Deadline and hours budget | unknown | Shapes how much of slice 5 happens. |
 | The user's own "Decisions: Everything will be..." note was cut off | unknown | Worth finishing. |
 | Session refresh mid-call: end the call on WebSocket close immediately, or after a short grace? | immediate | The peer connection died with the tab anyway. |
+| Voice layer: `gpt-realtime-2.1` (07) or `gpt-live-1` client delegation (07b)? | spike at slice 3, lean gpt-live | GPT-Live matches the store-first design exactly but is two weeks old. |
 | Mid-call agent rename: context message vs raw session.update through the provider session? | context message | Simpler; upgrade if it reads badly. |

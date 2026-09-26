@@ -17,6 +17,7 @@ Design notes for the Persona take-home: a web simulation of Persona's onboarding
 | [05-routing-and-decider.md](05-routing-and-decider.md) | Deltas, policy function, routing context, runs, verbs per medium, Jev |
 | [06-turn-taking-policy.md](06-turn-taking-policy.md) | Debounce, hold, multi-bubble delivery, cancel vs finish |
 | [07-voice-realtime.md](07-voice-realtime.md) | OpenAI Realtime over WebRTC with a server sideband, tools, transcripts, disconnects |
+| [07b-gpt-live-option.md](07b-gpt-live-option.md) | Alternative voice layer: GPT-Live 1 with client delegation, and how it changes the design |
 | [08-storage.md](08-storage.md) | SQLModel tables, in-memory cache with write-through, credentials encryption |
 | [09-protocol.md](09-protocol.md) | HTTP and WebSocket protocol, channel port, call state machine |
 | [10-gmail-and-integrations.md](10-gmail-and-integrations.md) | OAuth facts, the mock-inbox decision, provider registry, self-building integrations |
