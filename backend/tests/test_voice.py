@@ -7,7 +7,6 @@ from typing import Any
 
 import httpx
 
-from app.agent.call_notes import call_note
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
 from app.jev import Jev
@@ -30,7 +29,7 @@ class FakeSession:
 async def on_a_call(app: App, voice: VoiceResponder) -> tuple[Pipeline, LiveCall, FakeSession]:
     pipeline = app.pipeline
     pipeline.responders[Medium.VOICE] = voice
-    from app.voice.call_events import CallEvent, CallTransition
+    from app.voice.call_state import CallEvent, CallTransition
 
     for t in (CallTransition.CONNECTING, CallTransition.CONNECTED):
         await pipeline.submit(PHONE, Origin.CALL, Channel.SYSTEM, CallEvent(transition=t))
@@ -57,14 +56,14 @@ async def last_decision(pipeline: Pipeline) -> dict[str, Any]:
 
 
 async def test_when_the_agent_is_quiet_the_note_goes_straight_in(app: App) -> None:
-    pipeline, _, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    pipeline, _, session = await on_a_call(app, VoiceResponder())
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="it's sam@x.com"))
     assert len(session.sent) == 1 and "texted" in session.sent[0][0]
     assert (await last_decision(pipeline))["verb"] == "send"
 
 
 async def test_a_text_while_speaking_interrupts(app: App) -> None:
-    pipeline, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    pipeline, call, session = await on_a_call(app, VoiceResponder())
     call.speaking = True
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="wait"))
     assert session.sent[-1][1] is True
@@ -72,7 +71,7 @@ async def test_a_text_while_speaking_interrupts(app: App) -> None:
 
 
 async def test_without_jev_typing_is_absorbed_and_gmail_deferred(app: App) -> None:
-    pipeline, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    pipeline, call, session = await on_a_call(app, VoiceResponder())
     call.speaking = True
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, Typing(active=True, seconds=3))
     assert session.sent[-1][1] is False
@@ -84,7 +83,7 @@ async def test_without_jev_typing_is_absorbed_and_gmail_deferred(app: App) -> No
 
 
 async def test_jev_picks_the_verb_while_speaking(app: App) -> None:
-    voice = VoiceResponder(notes=call_note, jev=jev_answering("interrupt"))
+    voice = VoiceResponder(jev=jev_answering("interrupt"))
     pipeline, call, session = await on_a_call(app, voice)
     call.speaking = True
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, Typing(active=True, seconds=3))
@@ -94,7 +93,7 @@ async def test_jev_picks_the_verb_while_speaking(app: App) -> None:
 
 
 async def test_interrupt_waits_while_a_tool_runs(app: App) -> None:
-    voice = VoiceResponder(notes=call_note, jev=jev_answering("interrupt"))
+    voice = VoiceResponder(jev=jev_answering("interrupt"))
     pipeline, call, _ = await on_a_call(app, voice)
     call.speaking, call.tool_running = True, True
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, Typing(active=True, seconds=3))
@@ -102,7 +101,7 @@ async def test_interrupt_waits_while_a_tool_runs(app: App) -> None:
 
 
 async def test_no_call_in_progress_drops(app: App) -> None:
-    voice = VoiceResponder(notes=call_note)
+    voice = VoiceResponder()
     pipeline, _, _ = await on_a_call(app, voice)
     voice.calls.clear()
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="hello?"))
@@ -110,7 +109,7 @@ async def test_no_call_in_progress_drops(app: App) -> None:
 
 
 async def test_talking_over_the_voice_hands_held_notes_in_silently(app: App) -> None:
-    pipeline, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    pipeline, call, session = await on_a_call(app, VoiceResponder())
     call.speaking = True
     connected = GmailEvent(phase=GmailPhase.CONNECTED, email="s@x.com")
     await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, connected)
@@ -120,14 +119,14 @@ async def test_talking_over_the_voice_hands_held_notes_in_silently(app: App) -> 
 
 
 async def test_nothing_reaches_a_call_that_ended(app: App) -> None:
-    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    _, call, session = await on_a_call(app, VoiceResponder())
     call.closed = True
     await call.send("late", speak=False)
     assert session.sent == []
 
 
 async def test_held_background_goes_in_when_they_start_talking(app: App) -> None:
-    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    _, call, session = await on_a_call(app, VoiceResponder())
     await call.whisper("The Gmail link is in their texts.")
     assert session.sent == []  # the voice finished its turn: hold it
     await call.user_started()
@@ -144,7 +143,7 @@ async def test_end_call_on_a_live_call_waits_for_the_goodbye(app: App) -> None:
 
 
 async def test_on_the_voices_turn_background_goes_straight_in(app: App) -> None:
-    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    _, call, session = await on_a_call(app, VoiceResponder())
     await call.user_started()  # they spoke; the voice owes a reply
     await call.whisper("Their need is saved: taxes.")
     assert session.sent == [("Their need is saved: taxes.", False)]

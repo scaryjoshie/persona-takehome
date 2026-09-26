@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from pydantic_ai.models import Model
 
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.text.messenger import Messenger
 from app.users.user import Medium, User
+
+
+class Messenger(Protocol):
+    """How bubbles reach the user's phone: the web socket now; iMessage or Twilio later."""
+
+    async def send(self, phone: str, text: str) -> None: ...
+    async def set_typing(self, phone: str, active: bool) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -30,7 +37,7 @@ class AgentEnv:
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class Deps:
     user: User  # a snapshot taken when the run started
     medium: Medium
@@ -40,15 +47,11 @@ class Deps:
     back_office: bool = False
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
     first_reply: bool = False  # nothing has been said to them yet
-    placed_call: list[bool] = field(default_factory=lambda: [])  # set by start_call
+    placed_call: bool = False  # set by start_call
 
     @property
     def pipeline(self) -> Pipeline:
         return self.env.pipeline
-
-    @property
-    def messenger(self) -> Messenger:
-        return self.env.messenger
 
     @property
     def phone(self) -> str:

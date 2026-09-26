@@ -8,7 +8,6 @@ from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
 from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium
-from app.voice.call_state import CallState
 from app.voice.events import Speaker, VoiceUtterance
 from tests.conftest import ev
 
@@ -16,7 +15,6 @@ from tests.conftest import ev
 def situation(medium: Medium = Medium.TEXT, asks: int = 0, **slots: object) -> Situation:
     return Situation(
         slots=Slots(**slots),  # pyright: ignore[reportArgumentType]
-        call=CallState(),
         medium=medium,
         asks=asks,
     )
@@ -33,7 +31,7 @@ def test_every_objective_has_words_and_no_file_is_orphaned() -> None:
 
 
 def test_objectives_open_in_order() -> None:
-    assert open_name(Situation(Slots(), CallState(), Medium.TEXT, first_reply=True)) == "opener"
+    assert open_name(Situation(Slots(), Medium.TEXT, first_reply=True)) == "opener"
     assert open_name(situation()) == "agent_name"
     assert open_name(situation(agent_name="Mila")) == "contact"
     assert open_name(situation(agent_name="Mila", asks=1)) == "user_name"
@@ -105,20 +103,18 @@ def test_on_a_call_the_next_step_comes_along() -> None:
 def test_a_line_already_said_is_not_scripted_again() -> None:
     lines = [v for v in OBJECTIVE_TEXTS["agent_name"]["script"].splitlines() if v.startswith("- ")]
     said = tuple(" ".join(v[2:].lower().split())[:60] for v in lines)
-    text = render(Situation(Slots(), CallState(), Medium.TEXT, said=said), "1", OBJECTIVE_TEXTS)
+    text = render(Situation(Slots(), Medium.TEXT, said=said), "1", OBJECTIVE_TEXTS)
     assert "ask differently" in text
 
 
 def test_after_a_call_the_text_picks_up_from_it() -> None:
-    after = Situation(Slots(), CallState(), Medium.TEXT, after_call=True)
+    after = Situation(Slots(), Medium.TEXT, after_call=True)
     assert "A call just ended" in render(after, "1", OBJECTIVE_TEXTS)
 
 
 def test_scripts_show_only_in_the_clean_case() -> None:
     first = render(situation(), "1", OBJECTIVE_TEXTS)
     again = render(situation(asks=1), "1", OBJECTIVE_TEXTS)
-    after_call = render(
-        Situation(Slots(), CallState(), Medium.TEXT, after_call=True), "1", OBJECTIVE_TEXTS
-    )
+    after_call = render(Situation(Slots(), Medium.TEXT, after_call=True), "1", OBJECTIVE_TEXTS)
     assert "use this line" in first
     assert "use this line" not in again and "use this line" not in after_call

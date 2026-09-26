@@ -23,9 +23,6 @@ class UserMessage(Payload):
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.USER, _quoted(self.reply_to_text) + self.text)
 
-    def describe(self) -> str:
-        return f"the user texted: {self.text}"
-
 
 class AgentMessage(Payload):
     """A bubble that was sent. Recorded, never routed."""
@@ -53,8 +50,6 @@ class Typing(Payload):
     seconds: float = 0.0
 
     def describe(self) -> str:
-        if not self.active:
-            return "the user stopped typing"
         return f"the user has been typing a text message for {self.seconds:.0f} seconds"
 
 
@@ -87,9 +82,6 @@ class VoiceNote(Payload):
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.USER, f"(voice message) {self.transcript or '[could not transcribe]'}")
 
-    def describe(self) -> str:
-        return f"the user sent a voice message: {self.transcript or '(unclear)'}"
-
 
 class Reaction(Payload):
     """A tapback (❤️ 👍 😂 …) on a bubble, by either side. The user's route: a 👍 on
@@ -111,6 +103,3 @@ class Reaction(Payload):
         verb = "took back their" if self.removed else "reacted"
         target = f' to "{self.target_text}"' if self.target_text else ""
         return Turn(Role.NOTE, f"{who} {verb} {self.emoji}{target}")
-
-    def describe(self) -> str:
-        return f"the user reacted {self.emoji} to: {self.target_text or 'a message'}"

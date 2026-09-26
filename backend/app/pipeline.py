@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from pydantic import TypeAdapter
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
@@ -33,8 +32,7 @@ from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
 from app.users.user import Medium, User
-from app.voice.call_events import CallEvent, CallTransition
-from app.voice.call_state import next_state
+from app.voice.call_state import CallEvent, CallTransition, next_state
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +56,7 @@ class Context:
 
     async def record(self, origin: Origin, channel: Channel, payload: Payload) -> Event | None:
         """Save and publish an event now, without routing it."""
-        return await self.pipeline._save_and_publish(self.phone, origin, channel, payload)  # pyright: ignore[reportPrivateUsage]
+        return await self.pipeline.record(self.phone, origin, channel, payload)
 
     def later(self, seconds: float, origin: Origin, channel: Channel, payload: Payload) -> None:
         """Submit an event after a delay (the one timer the system uses)."""
@@ -70,13 +68,11 @@ class Pipeline:
         self,
         db: SessionFactory,
         *,
-        payloads: TypeAdapter[Payload],
         clock: Clock,
         timers: Timers,
     ) -> None:
         self.responders: dict[Medium, Responder] = {}
         self._db = db
-        self._payloads = payloads
         self._clock = clock
         self._timers = timers
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -93,7 +89,7 @@ class Pipeline:
 
     async def history(self, phone: str, *, limit: int | None = None) -> list[Event]:
         async with self._db() as s:
-            return await events.list_events(s, phone, payloads=self._payloads, limit=limit)
+            return await events.list_events(s, phone, limit=limit)
 
     def now(self) -> datetime:
         return self._clock()
@@ -111,7 +107,7 @@ class Pipeline:
     ) -> Event | None:
         """Save, publish, route. Returns None if the event changed nothing and was dropped."""
         async with self._locks[phone]:
-            event = await self._save_and_publish(phone, origin, channel, payload)
+            event = await self.record(phone, origin, channel, payload)
             if event is None:
                 return None
             if route if route is not None else payload.should_route():
@@ -158,15 +154,20 @@ class Pipeline:
             await events.delete_events(s, phone)
             await users.delete_user(s, phone)
 
-    # ---- steps --------------------------------------------------------------------
-
-    async def _save_and_publish(
+    async def record(
         self, phone: str, origin: Origin, channel: Channel, payload: Payload
     ) -> Event | None:
+        """Save and publish, without routing."""
         event = await self._save(phone, origin, channel, payload)
         if event is not None and payload.persists:
-            await self._publish(phone, event)
+            for kinds, fn in list(self._subscribers[phone]):
+                if kinds is None or event.kind in kinds:
+                    result = fn(event)
+                    if asyncio.iscoroutine(result):
+                        await result
         return event
+
+    # ---- steps --------------------------------------------------------------------
 
     async def _save(
         self, phone: str, origin: Origin, channel: Channel, payload: Payload
@@ -182,22 +183,15 @@ class Pipeline:
                 return Event(seq=0, ts=now, origin=origin, channel=channel, payload=applied)
             return await events.append(s, phone, origin, channel, applied, ts=now)
 
-    async def _publish(self, phone: str, event: Event) -> None:
-        for kinds, fn in list(self._subscribers[phone]):
-            if kinds is None or event.kind in kinds:
-                result = fn(event)
-                if asyncio.iscoroutine(result):
-                    await result
-
     async def _route(self, phone: str, event: Event) -> None:
         async with self._db() as s:
             user = await users.get_user(s, phone)
-            recent = await events.list_events(s, phone, payloads=self._payloads, limit=RECENT)
+            recent = await events.list_events(s, phone, limit=RECENT)
         assert user is not None
         responder = self.responders[user.floor]
         decision = await responder.handle(event, user, Context(self, phone, recent))
         if decision is not None:
-            await self._save_and_publish(phone, Origin.SYSTEM, Channel.SYSTEM, decision)
+            await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, decision)
 
 
 async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -> Payload | None:

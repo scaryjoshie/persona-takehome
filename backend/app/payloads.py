@@ -30,7 +30,7 @@ from app.text.events import (
     UserMessage,
     VoiceNote,
 )
-from app.voice.call_events import CallEvent
+from app.voice.call_state import CallEvent
 from app.voice.events import VoiceUtterance
 
 AnyPayload = Annotated[

@@ -11,19 +11,20 @@
 
 ```
 backend/app/
-  main.py        build_app (pipeline + the two media) and the FastAPI app
+  main.py        assemble (pipeline + the two media), from_settings, and the FastAPI app
   pipeline.py    submit: save (applying state changes), publish, hand to the medium with the floor
   payloads.py    every event kind in one union
   jev.py         Jev client (OpenRouter Decisions API); returns None on failure
+  services.py    what routes get from the app state
   database.py  settings.py  timers.py  cli.py
   events/   payload.py  event.py  decision.py  models.py  service.py
   users/    models.py  user.py (User, Medium)  service.py
-  calls/    events.py  state.py
   gmail/    events.py
-  text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  messenger.py
-  voice/    events.py  responder.py (VoiceResponder, LiveCall)  call.py (one call: audio, captions, listener)
-  agent/    agent.py  deps.py  prompts.py + prompts/*.md  context.py  call_notes.py  slots.py  events.py  model.py
-  web/      protocol.py  routes.py  sockets.py  schema.py
+  text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  voice_notes.py
+  voice/    events.py  call_state.py (CallEvent, CallState, next_state)  responder.py (VoiceResponder, LiveCall, call_note)  call.py (one call: audio, captions, listener)  routes.py
+  agent/    agent.py  deps.py (incl. Messenger)  prompts.py + prompts/*.md  objectives.py  context.py  slots.py  events.py  model.py
+  web/      protocol.py (every browser message)  routes.py  sockets.py  schema.py
+  previews/ fetch.py  routes.py
 ```
 
 The medium contract is one method, `handle(event, user, ctx) -> Decision | None`. Each medium owns its own vocabulary. The text medium is stateless (decisions come from the log and the user row); the voice medium's only in-process state is the live call.

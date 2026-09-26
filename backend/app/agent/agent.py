@@ -22,7 +22,7 @@ from app.gmail.events import GmailEvent, GmailPhase
 from app.pipeline import RECENT
 from app.text.events import AgentMessage
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 
 
 class Bubbles(BaseModel):
@@ -75,7 +75,7 @@ async def say(deps: Deps, text: str) -> None:
     """Send a bubble: record it, then push it through the messenger."""
     bubble = AgentMessage(text=text, from_call=deps.medium is Medium.VOICE)
     await deps.pipeline.submit(deps.phone, deps.origin, deps.channel, bubble)
-    await deps.messenger.send(deps.phone, text)
+    await deps.env.messenger.send(deps.phone, text)
 
 
 # Who may use which tool. By text the agent does everything itself. On a call the voice only
@@ -220,7 +220,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     )
     if not await _submit(ctx, ringing):
         return "can't call right now; a call is already ringing or in progress"
-    d.placed_call.append(True)  # the call is this reply; its bubbles are dropped
+    d.placed_call = True  # the call is this reply; its bubbles are dropped
     missed = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id=call_id)
     d.pipeline.later(RING_SECONDS, d.phone, Origin.SYSTEM, Channel.SYSTEM, missed)
     await _record(ctx, "start_call", {"reason": reason}, {})

@@ -25,10 +25,10 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Literal, cast
+from typing import cast
 
 from fastapi import WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent, SpeechPart
 from pydantic_ai.realtime import RealtimeSession, RealtimeTurnCompleteEvent
 from pydantic_ai.realtime.openai_live import (
@@ -46,10 +46,11 @@ from app.agent.objectives import guidance
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
-from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.users.user import Medium, User
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
+from app.web.protocol import TranscriptPartial
 
 log = logging.getLogger(__name__)
 
@@ -60,19 +61,6 @@ NOW = "Where things stand now:"
 STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
-
-
-class TranscriptPartial(BaseModel):
-    """A live caption: `text` is the turn's full transcript so far (replace, don't append).
-    `final` closes the turn; the VoiceUtterance event with the same turn_id follows."""
-
-    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
-
-    type: Literal["partial"] = "partial"
-    speaker: Speaker
-    turn_id: str
-    text: str
-    final: bool
 
 
 async def run_call(
@@ -134,24 +122,7 @@ async def run_call(
             state = StateNotes(pipeline, phone, call)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
-            # Say hi, then pick up the setup where it stands. The reason for the call is
-            # background, not a script: reading it out made the voice lead with the ask.
-            next_step = (
-                "ask what they want to call you, with a light reason (you can't really be "
-                "their assistant without a name)"
-                if user.slots.agent_name is None
-                else "ask their name"
-                if user.slots.user_name is None
-                else "carry on from where you left off"
-            )
-            if user.call.initiated_by is Initiator.USER:
-                opener = "They just called you. Pick up like a friend would"
-            else:
-                opener = "They just picked up your call. Say hi like a friend would"
-            opener += f", then {next_step}."
-            if user.slots.agent_name:
-                opener += " Your name is already on their screen; don't say it."
-            await session.send(opener)
+            await session.send(_opener(user))
             transcript = Transcript(phone, pipeline, push, call, Listener(env, call, phone))
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
@@ -182,6 +153,27 @@ async def run_call(
         await pipeline.submit(phone, Origin.CALL, Channel.SYSTEM, ended_event)
         with contextlib.suppress(Exception):
             await websocket.close()
+
+
+def _opener(user: User) -> str:
+    """Say hi, then pick up the setup where it stands. The reason for the call is
+    background, not a script: reading it out made the voice lead with the ask."""
+    next_step = (
+        "ask what they want to call you, with a light reason (you can't really be "
+        "their assistant without a name)"
+        if user.slots.agent_name is None
+        else "ask their name"
+        if user.slots.user_name is None
+        else "carry on from where you left off"
+    )
+    if user.call.initiated_by is Initiator.USER:
+        opener = "They just called you. Pick up like a friend would"
+    else:
+        opener = "They just picked up your call. Say hi like a friend would"
+    opener += f", then {next_step}."
+    if user.slots.agent_name:
+        opener += " Your name is already on their screen; don't say it."
+    return opener
 
 
 async def _microphone(
@@ -279,10 +271,9 @@ async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None
     """After end_call: wait for the voice to finish a goodbye (one it says next, or one it
     already said), let it play out, then hang up."""
     await call.hang_up_asked.wait()
-    before = call.hang_up_after or 0
     asked = time.monotonic()
     while time.monotonic() - asked < HANG_UP_WAIT:  # noqa: ASYNC110 (polls two conditions)
-        said_bye = call.agent_lines > before or GOODBYE.search(call.last_agent_line)
+        said_bye = call.agent_lines > call.hang_up_after or GOODBYE.search(call.last_agent_line)
         if said_bye and not call.speaking:
             await asyncio.sleep(1.0)
             break

@@ -25,6 +25,16 @@ def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
     return out
 
 
+def last_lines(events: list[Event], n: int = 12) -> list[str]:
+    """The last few events as "role: text" lines, for Jev's view of the conversation."""
+    lines: list[str] = []
+    for event in events[-n:]:
+        turn = event.payload.turn(event.ts)
+        if turn is not None:
+            lines.append(f"{turn.role.value}: {turn.text}")
+    return lines
+
+
 def to_model_messages(events: tuple[Event, ...] | list[Event]) -> list[ModelMessage]:
     """Notes ride as bracketed user-role parts. Adjacent request-side turns share one
     ModelRequest so requests and responses alternate."""
@@ -46,10 +56,6 @@ def bracket(lines: str) -> str:
     return "\n".join(f"[note: {line}]" for line in lines.split("\n"))
 
 
-def estimate_tokens(text: str) -> int:
-    return max(1, len(text) // 4)
-
-
 def trim_history(
     messages: list[ModelMessage], *, max_messages: int, max_tokens: int
 ) -> list[ModelMessage]:
@@ -57,7 +63,7 @@ def trim_history(
     kept: list[ModelMessage] = []
     budget = max_tokens
     for m in reversed(messages):
-        cost = estimate_tokens(_text_of(m))
+        cost = max(1, len(_text_of(m)) // 4)  # about four characters a token
         if len(kept) >= max_messages or cost > budget:
             break
         kept.append(m)

@@ -14,8 +14,8 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.payloads import AnyPayload
 from app.users.user import Medium
-from app.voice.call import TranscriptPartial
 from app.voice.call_state import CallState
+from app.voice.events import Speaker
 
 
 class Message(BaseModel):
@@ -123,6 +123,17 @@ class CallMessage(Message):
 class TypingMessage(Message):
     type: Literal["typing"] = "typing"
     active: bool
+
+
+class TranscriptPartial(Message):
+    """A live caption: `text` is the turn's full transcript so far (replace, don't append).
+    `final` closes the turn; the VoiceUtterance event with the same turn_id follows."""
+
+    type: Literal["partial"] = "partial"
+    speaker: Speaker
+    turn_id: str
+    text: str
+    final: bool
 
 
 ServerMessage = Annotated[

@@ -10,8 +10,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin, Role
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage, UserMessage
-from app.voice.call_events import CallEvent, CallTransition
-from app.voice.call_state import CallPhase, CallState
+from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
 from tests.conftest import ev
 

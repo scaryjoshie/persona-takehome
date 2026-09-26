@@ -9,15 +9,16 @@ ask Jev, with fixed defaults if Jev is unavailable.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from app.agent.context import last_lines
 from app.events.decision import Decision
 from app.events.event import Event
+from app.gmail.events import GmailEvent, GmailPhase, inbox_lines
 from app.jev import Jev
 from app.pipeline import Context
-from app.text.events import UserMessage
+from app.text.events import Typing, UserMessage
 from app.users.user import User
 
 
@@ -27,7 +28,36 @@ class Note:
     speak: bool
 
 
-NoteFor = Callable[[Event], Note | None]
+def call_note(event: Event) -> Note | None:
+    """How a routed event is worded for the voice. None: the voice needn't hear of it."""
+    match event.payload:
+        case UserMessage(text=text):
+            return Note(f"They just texted you: {text!r}. Work it in naturally.", False)
+        case Typing(active=False):
+            return None
+        case Typing(seconds=seconds):
+            return Note(
+                f"They've been typing a reply for {seconds:.0f}s. "
+                "If you asked them something, invite them to finish typing and wait.",
+                False,
+            )
+        case GmailEvent(phase=GmailPhase.CONNECTED) as connected:
+            return Note(
+                "Their Gmail just connected. Say so in a few words, then show you're useful: "
+                "mention one thing from their inbox that fits what they need. Their latest "
+                f"messages:\n{inbox_lines(connected)}",
+                True,
+            )
+        case GmailEvent(phase=GmailPhase.LINK_SENT):
+            return Note("The Gmail link is in their texts now.", False)
+        case GmailEvent(phase=GmailPhase.SKIPPED):
+            return Note("They don't want to connect Gmail. Don't ask again.", False)
+        case GmailEvent():
+            return Note(
+                "Tell the user the Gmail connection didn't go through; offer to retry.", True
+            )
+        case _:
+            return None
 
 
 class Session(Protocol):
@@ -47,8 +77,8 @@ class LiveCall:
     voice_owes_reply: bool = False  # they spoke last; the voice's next words answer them
     agent_lines: int = 0  # the voice's finished turns so far
     last_agent_line: str = ""
-    hang_up_after: int | None = None  # set by end_call: agent_lines when it was asked
-    hang_up_asked: asyncio.Event = field(default_factory=asyncio.Event)
+    hang_up_asked: asyncio.Event = field(default_factory=asyncio.Event)  # by end_call
+    hang_up_after: int = 0  # agent_lines when end_call asked
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
     async def send(self, text: str, *, speak: bool) -> None:
@@ -107,14 +137,13 @@ DEFAULTS = {"typing": "absorb", "gmail": "defer"}
 
 
 class VoiceResponder:
-    def __init__(self, *, notes: NoteFor, jev: Jev | None = None) -> None:
+    def __init__(self, *, jev: Jev | None = None) -> None:
         self.calls: dict[str, LiveCall] = {}  # phone → the call in progress
-        self._notes = notes
         self._jev = jev
 
     async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
         call = self.calls.get(ctx.phone)
-        note = self._notes(event)
+        note = call_note(event)
         if note is None:
             return None
         if call is None:
@@ -139,7 +168,7 @@ class VoiceResponder:
         call = self.calls.get(phone)
         if call is None:
             return False
-        if call.hang_up_after is None:
+        if not call.hang_up_asked.is_set():
             call.hang_up_after = call.agent_lines
             call.hang_up_asked.set()
         return True
@@ -157,15 +186,10 @@ class VoiceResponder:
 
 
 def _state(event: Event, call: LiveCall, ctx: Context) -> dict[str, object]:
-    conversation: list[str] = []
-    for e in ctx.recent[-12:]:
-        turn = e.payload.turn(e.ts)
-        if turn is not None:
-            conversation.append(f"{turn.role.value}: {turn.text}")
     return {
         "channel": "voice call",
         "assistant_currently_responding": call.speaking,
         "assistant_last_turn_asked_a_question": call.asked_question,
-        "conversation": conversation,
+        "conversation": last_lines(ctx.recent),
         "new_event": event.payload.describe(),
     }

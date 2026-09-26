@@ -17,19 +17,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 from pydantic_ai.realtime.openai_live import OpenAILiveModel
 
-from app.agent.call_notes import call_note
-from app.agent.deps import AgentEnv
+from app.agent.deps import AgentEnv, Messenger
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
 from app.gmail import routes as gmail_routes
 from app.jev import Jev
-from app.payloads import PAYLOADS
 from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
 from app.services import Services
 from app.settings import Settings, get_settings
 from app.text import voice_notes as voice_note_routes
-from app.text.messenger import Messenger
 from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.text.voice_notes import Transcriber
@@ -62,8 +59,8 @@ def assemble(
     timers: Timers | None = None,
     clock: Clock = utc_now,
 ) -> App:
-    pipeline = Pipeline(db, payloads=PAYLOADS, clock=clock, timers=timers or AsyncioTimers())
-    voice = VoiceResponder(notes=call_note, jev=jev)
+    pipeline = Pipeline(db, clock=clock, timers=timers or AsyncioTimers())
+    voice = VoiceResponder(jev=jev)
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,
@@ -132,9 +129,8 @@ def create_app() -> FastAPI:
         if settings.google_client_id and settings.google_client_secret
         else None,
     )
-    routers = (web_routes.router, voice_routes.router, voice_note_routes.router)
-    for router in (*routers, preview_routes.router, gmail_routes.router):
-        web.include_router(router)
+    for module in (web_routes, voice_routes, voice_note_routes, preview_routes, gmail_routes):
+        web.include_router(module.router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

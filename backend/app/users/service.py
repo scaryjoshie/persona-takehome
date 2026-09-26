@@ -32,16 +32,15 @@ async def get_user(session: AsyncSession, phone: str) -> User | None:
     return None if row is None else User.of(row)
 
 
-async def set_slots(session: AsyncSession, phone: str, **values: Any) -> User:
+async def set_slots(session: AsyncSession, phone: str, **values: Any) -> None:
     """Write slot columns by name. Enum values are stored as their string value."""
     row = await _row(session, phone)
     for slot, value in values.items():
         setattr(row, slot, value.value if isinstance(value, StrEnum) else value)
     await session.flush()
-    return User.of(row)
 
 
-async def set_call(session: AsyncSession, phone: str, call: CallState) -> User:
+async def set_call(session: AsyncSession, phone: str, call: CallState) -> None:
     """Sets the call columns and the floor: voice while connected, text otherwise."""
     row = await _row(session, phone)
     row.call_phase = call.phase.value
@@ -52,14 +51,12 @@ async def set_call(session: AsyncSession, phone: str, call: CallState) -> User:
     row.call_ended_at = call.ended_at
     row.floor = (Medium.VOICE if call.phase is CallPhase.CONNECTED else Medium.TEXT).value
     await session.flush()
-    return User.of(row)
 
 
-async def set_typing(session: AsyncSession, phone: str, since: datetime | None) -> User:
+async def set_typing(session: AsyncSession, phone: str, since: datetime | None) -> None:
     row = await _row(session, phone)
     row.typing_since = since
     await session.flush()
-    return User.of(row)
 
 
 async def _row(session: AsyncSession, phone: str) -> UserRow:

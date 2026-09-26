@@ -8,6 +8,8 @@ from collections import defaultdict
 from fastapi import WebSocket
 from pydantic import BaseModel
 
+from app.web.protocol import TypingMessage
+
 log = logging.getLogger(__name__)
 
 
@@ -42,6 +44,4 @@ class WebMessenger:
         return None
 
     async def set_typing(self, phone: str, active: bool) -> None:
-        from app.web.protocol import TypingMessage
-
         await self._sockets.push(phone, TypingMessage(active=active))

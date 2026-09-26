@@ -4,13 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.agent.objectives import parse
-
 _DIR = Path(__file__).parent / "prompts"
 
 
 def read_md(name: str) -> str:
     return (_DIR / f"{name}.md").read_text(encoding="utf-8").strip()
+
+
+def parse(markdown: str) -> dict[str, str]:
+    """Split an objective file into its sections; the untitled top is the key ""."""
+    sections: dict[str, list[str]] = {"": []}
+    key = ""
+    for line in markdown.splitlines():
+        if line.startswith("## "):
+            key = line[3:].strip().lower()
+            sections[key] = []
+        else:
+            sections[key].append(line)
+    return {k: "\n".join(v).strip() for k, v in sections.items()}
 
 
 PERSONA = read_md("persona")  # who the agent is and how it talks; every channel

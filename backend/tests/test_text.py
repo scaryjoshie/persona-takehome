@@ -18,9 +18,9 @@ from app.pipeline import Pipeline
 from app.text.events import ReplyStarted, Typing, UserMessage
 from app.text.reply import Replier
 from app.text.responder import TextResponder
-from app.text.timing import Timing, delay, waiting
+from app.text.timing import delay, waiting
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition
+from app.voice.call_state import CallEvent, CallTransition
 from tests.conftest import (
     PHONE,
     CapturingMessenger,
@@ -67,17 +67,16 @@ def test_waiting_is_everything_since_the_last_reply() -> None:
 
 
 def test_delay_rules() -> None:
-    t = Timing()
     msg = user_text("hi")
     now = msg.ts
-    assert delay([msg], None, now, t) == 1.5
-    assert delay([msg], now, now, t) == 5.0  # typing
-    assert delay([msg], None, now + timedelta(seconds=1), t) == 0.5
+    assert delay([msg], None, now) == 1.5
+    assert delay([msg], now, now) == 5.0  # typing
+    assert delay([msg], None, now + timedelta(seconds=1)) == 0.5
     later = msg.model_copy(update={"ts": now + timedelta(seconds=7)})
-    assert delay([msg, later], now, now + timedelta(seconds=7.5), t) == 0.5  # 8 s cap from first
-    assert delay([msg] * 6, None, now, t) == 0.0  # six waiting
+    assert delay([msg, later], now, now + timedelta(seconds=7.5)) == 0.5  # 8 s cap from first
+    assert delay([msg] * 6, None, now) == 0.0  # six waiting
     outcome = ev(CallEvent(transition=CallTransition.ENDED), Origin.CALL, Channel.SYSTEM)
-    assert delay([msg, outcome], None, now, t) == 0.0  # answer outcomes now
+    assert delay([msg, outcome], None, now) == 0.0  # answer outcomes now
 
 
 # ---- the medium, end to end ----------------------------------------------------------------

@@ -16,7 +16,7 @@ from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.services import ServicesDep
 from app.text.events import Reaction, Typing, UserMessage
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.web.protocol import (
     CLIENT_MESSAGE,
     CallAction,
@@ -36,13 +36,8 @@ from app.web.protocol import (
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-STATE_KINDS = {
-    "slot_changed",
-    "call",
-    "gmail",
-    "graduated",
-    "contact_saved",
-}  # the browser needs fresh state
+# After these, the browser needs fresh state.
+STATE_KINDS = {"slot_changed", "call", "gmail", "graduated", "contact_saved"}
 
 
 class SessionRequest(BaseModel):

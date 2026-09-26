@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from app.voice.call_events import CallEvent, CallTransition, Initiator
-from app.voice.call_state import CallPhase, CallState, next_state
+from app.voice.call_state import (
+    CallEvent,
+    CallPhase,
+    CallState,
+    CallTransition,
+    Initiator,
+    next_state,
+)
 from tests.conftest import FakeClock
 
 
