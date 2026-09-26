@@ -10,6 +10,7 @@ words in prompts/objectives/<name>.md:
     ## on a call      shown only on a call
     ## script         lines to say; code picks one per user
     ## script: <scenario>   lines for a named scenario, used instead of `script`
+    ## angle         directions (not lines) for steps that depend on them; one per user
 
 Scripts are for the clean case only: fixed moments that are the same for everyone (the
 opener, asking for a name), shown the first time the step comes up and never right after a
@@ -156,6 +157,9 @@ def _block(
     channel = "on a call" if s.medium is Medium.VOICE else "by text"
     if channel in sections:
         parts.append(sections[channel])
+    if "angle" in sections:  # not a line to say: a direction, worded fresh, varied per user
+        angle = pick_from(variants(sections["angle"]), f"{phone}:{objective.name}:angle")
+        parts.append(f"Your angle for this, in your own words: {angle}")
     scenario = objective.scenario(s)
     script = sections.get(f"script: {scenario}") if scenario else None
     script = script or sections.get("script")

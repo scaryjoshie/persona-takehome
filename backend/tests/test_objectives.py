@@ -118,3 +118,11 @@ def test_scripts_show_only_in_the_clean_case() -> None:
     after_call = render(Situation(Slots(), Medium.TEXT, after_call=True), "1", OBJECTIVE_TEXTS)
     assert "use this line" in first
     assert "use this line" not in again and "use this line" not in after_call
+
+
+def test_the_ask_gets_an_angle_that_varies_by_user() -> None:
+    angles = {
+        render(situation(agent_name="M", user_name="S"), phone, OBJECTIVE_TEXTS)
+        for phone in ("1", "2", "3", "4", "5", "6")
+    }
+    assert len(angles) > 1 and all("Your angle for this" in a for a in angles)
