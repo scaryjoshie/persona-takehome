@@ -22,6 +22,7 @@ from app.database import SessionFactory, create_schema, make_engine, make_sessio
 from app.jev import Jev
 from app.payloads import PAYLOADS
 from app.pipeline import Pipeline
+from app.previews.routes import make_router as make_preview_router
 from app.settings import get_settings
 from app.text.messenger import Messenger
 from app.text.reply import Replier
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
 
     web = FastAPI(lifespan=lifespan)
     web.include_router(make_router(built.pipeline, sockets, start_call, built.voice))
+    web.include_router(make_preview_router())
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

@@ -7,6 +7,7 @@ import json
 from pydantic import TypeAdapter
 
 from app.payloads import AnyPayload
+from app.previews.fetch import Preview
 from app.web.protocol import ClientMessage, ServerMessage
 
 
@@ -15,6 +16,7 @@ def schema() -> dict[str, object]:
         "client_message": TypeAdapter(ClientMessage).json_schema(mode="serialization"),
         "server_message": TypeAdapter(ServerMessage).json_schema(mode="serialization"),
         "payload": TypeAdapter(AnyPayload).json_schema(mode="serialization"),
+        "preview": Preview.model_json_schema(mode="serialization"),
     }
 
 
