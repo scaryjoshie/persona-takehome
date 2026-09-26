@@ -36,6 +36,7 @@ LINES = {
     "link": "Sure, text me the link.",
     "done": "Okay, I just connected it.",
     "rename": "Actually, wait, can you change your name to Nova? N, O, V, A.",
+    "email": "Can you send an email to my landlord saying the heater is still broken?",
 }
 
 
@@ -140,6 +141,17 @@ SCENARIOS: dict[str, list[str]] = {
         "say:yes",
         "say:rename",
         "say:siobhan",
+        "say:bye",
+        "wait:10",
+    ],
+    "email_on_call": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "say:yes",
+        "say:email",
+        "say:link",
         "say:bye",
         "wait:10",
     ],

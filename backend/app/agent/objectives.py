@@ -163,7 +163,8 @@ def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
     if following is not None:
         parts.append(
             "Once that's actually settled (they've agreed or answered, not just heard a "
-            "suggestion), go straight on to this without waiting for another turn:"
+            "suggestion), this comes next. Respond to what they just said first, and take one "
+            "step per turn; never run through several steps in one go:"
         )
         parts += _block(following, s, phone, texts)
     return "\n\n".join(parts)

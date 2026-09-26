@@ -161,3 +161,12 @@ async def test_silence_gets_a_check_in_then_a_graceful_hang_up(
     spoken = [text for text, speak in session.sent if speak]
     assert "Check in" in spoken[0] and "text" in spoken[1]
     assert call.hang_up_asked.is_set() and call.hang_up_reason == "silence"
+
+
+async def test_long_notes_go_to_the_voice_in_pieces(app: App) -> None:
+    _, call, session = await on_a_call(app, VoiceResponder())
+    note = "\n".join(f"line {i}: " + "x" * 90 for i in range(40))  # ~4000 chars
+    await call.send(note, speak=True)
+    assert len(session.sent) > 1 and all(len(text) <= 1200 for text, _ in session.sent)
+    assert [speak for _, speak in session.sent] == [False] * (len(session.sent) - 1) + [True]
+    assert "\n".join(text for text, _ in session.sent) == note

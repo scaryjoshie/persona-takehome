@@ -86,8 +86,13 @@ class LiveCall:
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
     async def send(self, text: str, *, speak: bool) -> None:
-        if not self.closed:
-            await self.session.send(text, respond=speak)
+        """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes
+        go in pieces; only the last one asks the voice to respond."""
+        pieces = _pieces(text)
+        for i, piece in enumerate(pieces):
+            if self.closed:
+                return
+            await self.session.send(piece, respond=speak and i == len(pieces) - 1)
 
     def said(self, line: str) -> None:
         self.agent_lines += 1
@@ -200,3 +205,27 @@ def _state(event: Event, call: LiveCall, ctx: Context) -> dict[str, object]:
         "conversation": last_lines(ctx.recent),
         "new_event": event.payload.describe(),
     }
+
+
+NOTE_CHARS = 1200  # ~300 tokens: well under Live's 500-token limit per send
+
+
+def _pieces(text: str) -> list[str]:
+    """Split by lines into pieces of at most NOTE_CHARS (a longer single line is cut)."""
+    pieces: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        while len(line) > NOTE_CHARS:
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(line[:NOTE_CHARS])
+            line = line[NOTE_CHARS:]
+        if current and len(current) + 1 + len(line) > NOTE_CHARS:
+            pieces.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current.strip():
+        pieces.append(current)
+    return pieces or [text]
