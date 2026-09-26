@@ -225,6 +225,16 @@ export interface GmailEvent {
   kind: "gmail";
   phase: GmailPhase;
   email: string | null;
+  demo: boolean;
+  inbox: InboxItem[];
+}
+/**
+ * One inbox message as seen at connect time: headers and Gmail's snippet, no body.
+ */
+export interface InboxItem {
+  sender: string;
+  subject: string;
+  snippet: string;
 }
 export interface Decision {
   kind: "decision";

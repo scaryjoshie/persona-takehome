@@ -592,12 +592,27 @@
             ],
             "default": null,
             "title": "Email"
+          },
+          "demo": {
+            "default": false,
+            "title": "Demo",
+            "type": "boolean"
+          },
+          "inbox": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/InboxItem"
+            },
+            "title": "Inbox",
+            "type": "array"
           }
         },
         "required": [
           "kind",
           "phase",
-          "email"
+          "email",
+          "demo",
+          "inbox"
         ],
         "title": "GmailEvent",
         "type": "object"
@@ -626,6 +641,30 @@
           "kind"
         ],
         "title": "Graduated",
+        "type": "object"
+      },
+      "InboxItem": {
+        "description": "One inbox message as seen at connect time: headers and Gmail's snippet, no body.",
+        "properties": {
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sender",
+          "subject",
+          "snippet"
+        ],
+        "title": "InboxItem",
         "type": "object"
       },
       "Initiator": {
@@ -1607,12 +1646,27 @@
             ],
             "default": null,
             "title": "Email"
+          },
+          "demo": {
+            "default": false,
+            "title": "Demo",
+            "type": "boolean"
+          },
+          "inbox": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/InboxItem"
+            },
+            "title": "Inbox",
+            "type": "array"
           }
         },
         "required": [
           "kind",
           "phase",
-          "email"
+          "email",
+          "demo",
+          "inbox"
         ],
         "title": "GmailEvent",
         "type": "object"
@@ -1641,6 +1695,30 @@
           "kind"
         ],
         "title": "Graduated",
+        "type": "object"
+      },
+      "InboxItem": {
+        "description": "One inbox message as seen at connect time: headers and Gmail's snippet, no body.",
+        "properties": {
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sender",
+          "subject",
+          "snippet"
+        ],
+        "title": "InboxItem",
         "type": "object"
       },
       "Initiator": {
