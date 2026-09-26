@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.users.models import UserRow
@@ -71,3 +72,10 @@ async def delete_user(session: AsyncSession, phone: str) -> None:
     row = await session.get(UserRow, phone)
     if row is not None:
         await session.delete(row)
+
+
+async def in_calls(session: AsyncSession) -> list[tuple[str, CallPhase]]:
+    """Users whose call hasn't ended: (phone, phase)."""
+    live = (CallPhase.RINGING, CallPhase.CONNECTING, CallPhase.CONNECTED)
+    rows = await session.exec(select(UserRow).where(col(UserRow.call_phase).in_(live)))
+    return [(row.phone, CallPhase(row.call_phase)) for row in rows]

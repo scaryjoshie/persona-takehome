@@ -32,7 +32,7 @@ from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
 from app.users.user import Medium, User
-from app.voice.call_state import CallEvent, CallTransition, next_state
+from app.voice.call_state import CallEvent, CallPhase, CallTransition, next_state
 
 log = logging.getLogger(__name__)
 
@@ -147,6 +147,17 @@ class Pipeline:
                 self._subscribers[phone].remove(entry)
 
         return unsubscribe
+
+    async def close_open_calls(self) -> None:
+        """At startup nothing is on a call, whatever the rows say: a restart mid-call never
+        wrote its "ended". Close them, so texts go to the text side again and it picks up."""
+        async with self._db() as s:
+            open_calls = await users.in_calls(s)
+        for phone, phase in open_calls:
+            ringing = phase is CallPhase.RINGING
+            end = CallTransition.FAILED if ringing else CallTransition.ENDED
+            closed = CallEvent(transition=end, reason="server_restart")
+            await self.submit(phone, Origin.SYSTEM, Channel.SYSTEM, closed)
 
     async def reset(self, phone: str) -> None:
         """Debug: forget everything about a user."""

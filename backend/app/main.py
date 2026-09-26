@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         await create_schema(make_engine(settings.database_url))
+        await built.pipeline.close_open_calls()
         yield
 
     web = FastAPI(lifespan=lifespan)

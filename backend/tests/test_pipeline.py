@@ -7,7 +7,7 @@ from app.google.events import GmailEvent, GmailPhase
 from app.pipeline import Pipeline
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.users.user import Medium
-from app.voice.call_state import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallPhase, CallTransition, Initiator
 from tests.conftest import PHONE, FakeClock, FakeResponder, FakeTimers
 
 
@@ -155,3 +155,15 @@ async def test_declining_a_call_is_remembered(pipeline: Pipeline) -> None:
     assert (await pipeline.user(PHONE)).slots.no_calls
     opt_out = CallOptOut()
     assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, opt_out) is None
+
+
+async def test_calls_left_open_by_a_restart_are_closed_at_startup(pipeline: Pipeline) -> None:
+    for t in (CallTransition.CONNECTING, CallTransition.CONNECTED):
+        await pipeline.submit(
+            PHONE, Origin.CALL, Channel.SYSTEM, CallEvent(transition=t), route=False
+        )
+    assert (await pipeline.user(PHONE)).floor is Medium.VOICE
+    await pipeline.close_open_calls()
+    user = await pipeline.user(PHONE)
+    assert user.call.phase is CallPhase.ENDED and user.call.reason == "server_restart"
+    assert user.floor is Medium.TEXT
