@@ -105,7 +105,7 @@ def create_app() -> FastAPI:
 
     web = FastAPI(lifespan=lifespan)
     web.include_router(make_router(built.pipeline, sockets, start_call, built.voice))
-    web.include_router(make_preview_router())
+    web.include_router(make_preview_router(settings.app_base_url))
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

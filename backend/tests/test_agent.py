@@ -101,5 +101,5 @@ async def test_instructions_include_state_and_text_tail(
     with agent.override(model=FunctionModel(fn)):
         await agent.run("x", deps=deps, output_type=Bubbles)
     text = captured["instructions"]
-    assert "agent_name: Jarvis" in text and "still need: user_name, help_need, gmail" in text
+    assert "Your name is Jarvis." in text and "Still missing: user name, help need, gmail." in text
     assert "zero to four" in text and prompts.PERSONA[:40] in text

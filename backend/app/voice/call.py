@@ -29,7 +29,7 @@ from pydantic_ai.realtime.openai_live import OpenAILiveModel, OpenAILiveModelSet
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import state_block, to_model_messages, trim_history
+from app.agent.context import to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
 from app.calls.events import CallEvent, CallTransition
 from app.events.event import Event
@@ -79,7 +79,8 @@ async def run_call(
     deps = env.deps(user, Medium.VOICE)
     settings = OpenAILiveModelSettings(
         openai_live_instructions=(
-            f"{prompts.SPEAKING}\n\nWhat you know right now:\n{state_block(user.slots, user.call)}"
+            f"{prompts.PERSONA}\n\n{prompts.ONBOARDING}\n\n{prompts.CALL}\n\n"
+            f"# What you know\n\n{what_you_know(user.slots, user.call)}"
         ),
     )
 

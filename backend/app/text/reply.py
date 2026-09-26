@@ -36,7 +36,7 @@ class Replier:
         result = await agent.run(
             None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
         )
-        bubbles = [b.strip() for b in result.output.bubbles if b.strip()]
+        bubbles = [b.strip() for b in result.output.bubbles if b.strip()] + deps.after_reply
         try:
             for i, text in enumerate(bubbles):
                 if await self._superseded(phone, through_seq):

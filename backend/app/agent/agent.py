@@ -10,7 +10,7 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
-from app.agent.context import state_block
+from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import Graduated, SlotChanged, ToolCall
 from app.calls.events import CallEvent, CallTransition, Initiator
@@ -28,7 +28,7 @@ class Bubbles(BaseModel):
 
 agent: Agent[Deps, str] = Agent(
     deps_type=Deps,
-    instructions=[prompts.PERSONA, prompts.STYLE, prompts.WORK],
+    instructions=[prompts.PERSONA, prompts.ONBOARDING],
     defer_model_check=True,
     name="onboarding",
 )
@@ -36,8 +36,9 @@ agent: Agent[Deps, str] = Agent(
 
 @agent.instructions
 def dynamic_instructions(ctx: RunContext[Deps]) -> str:
-    tail = prompts.TEXT_TAIL if ctx.deps.medium is Medium.TEXT else ""
-    return f"Current state:\n{state_block(ctx.deps.user.slots, ctx.deps.user.call)}\n\n{tail}"
+    known = what_you_know(ctx.deps.user.slots, ctx.deps.user.call)
+    tail = prompts.TEXT if ctx.deps.medium is Medium.TEXT else ""
+    return f"# What you know\n\n{known}\n\n{tail}"
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -104,7 +105,10 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     if not await _submit(ctx, GmailEvent(phase=GmailPhase.LINK_SENT)):
         return "the link was already sent (or Gmail is connected); it is in their texts"
     link = f"{d.env.app_base_url}/api/auth/google/start?phone={d.phone}"
-    await say(d, link)
+    if d.medium is Medium.TEXT:
+        d.after_reply.append(link)  # sent after this reply's bubbles, so they introduce it
+    else:
+        await say(d, link)
     await _record(ctx, "send_gmail_link", {}, {"link": link})
     return "link sent by text; the user will tap it when ready"
 
@@ -126,6 +130,14 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     await _submit(ctx, ringing)
     await _record(ctx, "start_call", {"reason": reason}, {})
     return "calling now; the user's phone is ringing"
+
+
+@agent.tool(prepare=only_voice)
+async def send_text(ctx: RunContext[Deps], text: str) -> str:
+    """Text the user during the call, e.g. something easier to read than to hear."""
+    await say(ctx.deps, text)
+    await _record(ctx, "send_text", {"text": text}, {})
+    return "texted"
 
 
 @agent.tool(prepare=only_voice)

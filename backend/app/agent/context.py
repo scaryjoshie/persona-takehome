@@ -5,9 +5,10 @@ from __future__ import annotations
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from app.agent.slots import Slots
-from app.calls.state import CallState
+from app.calls.state import CallPhase, CallState
 from app.events.event import Event
 from app.events.payload import Role, Turn
+from app.gmail.events import GmailPhase
 
 
 def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
@@ -73,18 +74,38 @@ def _text_of(m: ModelMessage) -> str:
     )
 
 
-def state_block(slots: Slots, call: CallState) -> str:
-    """The facts rendered into every prompt. This is the whole steering mechanism."""
-    gmail = "not asked" if slots.gmail is None else slots.gmail.value
-    if slots.gmail_email:
-        gmail += f" ({slots.gmail_email})"
+def what_you_know(slots: Slots, call: CallState) -> str:
+    """The facts, in plain sentences, rendered into every prompt."""
     lines = [
-        f"agent_name: {slots.agent_name or '(not chosen)'}",
-        f"user_name: {slots.user_name or '(unknown)'}",
-        f"help_need: {slots.help_need or '(unknown)'}",
-        f"gmail: {gmail}",
-        f"graduated: {'yes' if slots.graduated else 'no'}",
-        f"call: {call.phase.value}" + (f", reason: {call.reason}" if call.reason else ""),
-        "still need: " + (", ".join(slots.missing()) or "nothing"),
+        f"Your name is {slots.agent_name}."
+        if slots.agent_name
+        else "You don't have a name yet; they haven't picked one.",
+        f"They go by {slots.user_name}." if slots.user_name else "You don't know their name yet.",
+        f"They want help with: {slots.help_need}."
+        if slots.help_need
+        else "You don't know what they want help with yet.",
     ]
+    match slots.gmail:
+        case None:
+            lines.append("Gmail isn't connected and you haven't sent the link.")
+        case GmailPhase.LINK_SENT:
+            lines.append(
+                "You've texted the Gmail link; it isn't connected yet. Don't send it again."
+            )
+        case GmailPhase.CONNECTED:
+            lines.append(f"Gmail is connected ({slots.gmail_email}).")
+        case GmailPhase.SKIPPED:
+            lines.append("They said no to Gmail. Don't bring it up again.")
+        case GmailPhase.FAILED:
+            lines.append("Connecting Gmail failed. Offer to try again once.")
+    if slots.graduated:
+        lines.append("They've graduated: onboarding is done.")
+    if call.phase is CallPhase.CONNECTED:
+        lines.append("You're on a call with them right now.")
+    missing = slots.missing()
+    lines.append(
+        "Still missing: " + ", ".join(m.replace("_", " ") for m in missing) + "."
+        if missing
+        else "You have everything onboarding needs."
+    )
     return "\n".join(lines)

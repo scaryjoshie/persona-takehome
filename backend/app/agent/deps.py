@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic_ai.models import Model
 
@@ -28,6 +28,7 @@ class Deps:
     user: User  # a snapshot taken when the run started
     medium: Medium
     env: AgentEnv
+    after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
 
     @property
     def pipeline(self) -> Pipeline:

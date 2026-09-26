@@ -7,14 +7,23 @@ from fastapi import APIRouter, HTTPException
 
 from app.previews.fetch import FetchFailed, Preview, PreviewCache, Refused, fetch_preview
 
+GMAIL_LINK = "/api/auth/google/start"
 
-def make_router() -> APIRouter:
+
+def make_router(app_base_url: str) -> APIRouter:
     router = APIRouter()
     cache = PreviewCache()
     client = httpx.AsyncClient(timeout=httpx.Timeout(4.0))
 
     @router.get("/api/preview")
     async def preview(url: str) -> Preview:
+        if url.startswith(app_base_url + GMAIL_LINK):  # our own link: no fetch needed
+            return Preview(
+                url=url,
+                title="Connect your Google account",
+                description="Let your Persona read your Gmail so it can see what needs you.",
+                site_name="Persona",
+            )
         cached = cache.get(url)
         if cached is not None:
             return cached

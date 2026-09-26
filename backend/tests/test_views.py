@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart
 
-from app.agent.context import state_block, to_model_messages, trim_history, turns
+from app.agent.context import to_model_messages, trim_history, turns, what_you_know
 from app.agent.events import ToolCall
 from app.agent.slots import Slots
 from app.calls.events import CallEvent, CallTransition
@@ -87,13 +87,13 @@ def test_trim_history_keeps_the_tail() -> None:
     assert len(trim_history(msgs, max_messages=100, max_tokens=25)) == 2
 
 
-def test_state_block() -> None:
-    block = state_block(Slots(agent_name="Jarvis"), CallState())
-    assert "agent_name: Jarvis" in block and block.endswith(
-        "still need: user_name, help_need, gmail"
-    )
-    done = state_block(
+def test_what_you_know_is_plain_sentences() -> None:
+    text = what_you_know(Slots(agent_name="Jarvis"), CallState())
+    assert "Your name is Jarvis." in text and "You don't know their name yet." in text
+    assert text.endswith("Still missing: user name, help need, gmail.")
+    done = what_you_know(
         Slots(agent_name="J", user_name="S", help_need="inbox", gmail=GmailPhase.SKIPPED),
-        CallState(phase=CallPhase.ENDED, reason="user_hangup"),
+        CallState(phase=CallPhase.CONNECTED),
     )
-    assert done.endswith("still need: nothing") and "call: ended, reason: user_hangup" in done
+    assert "They said no to Gmail." in done and "on a call with them right now" in done
+    assert done.endswith("You have everything onboarding needs.")

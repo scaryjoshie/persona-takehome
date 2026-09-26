@@ -11,9 +11,8 @@ def read_md(name: str) -> str:
     return (_DIR / f"{name}.md").read_text(encoding="utf-8").strip()
 
 
-PERSONA = read_md("persona")
-STYLE = read_md("style")
-WORK = read_md("work")
-TEXT_TAIL = read_md("text_tail")
-SPEAKING = read_md("speaking")
-LISTENER = read_md("listener")
+PERSONA = read_md("persona")  # who the agent is and how it talks; every channel
+ONBOARDING = read_md("onboarding")  # the job right now; every channel
+TEXT = read_md("text")  # the text channel's format
+CALL = read_md("call")  # the voice on a call
+LISTENER = read_md("listener")  # the back office during a call
