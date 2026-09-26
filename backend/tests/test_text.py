@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from datetime import timedelta
 
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from app.agent.agent import agent
 from app.calls.events import CallEvent, CallTransition
 from app.events.decision import Decision
 from app.events.payload import Channel, Origin
+from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import ReplyStarted, Typing, UserMessage
 from app.text.reply import Replier
@@ -132,7 +133,11 @@ async def test_a_hang_up_is_answered_at_once(
 
 
 async def test_a_newer_message_supersedes_a_reply_in_flight(
-    pipeline: Pipeline, timers: FakeTimers, clock: FakeClock, messenger: CapturingMessenger
+    app: App,
+    pipeline: Pipeline,
+    timers: FakeTimers,
+    clock: FakeClock,
+    messenger: CapturingMessenger,
 ) -> None:
     release = asyncio.Event()
     replies: list[int] = []
@@ -143,15 +148,8 @@ async def test_a_newer_message_supersedes_a_reply_in_flight(
             await release.wait()  # the first reply is still thinking...
         return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": ["hi"]})])
 
-    replier = Replier(
-        agent,
-        pipeline=pipeline,
-        messenger=messenger,
-        model=FunctionModel(slow_model),
-        app_base_url="http://x",
-        sleep=no_sleep,
-    )
-    pipeline.responders[Medium.TEXT] = TextResponder(replier)
+    env = dataclasses.replace(app.env, model=FunctionModel(slow_model))
+    pipeline.responders[Medium.TEXT] = TextResponder(Replier(env, sleep=no_sleep))
     await say(pipeline, "book a dentist")
     timers.fire_next()
     for _ in range(200):  # let the check run and the first reply start

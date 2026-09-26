@@ -5,11 +5,9 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.agent.model import agent_model
-from app.database import create_schema, make_engine, make_sessions
+from app.database import create_schema, make_engine
 from app.events.payload import Channel, Origin
-from app.jev import Jev
-from app.main import build_app
+from app.main import from_settings
 from app.settings import get_settings
 from app.text.events import UserMessage
 
@@ -25,20 +23,9 @@ class ConsoleMessenger:
 
 async def main(phone: str) -> None:
     settings = get_settings()
-    engine = make_engine(settings.database_url)
-    await create_schema(engine)
-    jev = (
-        Jev(api_key=settings.openrouter_api_key.get_secret_value(), model=settings.jev_model)
-        if settings.openrouter_api_key
-        else None
-    )
-    pipeline = build_app(
-        db=make_sessions(engine),
-        messenger=ConsoleMessenger(),
-        model=agent_model(settings),
-        app_base_url=settings.app_base_url,
-        jev=jev,
-    ).pipeline
+    await create_schema(make_engine(settings.database_url))
+    built, _ = from_settings(settings, ConsoleMessenger())
+    pipeline = built.pipeline
     print(f"chatting as {phone}; ctrl-d to quit")
     loop = asyncio.get_running_loop()
     while True:

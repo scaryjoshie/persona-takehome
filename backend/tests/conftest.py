@@ -9,12 +9,11 @@ import pytest
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from app.agent.agent import agent
 from app.database import SessionFactory, create_schema, make_engine, make_sessions
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.main import App, build_app
+from app.main import App, assemble
 from app.pipeline import Context, Pipeline
 from app.text.events import Typing, UserMessage
 from app.text.reply import Replier
@@ -164,7 +163,7 @@ def messenger() -> CapturingMessenger:
 def app(
     db: SessionFactory, messenger: CapturingMessenger, clock: FakeClock, timers: FakeTimers
 ) -> App:
-    built = build_app(
+    built = assemble(
         db=db,
         messenger=messenger,
         model=FunctionModel(reply_hi),
@@ -172,15 +171,7 @@ def app(
         timers=timers,
         clock=clock,
     )
-    replier = Replier(
-        agent,
-        pipeline=built.pipeline,
-        messenger=messenger,
-        model=FunctionModel(reply_hi),
-        app_base_url="http://x",
-        sleep=no_sleep,
-    )
-    built.pipeline.responders[Medium.TEXT] = TextResponder(replier)
+    built.pipeline.responders[Medium.TEXT] = TextResponder(Replier(built.env, sleep=no_sleep))
     return built
 
 

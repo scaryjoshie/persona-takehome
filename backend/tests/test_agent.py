@@ -5,7 +5,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent import prompts
 from app.agent.agent import Bubbles, agent
-from app.agent.deps import Deps
+from app.agent.deps import AgentEnv
 from app.agent.events import SlotChanged
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
@@ -30,14 +30,8 @@ async def run_text(
     async def sleep(s: float) -> None:
         sleeps.append(s)
 
-    replier = Replier(
-        agent,
-        pipeline=pipeline,
-        messenger=messenger,
-        model=model,
-        app_base_url="http://x",
-        sleep=sleep,
-    )
+    env = AgentEnv(pipeline=pipeline, messenger=messenger, model=model, app_base_url="http://x")
+    replier = Replier(env, sleep=sleep)
     trigger = await pipeline.submit(
         PHONE, Origin.USER, Channel.TEXT, UserMessage(text="hi, I'm Sam"), route=False
     )
@@ -84,9 +78,7 @@ async def test_tools_are_filtered_by_medium(
         (Medium.TEXT, "start_call", "end_call"),
         (Medium.VOICE, "end_call", "start_call"),
     ):
-        deps = Deps(
-            user=user, pipeline=pipeline, messenger=messenger, medium=medium, app_base_url=""
-        )
+        deps = AgentEnv(pipeline, messenger, FunctionModel(fn), "").deps(user, medium)
         with agent.override(model=FunctionModel(fn)):
             await agent.run("x", deps=deps, output_type=Bubbles)
         assert present in seen["names"] and absent not in seen["names"]
@@ -104,13 +96,8 @@ async def test_instructions_include_state_and_text_tail(
     await pipeline.submit(
         PHONE, Origin.TEXT_AGENT, Channel.TEXT, SlotChanged(slot="agent_name", new="Jarvis")
     )
-    deps = Deps(
-        user=await pipeline.user(PHONE),
-        pipeline=pipeline,
-        messenger=messenger,
-        medium=Medium.TEXT,
-        app_base_url="",
-    )
+    env = AgentEnv(pipeline, messenger, FunctionModel(fn), "")
+    deps = env.deps(await pipeline.user(PHONE), Medium.TEXT)
     with agent.override(model=FunctionModel(fn)):
         await agent.run("x", deps=deps, output_type=Bubbles)
     text = captured["instructions"]

@@ -18,7 +18,7 @@ from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
 from app.database import create_schema, make_engine, make_sessions
-from app.main import build_app
+from app.main import assemble
 from app.web.routes import make_router, normalize
 from app.web.sockets import Sockets, WebMessenger
 
@@ -42,7 +42,7 @@ async def fake_call(websocket: WebSocket, phone: str) -> None:
 def client(tmp_path: Path) -> Iterator[TestClient]:
     engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'web.db'}")
     sockets = Sockets()
-    built = build_app(
+    built = assemble(
         db=make_sessions(engine),
         messenger=WebMessenger(sockets),
         model=FunctionModel(reply_hi),

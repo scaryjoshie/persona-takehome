@@ -19,26 +19,22 @@ import contextlib
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
 from typing import Literal
 
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict
-from pydantic_ai import Agent
 from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent, SpeechPart
-from pydantic_ai.models import Model
-from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.realtime import RealtimeSession, RealtimeTurnCompleteEvent
 from pydantic_ai.realtime.openai_live import OpenAILiveModel, OpenAILiveModelSettings
 
 from app.agent import prompts
+from app.agent.agent import agent
 from app.agent.context import state_block, to_model_messages, trim_history
-from app.agent.deps import Deps
+from app.agent.deps import AgentEnv
 from app.calls.events import CallEvent, CallTransition
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.text.messenger import Messenger
 from app.users.user import Medium
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
@@ -63,49 +59,28 @@ class TranscriptPartial(BaseModel):
     final: bool
 
 
-@dataclass(frozen=True)
-class VoiceConfig:
-    listener_model: Model  # the agent's model; runs the back-office listener
-    api_key: str
-    live_model: str  # "gpt-live-1"
-    backend_model: str | None  # None = the agent's own model does the thinking
-    app_base_url: str
-
-
 async def run_call(
     websocket: WebSocket,
     *,
     phone: str,
-    pipeline: Pipeline,
-    agent: Agent[Deps, str],
-    messenger: Messenger,
-    push: Push,
-    config: VoiceConfig,
+    env: AgentEnv,
+    live_model: OpenAILiveModel,
     voice: VoiceResponder,
+    push: Push,
 ) -> None:
     """Run one call until it ends. The caller has accepted the websocket."""
+    pipeline = env.pipeline
     user = await pipeline.user(phone)
     history = trim_history(
         to_model_messages(await pipeline.history(phone)),
         max_messages=SEED_MESSAGES,
         max_tokens=SEED_TOKENS,
     )
-    deps = Deps(
-        user=user,
-        pipeline=pipeline,
-        messenger=messenger,
-        medium=Medium.VOICE,
-        app_base_url=config.app_base_url,
-    )
+    deps = env.deps(user, Medium.VOICE)
     settings = OpenAILiveModelSettings(
         openai_live_instructions=(
             f"{prompts.SPEAKING}\n\nWhat you know right now:\n{state_block(user.slots, user.call)}"
         ),
-    )
-    if config.backend_model:
-        settings["openai_live_delegation"] = {"model": config.backend_model}
-    model = OpenAILiveModel(
-        config.live_model, provider=OpenAIProvider(api_key=config.api_key), settings=settings
     )
 
     ended = asyncio.Event()
@@ -123,7 +98,9 @@ async def run_call(
         ):
             end(event.payload.reason or "ended")
 
-    realtime = agent.realtime(model, deps=deps, message_history=history)
+    realtime = agent.realtime(
+        live_model, deps=deps, message_history=history, model_settings=settings
+    )
     try:
         async with realtime.session() as session:
             call = LiveCall(session)
@@ -140,7 +117,7 @@ async def run_call(
                 "Internal note: the call just connected. Greet the user"
                 + (f" and say why you are calling ({reason_for_call})." if reason_for_call else ".")
             )
-            listener = Listener(agent, deps, config.listener_model, session, pipeline, phone)
+            listener = Listener(env, session, phone)
             open_turns: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
@@ -282,20 +259,9 @@ class Listener:
     (docs/proposed-design/research/gpt-live-behavior.md), so we do not depend on it.
     Runs one at a time; turns that arrive during a run are covered by the next run."""
 
-    def __init__(
-        self,
-        agent: Agent[Deps, str],
-        deps: Deps,
-        model: Model,
-        session: RealtimeSession,
-        pipeline: Pipeline,
-        phone: str,
-    ) -> None:
-        self._agent = agent
-        self._deps = deps
-        self._model = model
+    def __init__(self, env: AgentEnv, session: RealtimeSession, phone: str) -> None:
+        self._env = env
         self._session = session
-        self._pipeline = pipeline
         self._phone = phone
         self._task: asyncio.Task[None] | None = None
         self._again = False
@@ -310,21 +276,15 @@ class Listener:
         while True:
             self._again = False
             try:
-                user = await self._pipeline.user(self._phone)
-                history = to_model_messages(await self._pipeline.history(self._phone))
-                deps = Deps(
-                    user=user,
-                    pipeline=self._deps.pipeline,
-                    messenger=self._deps.messenger,
-                    medium=Medium.VOICE,
-                    app_base_url=self._deps.app_base_url,
-                )
-                result = await self._agent.run(
+                pipeline = self._env.pipeline
+                user = await pipeline.user(self._phone)
+                history = to_model_messages(await pipeline.history(self._phone))
+                result = await agent.run(
                     None,
                     message_history=history,
-                    deps=deps,
+                    deps=self._env.deps(user, Medium.VOICE),
                     output_type=NoteForVoice,
-                    model=self._model,
+                    model=self._env.model,
                     instructions=prompts.LISTENER,
                 )
                 if result.output.note:
