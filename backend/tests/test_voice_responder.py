@@ -14,7 +14,7 @@ class Sink:
     def __init__(self) -> None:
         self.sent: list[tuple[str, bool]] = []
 
-    async def send(self, text: str, *, speak: bool) -> None:
+    async def send_to_call(self, text: str, *, speak: bool) -> None:
         self.sent.append((text, speak))
 
 

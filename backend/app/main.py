@@ -1,12 +1,12 @@
-"""Entry point. The only file that sees every section: assembles the payload union
-and wires one process's live, actions, and per-user responders. The FastAPI app
-will live here too. No logic."""
+"""Entry point: the one place that sees every section. Two jobs:
+
+- PAYLOADS: every event kind in one union, so rows read back from SQLite become the
+  right class. Adding an event kind means adding it here.
+- build_app: wires the pieces for this process. The FastAPI app will live here too.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Annotated
 
 from pydantic import Field, TypeAdapter
@@ -20,14 +20,13 @@ from app.calls.events import CallEvent
 from app.database import SessionFactory, utc_now
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
-from app.routing.responder import Responder
 from app.routing.types import Decision, Medium
 from app.text.decider import text_decider
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.text.messenger import Messenger
 from app.text.reply import Reply
 from app.text.responder import TextResponder
-from app.timers import AsyncioTimers, Timers
+from app.timers import AsyncioTimers, Clock, Timers
 from app.users.live import LiveUser, LiveUsers
 from app.voice.decider import voice_decider
 from app.voice.events import VoiceUtterance
@@ -49,23 +48,6 @@ AnyPayload = Annotated[
 PAYLOADS: TypeAdapter[Payload] = TypeAdapter(AnyPayload)  # pyright: ignore[reportArgumentType]
 
 
-class _LiveVoice:
-    """The voice responder's sink: forwards to the live's live session, if any."""
-
-    def __init__(self, live: LiveUser) -> None:
-        self._runtime = live
-
-    async def send(self, text: str, *, speak: bool) -> None:
-        if self._runtime.voice is not None:
-            await self._runtime.voice.send(text, speak=speak)
-
-
-@dataclass
-class App:
-    actions: Actions
-    live_users: LiveUsers
-
-
 def build_app(
     *,
     db: SessionFactory,
@@ -75,37 +57,31 @@ def build_app(
     openrouter_key: str | None = None,
     jev_model: str = "typesafe/jev-1.13",
     timers: Timers | None = None,
-    clock: Callable[[], datetime] = utc_now,
-) -> App:
-    holder: list[Actions] = []
-
-    def make_live_user(phone: str) -> LiveUser:
-        handler = Reply(
+    clock: Clock = utc_now,
+) -> Actions:
+    def new_live_user(phone: str) -> LiveUser:
+        live = LiveUser(phone)
+        reply = Reply(
             agent,
             phone=phone,
-            actions=holder[0],
+            actions=actions,  # defined below; only called after build_app returns
             messenger=messenger,
             model=model,
             app_base_url=app_base_url,
         )
-        responders: dict[Medium, Responder] = {
-            Medium.TEXT: TextResponder(
-                runner=handler,
-                decider=text_decider(openrouter_key=openrouter_key, jev_model=jev_model),
-                timers=timers or AsyncioTimers(),
-                clock=clock,
-            ),
-        }
-        live = LiveUser(phone, responders)
-        responders[Medium.VOICE] = VoiceResponder(
-            sink=_LiveVoice(live),
+        live.responders[Medium.TEXT] = TextResponder(
+            runner=reply,
+            decider=text_decider(openrouter_key=openrouter_key, jev_model=jev_model),
+            timers=timers or AsyncioTimers(),
+            clock=clock,
+        )
+        live.responders[Medium.VOICE] = VoiceResponder(
+            sink=live,
             notes=call_note,
             decider=voice_decider(openrouter_key=openrouter_key, jev_model=jev_model),
             clock=clock,
         )
         return live
 
-    live_users = LiveUsers(make_live_user)
-    actions = Actions(db, live_users, payloads=PAYLOADS, clock=clock)
-    holder.append(actions)
-    return App(actions=actions, live_users=live_users)
+    actions = Actions(db, LiveUsers(new_live_user), payloads=PAYLOADS, clock=clock)
+    return actions

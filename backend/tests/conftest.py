@@ -8,10 +8,11 @@ from pathlib import Path
 import pytest
 from pydantic_ai.models.test import TestModel
 
+from app.actions import Actions
 from app.database import SessionFactory, create_schema, make_engine, make_sessions
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.main import App, build_app
+from app.main import build_app
 from app.routing.deciders import DefaultDecider
 from app.routing.responder import Responder
 from app.routing.types import Medium, Run, Verb
@@ -176,9 +177,9 @@ def messenger() -> CapturingMessenger:
 
 
 @pytest.fixture
-def app(
+def actions(
     db: SessionFactory, messenger: CapturingMessenger, clock: FakeClock, timers: FakeTimers
-) -> App:
+) -> Actions:
     return build_app(
         db=db,
         messenger=messenger,

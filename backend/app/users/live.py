@@ -1,8 +1,9 @@
-"""Per-user live: only the things that can live nowhere but in a process.
+"""The in-process part of a user: only what can live nowhere but in a running process.
 
 A lock so a user's events are handled one at a time, the responders (which hold the text
-debounce timer and the running task), the live voice session, and the sockets to push to.
-No data. If the process restarts, all of this is gone, and that is correct.
+debounce timer and the running reply), the voice session while a call is up, and the
+browser sockets to push to. No data: that is all in SQLite. A restart loses exactly this,
+which is correct, since the sockets and the call died with the process.
 """
 
 from __future__ import annotations
@@ -24,12 +25,17 @@ class VoiceSession(Protocol):
 
 
 class LiveUser:
-    def __init__(self, phone: str, responders: dict[Medium, Responder]) -> None:
+    def __init__(self, phone: str) -> None:
         self.phone = phone
         self.lock = asyncio.Lock()  # not reentrant: never submit while holding it
-        self.responders = responders
+        self.responders: dict[Medium, Responder] = {}
         self.voice: VoiceSession | None = None
         self._subs: list[tuple[frozenset[str] | None, Subscriber]] = []
+
+    async def send_to_call(self, text: str, *, speak: bool) -> None:
+        """Pass a note into the call, if one is up. The voice responder's output."""
+        if self.voice is not None:
+            await self.voice.send(text, speak=speak)
 
     def subscribe(
         self, fn: Subscriber, *, kinds: Iterable[str] | None = None
@@ -52,17 +58,14 @@ class LiveUser:
 
 
 class LiveUsers:
-    """Registry: one live per active user, built on first contact."""
+    """One LiveUser per phone, built on first contact."""
 
     def __init__(self, factory: Callable[[str], LiveUser]) -> None:
         self._factory = factory
         self._by_phone: dict[str, LiveUser] = {}
 
     def get(self, phone: str) -> LiveUser:
-        rt = self._by_phone.get(phone)
-        if rt is None:
-            rt = self._by_phone[phone] = self._factory(phone)
-        return rt
-
-    def drop(self, phone: str) -> None:
-        self._by_phone.pop(phone, None)
+        live = self._by_phone.get(phone)
+        if live is None:
+            live = self._by_phone[phone] = self._factory(phone)
+        return live

@@ -1,5 +1,5 @@
-"""Actions own transactions. Each one: validate, one short transaction, then notify
-the live and route. This is the only place that composes sections."""
+"""Everything that changes a user goes through here. Each action runs under the user's
+lock, writes in one short transaction, then tells the live user (browser push, routing)."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ from app.database import SessionFactory
 from app.events import service as events
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.routing.route import route as route_event
+from app.routing.route import route
 from app.users import service as users
 from app.users.live import LiveUsers
 from app.users.user import User
 
 log = logging.getLogger(__name__)
 
-RECENT = 12
+RECENT = 12  # events the decider sees
 
 
 class Actions:
@@ -36,8 +36,8 @@ class Actions:
         payloads: TypeAdapter[Payload],
         clock: Callable[[], datetime],
     ) -> None:
+        self.live_users = live_users
         self._db = db
-        self._live_users = live_users
         self._payloads = payloads
         self._clock = clock
 
@@ -51,7 +51,7 @@ class Actions:
         async with self._db() as s:
             return await events.list_events(s, phone, payloads=self._payloads, limit=limit)
 
-    # ---- the one door for events -----------------------------------------------
+    # ---- writes ---------------------------------------------------------------
 
     async def submit(
         self,
@@ -62,57 +62,65 @@ class Actions:
         *,
         route: bool | None = None,
     ) -> Event | None:
-        """Persist (if the kind persists), apply call transitions, publish, route.
-        Returns None if a call transition was invalid and the event was dropped."""
-        rt = self._live_users.get(phone)
-        async with rt.lock:
-            now = self._clock()
-            async with self._db() as s, s.begin():
-                user = await users.ensure_user(s, phone, now=now)
-                if isinstance(payload, CallEvent):
-                    nxt = next_state(user.call, payload, now)
-                    if nxt is None:
-                        log.info(
-                            "%s: dropped call %s from %s",
-                            phone,
-                            payload.transition,
-                            user.call.phase,
-                        )
-                        return None
-                    user = await users.set_call(s, phone, nxt)
-                if payload.persists:
-                    event = await events.append(s, phone, origin, channel, payload, ts=now)
-                else:
-                    event = Event(seq=0, ts=now, origin=origin, channel=channel, payload=payload)
-                recent = await events.list_events(s, phone, payloads=self._payloads, limit=RECENT)
+        """The one door for events: save it, push it to the browser, route it.
+        Returns None if it was a call event that makes no sense from the current call state."""
+        live = self.live_users.get(phone)
+        async with live.lock:
+            event = await self._save(phone, origin, channel, payload)
+            if event is None:
+                return None
             if payload.persists:
-                await rt.publish(event)
+                await live.publish(event)
             if route if route is not None else payload.should_route():
-                decision = await route_event(event, user, rt.responders, recent, self._clock)
-                async with self._db() as s, s.begin():
-                    logged = await events.append(
-                        s, phone, Origin.SYSTEM, Channel.SYSTEM, decision, ts=self._clock()
-                    )
-                await rt.publish(logged)
+                await self._route(phone, event)
             return event
-
-    # ---- state changes ---------------------------------------------------------
 
     async def set_slot(
         self, phone: str, slot: str, value: Any, *, origin: Origin, channel: Channel
     ) -> bool:
-        """Idempotent. Logs a slot_changed event when the value actually changes."""
-        rt = self._live_users.get(phone)
-        async with rt.lock:
-            now = self._clock()
+        """Write one slot. Returns False (and logs nothing) if it already had that value."""
+        live = self.live_users.get(phone)
+        async with live.lock:
             async with self._db() as s, s.begin():
-                user = await users.ensure_user(s, phone, now=now)
+                user = await users.ensure_user(s, phone, now=self._clock())
                 old = getattr(user.slots, slot)
                 if old == value:
                     return False
                 await users.set_slot(s, phone, slot, value)
-                event = await events.append(
-                    s, phone, origin, channel, SlotChanged(slot=slot, old=old, new=value), ts=now
-                )
-            await rt.publish(event)
+                change = SlotChanged(slot=slot, old=old, new=value)
+                event = await events.append(s, phone, origin, channel, change, ts=self._clock())
+            await live.publish(event)
             return True
+
+    # ---- steps ------------------------------------------------------------------
+
+    async def _save(
+        self, phone: str, origin: Origin, channel: Channel, payload: Payload
+    ) -> Event | None:
+        """Apply a call event to the call state, then append the event (if it persists)."""
+        now = self._clock()
+        async with self._db() as s, s.begin():
+            user = await users.ensure_user(s, phone, now=now)
+            if isinstance(payload, CallEvent):
+                call = next_state(user.call, payload, now)
+                if call is None:
+                    log.info(
+                        "%s: ignored call %s during %s", phone, payload.transition, user.call.phase
+                    )
+                    return None
+                await users.set_call(s, phone, call)
+            if not payload.persists:
+                return Event(seq=0, ts=now, origin=origin, channel=channel, payload=payload)
+            return await events.append(s, phone, origin, channel, payload, ts=now)
+
+    async def _route(self, phone: str, event: Event) -> None:
+        """Hand the event to the responder with the floor, and log what it decided."""
+        async with self._db() as s:
+            user = await users.get_user(s, phone)
+            recent = await events.list_events(s, phone, payloads=self._payloads, limit=RECENT)
+        assert user is not None
+        live = self.live_users.get(phone)
+        decision = await route(event, user, live.responders, recent, self._clock)
+        logged = await self._save(phone, Origin.SYSTEM, Channel.SYSTEM, decision)
+        assert logged is not None
+        await live.publish(logged)

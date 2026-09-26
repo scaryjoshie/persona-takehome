@@ -26,7 +26,7 @@ NoteRenderer = Callable[[Event], Note | None]
 
 
 class VoiceSink(Protocol):
-    async def send(self, text: str, *, speak: bool) -> None: ...
+    async def send_to_call(self, text: str, *, speak: bool) -> None: ...
 
 
 class VoiceResponder(Responder):
@@ -89,4 +89,4 @@ class VoiceResponder(Responder):
         note = self._notes(event)
         if note is None:
             return
-        await self._sink.send(note.text, speak=note.speak if speak is None else speak)
+        await self._sink.send_to_call(note.text, speak=note.speak if speak is None else speak)
