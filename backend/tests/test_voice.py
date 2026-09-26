@@ -128,8 +128,8 @@ async def test_nothing_reaches_a_call_that_ended(app: App) -> None:
 
 async def test_held_background_goes_in_when_they_start_talking(app: App) -> None:
     _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
-    call.hold("The Gmail link is in their texts.")
-    assert session.sent == []
+    await call.whisper("The Gmail link is in their texts.")
+    assert session.sent == []  # the voice finished its turn: hold it
     await call.user_started()
     assert session.sent == [("The Gmail link is in their texts.", False)] and call.held == []
 
@@ -141,3 +141,10 @@ async def test_end_call_on_a_live_call_waits_for_the_goodbye(app: App) -> None:
     assert (await pipeline.user(PHONE)).call.phase.value == "connected"  # not ended yet
     app.voice.calls.clear()
     assert not app.env.hang_up(PHONE)  # no live call: end_call falls back to a timer
+
+
+async def test_on_the_voices_turn_background_goes_straight_in(app: App) -> None:
+    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    await call.user_started()  # they spoke; the voice owes a reply
+    await call.whisper("Their need is saved: taxes.")
+    assert session.sent == [("Their need is saved: taxes.", False)]

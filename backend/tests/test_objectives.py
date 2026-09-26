@@ -14,6 +14,8 @@ from tests.conftest import ev
 
 
 def situation(medium: Medium = Medium.TEXT, asks: int = 0, **slots: object) -> Situation:
+    """Slots as given; a named agent counts as saved in their contacts unless said otherwise."""
+    slots.setdefault("contact_name", slots.get("agent_name"))
     return Situation(
         slots=Slots(**slots),  # pyright: ignore[reportArgumentType]
         call=CallState(),
@@ -35,6 +37,8 @@ def test_every_objective_has_words_and_no_file_is_orphaned() -> None:
 def test_objectives_open_in_order() -> None:
     assert open_name(Situation(Slots(), CallState(), Medium.TEXT, first_reply=True)) == "opener"
     assert open_name(situation()) == "agent_name"
+    assert open_name(situation(agent_name="Mila", contact_name=None)) == "contact"
+    assert open_name(situation(agent_name="Mila", contact_name=None, asks=1)) == "user_name"
     assert open_name(situation(agent_name="Mila")) == "user_name"
     assert open_name(situation(agent_name="Mila", user_name="Sam")) == "help_need"
     done = situation(agent_name="M", user_name="S", help_need="x", gmail="skipped")
@@ -62,7 +66,7 @@ def test_scripts_are_picked_per_user_and_stable() -> None:
 
 def test_a_scenario_swaps_the_script() -> None:
     text = render(situation(no_calls=True), "1", OBJECTIVE_TEXTS)
-    assert "we can do it all here" in text
+    assert "texting works too" in text
 
 
 def test_the_name_goes_into_the_script() -> None:

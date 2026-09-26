@@ -21,7 +21,7 @@ import zlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from app.agent.events import CallOptOut, Graduated, SlotChanged
+from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.gmail.events import GmailEvent
@@ -30,7 +30,13 @@ from app.users.user import Medium, User
 from app.voice.call_state import CallState
 from app.voice.events import Speaker, VoiceUtterance
 
-PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
+PROGRESS = (
+    SlotChanged,
+    GmailEvent,
+    CallOptOut,
+    Graduated,
+    ContactSaved,
+)  # a step moved; asks restart
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,14 @@ OBJECTIVES: tuple[Objective, ...] = (
         "agent_name",
         done=lambda s: s.slots.agent_name is not None,
         scenarios=(("no call", lambda s: s.slots.no_calls and s.medium is Medium.TEXT),),
+    ),
+    # Right after the name: point them at the contact card, once, so it's sorted before
+    # moving on. One turn, then it parks whether or not they saved it.
+    Objective(
+        "contact",
+        done=lambda s: s.slots.contact_name == s.slots.agent_name,
+        max_asks=1,
+        scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
     ),
     Objective("user_name", done=lambda s: s.slots.user_name is not None),
     # Asks count from the last saved step, so these count only their own turns.
@@ -99,7 +113,8 @@ def current(s: Situation) -> tuple[Objective, bool] | None:
         if objective.done(s):
             continue
         if objective.max_asks is not None and asks >= objective.max_asks:
-            parked, asks = True, asks - objective.max_asks
+            parked = parked or objective.name != "contact"  # the card needs no "move on"
+            asks -= objective.max_asks
             continue
         return objective, parked
     return None
@@ -122,7 +137,10 @@ def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
     parts += _block(objective, s, phone, texts)
     following = _after(objective, s) if s.medium is Medium.VOICE else None
     if following is not None:
-        parts.append("The moment that's done, go straight on to this, in the same breath:")
+        parts.append(
+            "Once that's actually settled (they've agreed or answered, not just heard a "
+            "suggestion), go straight on to this without waiting for another turn:"
+        )
         parts += _block(following, s, phone, texts)
     return "\n\n".join(parts)
 

@@ -61,7 +61,7 @@ class ContactSaved(Payload):
     """The user saved the agent's contact card. Sets what their phone calls the agent."""
 
     kind: Literal["contact_saved"] = "contact_saved"
-    routes = False
+    # Routed: saving the card is their answer to "save me", so the agent moves on to their name.
 
     name: str
 

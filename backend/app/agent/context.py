@@ -87,7 +87,7 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     ]
     if slots.agent_name and slots.contact_name != slots.agent_name:
         lines.append(
-            "They haven't saved your contact card yet; you can mention it once, casually."
+            "They haven't saved your contact card yet."
             if slots.contact_name is None
             else f"They still have you saved as {slots.contact_name}; "
             "your card with the new name is in their texts."

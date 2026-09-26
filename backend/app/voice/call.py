@@ -251,7 +251,7 @@ async def _captions(session: RealtimeSession, call: LiveCall, transcript: Transc
     async for update in session.stream_transcripts(delta=True):
         speaker = _speaker_of(update.speaker)
         if speaker is Speaker.AGENT:
-            call.speaking = True
+            call.speaking, call.voice_owes_reply = True, False
         else:
             await call.user_started()
         # Live numbers turns across both speakers
@@ -326,7 +326,7 @@ class StateNotes:
         await asyncio.sleep(self.SETTLE)
         note = await self._note()
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
-        self._call.hold(note)
+        await self._call.whisper(note)
 
     async def _note(self) -> str:
         user = await self._pipeline.user(self._phone)
@@ -381,7 +381,7 @@ class Listener:
                 )
                 note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()
                 if note and note.strip(".").lower() not in ("null", "none"):
-                    self._call.hold(note)
+                    await self._call.whisper(note)
             except Exception:
                 log.exception("%s: listener run failed", self._phone)
             log.info("%s: back office ran in %.1fs", self._phone, time.monotonic() - started)

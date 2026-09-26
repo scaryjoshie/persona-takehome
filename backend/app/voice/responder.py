@@ -44,6 +44,7 @@ class LiveCall:
     asked_question: bool = False
     deferred: list[str] = field(default_factory=lambda: [])
     held: list[str] = field(default_factory=lambda: [])  # background, for their next turn
+    voice_owes_reply: bool = False  # they spoke last; the voice's next words answer them
     agent_lines: int = 0  # the voice's finished turns so far
     last_agent_line: str = ""
     hang_up_after: int | None = None  # set by end_call: agent_lines when it was asked
@@ -58,20 +59,24 @@ class LiveCall:
         self.agent_lines += 1
         self.last_agent_line = line
 
-    def hold(self, text: str) -> None:
-        """Background for the voice (where things stand, what the back office did). Handed in
-        when they next start talking: sent while the voice is idle, even silent context
-        tends to make it speak up unprompted, and it only matters for its next reply."""
-        self.held.append(text)
+    async def whisper(self, text: str) -> None:
+        """Background for the voice (where things stand, what the back office did). If it's
+        the voice's turn, it goes in now so the reply uses it. Otherwise it waits until they
+        next start talking: sent to a voice that has finished its turn, even silent context
+        tends to make it speak up unprompted."""
+        if self.voice_owes_reply:
+            await self.send(text, speak=False)
+        else:
+            self.held.append(text)
 
     async def user_started(self) -> None:
         """They started talking, so the voice stopped. Held background goes in now, and
         anything deferred to the end of its sentence goes in silently rather than being lost
         with the cut-off turn."""
-        self.speaking = False
+        self.speaking, self.voice_owes_reply = False, True
         waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
-        for text in waiting:
-            await self.send(text, speak=False)
+        if waiting:  # one append: several at once each drew their own reply
+            await self.send("\n\n".join(waiting), speak=False)
 
     async def turn_complete(self, *, asked_question: bool) -> None:
         self.speaking = False
