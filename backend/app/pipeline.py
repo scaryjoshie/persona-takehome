@@ -22,7 +22,7 @@ from typing import Protocol
 from pydantic import TypeAdapter
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import ContactSaved, Graduated, SlotChanged
+from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -33,7 +33,7 @@ from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
 from app.users.user import Medium, User
-from app.voice.call_events import CallEvent
+from app.voice.call_events import CallEvent, CallTransition
 from app.voice.call_state import next_state
 
 log = logging.getLogger(__name__)
@@ -210,6 +210,12 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if call is None:
                 return None
             await users.set_call(s, user.phone, call)
+            if payload.transition is CallTransition.DECLINED:
+                await users.set_slots(s, user.phone, no_calls=True)
+        case CallOptOut():
+            if user.slots.no_calls:
+                return None
+            await users.set_slots(s, user.phone, no_calls=True)
         case SlotChanged(slot=slot, new=new):
             old: str | None = getattr(user.slots, slot)
             if old == new:

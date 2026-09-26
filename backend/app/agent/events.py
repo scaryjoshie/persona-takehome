@@ -67,3 +67,13 @@ class ContactSaved(Payload):
 
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.NOTE, f"they saved your contact as {self.name}")
+
+
+class CallOptOut(Payload):
+    """They'd rather not talk on the phone. The agent stops offering a call."""
+
+    kind: Literal["call_opt_out"] = "call_opt_out"
+    routes = False
+
+    def turn(self, at: datetime) -> Turn | None:
+        return Turn(Role.NOTE, "they'd rather not do a call")

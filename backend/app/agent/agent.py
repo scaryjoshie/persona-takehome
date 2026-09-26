@@ -12,7 +12,7 @@ from pydantic_ai.tools import ToolDefinition
 from app.agent import prompts
 from app.agent.context import what_you_know
 from app.agent.deps import Deps
-from app.agent.events import ContactCard, Graduated, SlotChanged, ToolCall
+from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage
@@ -125,6 +125,14 @@ async def skip_gmail(ctx: RunContext[Deps]) -> str:
     await _submit(ctx, GmailEvent(phase=GmailPhase.SKIPPED))
     await _record(ctx, "skip_gmail", {}, {})
     return "recorded: gmail skipped"
+
+
+@agent.tool(prepare=only_text)
+async def no_call(ctx: RunContext[Deps]) -> str:
+    """They'd rather not talk on the phone. Stops you offering a call again."""
+    await _submit(ctx, CallOptOut())
+    await _record(ctx, "no_call", {}, {})
+    return "recorded: no calls unless they ask"
 
 
 @agent.tool(prepare=only_text)

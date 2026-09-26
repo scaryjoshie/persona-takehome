@@ -105,6 +105,8 @@ def what_you_know(slots: Slots, call: CallState) -> str:
             lines.append("They said no to Gmail. Don't bring it up again.")
         case GmailPhase.FAILED:
             lines.append("Connecting Gmail failed. Offer to try again once.")
+    if slots.no_calls:
+        lines.append("They'd rather not do a call. Don't offer one again unless they ask.")
     if slots.graduated:
         lines.append("They've graduated: onboarding is done.")
     if call.phase is CallPhase.CONNECTED:
