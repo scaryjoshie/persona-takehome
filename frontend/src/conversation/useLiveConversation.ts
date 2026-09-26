@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Snapshot } from "../types";
 import type { Transport } from "../transport/types";
 import { useSession } from "../state/session";
-import { contactOffer, receiptLabel, savedContactName, threadMessages, transcriptLines } from "../state/derive";
+import { contactOffer, receiptLabel, threadMessages, transcriptLines } from "../state/derive";
 import { useCallAudio } from "../audio/useCallAudio";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { Conversation } from "./types";
@@ -31,7 +31,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   else if (call.phase === "connecting") callPhase = "calling";
   else if (call.phase === "connected") callPhase = "active";
 
-  const contactName = savedContactName(events, state.slots.contact_name);
+  const contactName = state.slots.contact_name;
 
   return {
     agentName: state.slots.agent_name,

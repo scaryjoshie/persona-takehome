@@ -1,6 +1,6 @@
 // Generated from src/schema.json by scripts/gen-types.mjs. Do not edit.
 
-export type ClientMessage = SendMessage | SetTyping | CallCommand | React | SaveContact | Reset;
+export type ClientMessage = SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
 export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
@@ -49,7 +49,7 @@ export interface CallCommand {
 /**
  * A tapback on a bubble; `remove` takes it back.
  */
-export interface React {
+export interface ReactCommand {
   type: "react";
   target_seq: number;
   emoji: string;

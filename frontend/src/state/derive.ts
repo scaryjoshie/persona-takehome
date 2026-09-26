@@ -133,9 +133,3 @@ export function contactOffer(events: WireEvent[], savedName: string | null): str
   const name = card?.kind === "contact_card" ? card.name : null;
   return name && name !== savedName ? name : null;
 }
-
-/** What the user saved the agent's contact as: the latest contact_saved event, else the slot. */
-export function savedContactName(events: WireEvent[], slot: string | null): string | null {
-  const saved = events.findLast((e) => e.payload.kind === "contact_saved")?.payload;
-  return saved?.kind === "contact_saved" ? saved.name : slot;
-}
