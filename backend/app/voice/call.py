@@ -46,7 +46,7 @@ from app.agent.objectives import guidance
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
-from app.users.user import Medium
+from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
@@ -122,24 +122,7 @@ async def run_call(
             state = StateNotes(pipeline, phone, call)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
-            # Say hi, then pick up the setup where it stands. The reason for the call is
-            # background, not a script: reading it out made the voice lead with the ask.
-            next_step = (
-                "ask what they want to call you, with a light reason (you can't really be "
-                "their assistant without a name)"
-                if user.slots.agent_name is None
-                else "ask their name"
-                if user.slots.user_name is None
-                else "carry on from where you left off"
-            )
-            if user.call.initiated_by is Initiator.USER:
-                opener = "They just called you. Pick up like a friend would"
-            else:
-                opener = "They just picked up your call. Say hi like a friend would"
-            opener += f", then {next_step}."
-            if user.slots.agent_name:
-                opener += " Your name is already on their screen; don't say it."
-            await session.send(opener)
+            await session.send(_opener(user))
             transcript = Transcript(phone, pipeline, push, call, Listener(env, call, phone))
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
@@ -170,6 +153,27 @@ async def run_call(
         await pipeline.submit(phone, Origin.CALL, Channel.SYSTEM, ended_event)
         with contextlib.suppress(Exception):
             await websocket.close()
+
+
+def _opener(user: User) -> str:
+    """Say hi, then pick up the setup where it stands. The reason for the call is
+    background, not a script: reading it out made the voice lead with the ask."""
+    next_step = (
+        "ask what they want to call you, with a light reason (you can't really be "
+        "their assistant without a name)"
+        if user.slots.agent_name is None
+        else "ask their name"
+        if user.slots.user_name is None
+        else "carry on from where you left off"
+    )
+    if user.call.initiated_by is Initiator.USER:
+        opener = "They just called you. Pick up like a friend would"
+    else:
+        opener = "They just picked up your call. Say hi like a friend would"
+    opener += f", then {next_step}."
+    if user.slots.agent_name:
+        opener += " Your name is already on their screen; don't say it."
+    return opener
 
 
 async def _microphone(
