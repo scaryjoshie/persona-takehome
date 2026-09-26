@@ -17,7 +17,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 from pydantic_ai.realtime.openai_live import OpenAILiveModel
 
-from app.agent.call_notes import call_note
 from app.agent.deps import AgentEnv
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
@@ -62,7 +61,7 @@ def assemble(
     clock: Clock = utc_now,
 ) -> App:
     pipeline = Pipeline(db, payloads=PAYLOADS, clock=clock, timers=timers or AsyncioTimers())
-    voice = VoiceResponder(notes=call_note, jev=jev)
+    voice = VoiceResponder(jev=jev)
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,

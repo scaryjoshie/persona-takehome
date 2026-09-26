@@ -21,8 +21,8 @@ backend/app/
   calls/    events.py  state.py
   gmail/    events.py
   text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  messenger.py
-  voice/    events.py  responder.py (VoiceResponder, LiveCall)  call.py (one call: audio, captions, listener)
-  agent/    agent.py  deps.py  prompts.py + prompts/*.md  context.py  call_notes.py  slots.py  events.py  model.py
+  voice/    events.py  responder.py (VoiceResponder, LiveCall, call_note)  call.py (one call: audio, captions, listener)
+  agent/    agent.py  deps.py  prompts.py + prompts/*.md  context.py  slots.py  events.py  model.py
   web/      protocol.py  routes.py  sockets.py  schema.py
 ```
 
