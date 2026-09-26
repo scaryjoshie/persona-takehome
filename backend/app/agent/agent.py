@@ -41,13 +41,15 @@ agent: Agent[Deps, str] = Agent(
 
 
 @agent.instructions
-def dynamic_instructions(ctx: RunContext[Deps]) -> str:
+async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     d = ctx.deps
     if d.medium is Medium.VOICE and not d.back_office:
         return ""  # the Live backend: its snapshot would go stale; state reaches it as notes
-    known = what_you_know(d.user.slots, d.user.call)
+    # Read fresh: tools earlier in this same run may have just saved a name.
+    user = await d.pipeline.user(d.phone)
+    known = what_you_know(user.slots, user.call)
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    stage = current_stage(d.user.slots, first_reply=d.first_reply) or ""
+    stage = current_stage(user.slots, first_reply=d.first_reply) or ""
     return f"# What you know\n\n{known}\n\n{stage}\n\n{tail}"
 
 
@@ -200,6 +202,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     )
     if not await _submit(ctx, ringing):
         return "can't call right now; a call is already ringing or in progress"
+    d.placed_call.append(True)  # the call is this reply; its bubbles are dropped
     missed = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id=call_id)
     d.pipeline.later(RING_SECONDS, d.phone, Origin.SYSTEM, Channel.SYSTEM, missed)
     await _record(ctx, "start_call", {"reason": reason}, {})

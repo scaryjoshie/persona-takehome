@@ -15,6 +15,7 @@ from app.agent.deps import AgentEnv
 from app.events.payload import Channel, Origin
 from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
+from app.voice.call_state import CallPhase
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -45,11 +46,11 @@ class Replier:
             await self._react(phone, through_seq, result.output.react)
         try:
             for i, text in enumerate(bubbles):
-                if await self._superseded(phone, through_seq):
+                if deps.placed_call or await self._superseded(phone, through_seq):
                     return
                 await self._env.messenger.set_typing(phone, True)
                 await self._sleep(typing_time(text) + (GAP if i else 0.0))
-                if await self._superseded(phone, through_seq):
+                if deps.placed_call or await self._superseded(phone, through_seq):
                     return
                 await say(deps, text)
         finally:
@@ -65,6 +66,10 @@ class Replier:
                 return
 
     async def _superseded(self, phone: str, through_seq: int) -> bool:
-        """Did anything that wants a reply arrive after the events this reply answers?"""
+        """Stop if a call is live (the voice has the conversation), or if anything that wants
+        a reply arrived after the events this reply answers. A ringing call does not stop a
+        reply: an unanswered ring must never silence the text side."""
+        if (await self._env.pipeline.user(phone)).call.phase is CallPhase.CONNECTED:
+            return True
         recent = await self._env.pipeline.history(phone, limit=20)
         return any(e.seq > through_seq and e.payload.should_route() for e in recent)

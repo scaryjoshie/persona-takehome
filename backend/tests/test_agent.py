@@ -186,3 +186,16 @@ async def test_an_unanswered_call_becomes_a_missed_call(
     call = (await pipeline.user(PHONE)).call
     assert call.phase is CallPhase.NONE and call.reason == "no_answer"
     assert not (await pipeline.user(PHONE)).slots.no_calls  # missing a call isn't a no
+
+
+async def test_a_reply_that_places_a_call_sends_no_bubbles(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    model = scripted(
+        [ToolCallPart("start_call", {"reason": "setup"})],
+        [ToolCallPart("final_result", {"bubbles": ["what do you want to call me?"]})],
+    )
+    await run_text(pipeline, messenger, model, [])
+    assert messenger.sent == []  # the call took over; the bubble is dropped
+    kinds = [e.kind for e in await pipeline.history(PHONE)]
+    assert "call" in kinds and "agent_message" not in kinds

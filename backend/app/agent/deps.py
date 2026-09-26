@@ -40,6 +40,7 @@ class Deps:
     back_office: bool = False
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
     first_reply: bool = False  # nothing has been said to them yet
+    placed_call: list[bool] = field(default_factory=lambda: [])  # set by start_call
 
     @property
     def pipeline(self) -> Pipeline:
