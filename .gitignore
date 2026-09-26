@@ -29,3 +29,4 @@ dist/
 
 # uploaded voice messages
 backend/data/
+*.db.bak*
