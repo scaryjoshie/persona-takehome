@@ -12,6 +12,7 @@ from app.database import SessionFactory, create_schema, make_engine, make_sessio
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.main import App, build_app
+from app.routing.deciders import DefaultDecider
 from app.routing.responder import Responder
 from app.routing.types import Medium, Run, Verb
 from app.text.events import Typing, UserMessage
@@ -94,6 +95,7 @@ class FakeRunner:
 class FakeResponder(Responder):
     def __init__(self, medium: Medium, clock: FakeClock) -> None:
         self.medium = medium
+        self.decider = DefaultDecider({"typing": Verb.ABSORB, "gmail": Verb.DEFER})
         self._clock = clock
         self._run: Run | None = None
         self.log: list[tuple[str, str]] = []

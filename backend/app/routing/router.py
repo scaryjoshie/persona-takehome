@@ -4,7 +4,7 @@ the caller supplies the user and recent events and persists the decision."""
 from __future__ import annotations
 
 from app.events.event import Event
-from app.routing.filter import Filter
+from app.routing import filter
 from app.routing.responder import Responder
 from app.routing.types import DecidedBy, Decision, Medium, RoutingContext, Verb
 from app.timers import Clock
@@ -12,8 +12,7 @@ from app.users.user import User
 
 
 class Router:
-    def __init__(self, filter_: Filter, *, clock: Clock) -> None:
-        self._filter = filter_
+    def __init__(self, *, clock: Clock) -> None:
         self._clock = clock
 
     async def route(
@@ -39,7 +38,7 @@ class Router:
                 recent=tuple(recent),
                 now=t0,
             )
-            v = await self._filter.verdict(ctx)
+            v = await filter.verdict(ctx, responder.decider)
             await responder.apply(v.verb, event)
             verb, by, confidence, note = v.verb, v.by, v.confidence, v.note
         return Decision(

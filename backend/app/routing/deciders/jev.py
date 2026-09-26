@@ -1,15 +1,17 @@
 """Jev (TypeSafe's decision model) via OpenRouter's Decisions API.
 
-One `choice` question over the three verbs, with the run and the recent conversation as
-state. Events render themselves (`Payload.turn`), so no agent code is needed here. If the
-call fails or exceeds the timeout, the fallback decider answers instead, and the verdict
-says so.
+A generic client: one `choice` question over the three verbs. The question and what each
+verb means come from the medium (see text/decider.py and voice/decider.py), because
+interrupting a text reply and interrupting a call are different acts. State is the run,
+the recent conversation, and the event in plain English. If the call fails or exceeds
+the timeout, the fallback decider answers instead, and the verdict says so.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -21,18 +23,6 @@ log = logging.getLogger(__name__)
 
 URL = "https://openrouter.ai/api/alpha/decisions"
 
-CRITERIA = {
-    Verb.INTERRUPT: (
-        "The event is a reply to something the assistant is waiting on, or needs a response "
-        "right now. Address it immediately."
-    ),
-    Verb.ABSORB: "The event is background information the assistant should know but not remark on.",
-    Verb.DEFER: (
-        "The event deserves a response, but the assistant is mid-response on something else "
-        "and should finish first."
-    ),
-}
-
 
 class JevDecider:
     def __init__(
@@ -40,12 +30,16 @@ class JevDecider:
         *,
         api_key: str,
         model: str,
+        question: str,
+        criteria: Mapping[Verb, str],
         fallback: Decider,
         client: httpx.AsyncClient | None = None,
         timeout: float = 1.5,
     ) -> None:
         self._api_key = api_key
         self._model = model
+        self._question = question
+        self._criteria = {verb.value: text for verb, text in criteria.items()}
         self._fallback = fallback
         self._client = client or httpx.AsyncClient()
         self._timeout = timeout
@@ -79,11 +73,8 @@ class JevDecider:
                 "questions": {
                     "verb": {
                         "type": "choice",
-                        "instructions": (
-                            "A new event arrived while the assistant is responding. "
-                            "How should the assistant handle it?"
-                        ),
-                        "criteria": {verb.value: text for verb, text in CRITERIA.items()},
+                        "instructions": self._question,
+                        "criteria": self._criteria,
                     }
                 },
             },

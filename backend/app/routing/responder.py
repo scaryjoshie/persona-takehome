@@ -10,11 +10,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from app.events.event import Event
+from app.routing.deciders import Decider
 from app.routing.types import Medium, Run, Verb
 
 
 class Responder(ABC):
     medium: Medium
+    decider: Decider  # judges events that arrive mid-run; each medium brings its own
 
     @property
     @abstractmethod

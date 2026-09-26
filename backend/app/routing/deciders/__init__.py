@@ -1,8 +1,9 @@
 """Deciders answer the judgment cases the filter cannot fix by event kind.
 
-One method: `decide(ctx) -> Verdict`. `JevDecider` asks TypeSafe's Jev through OpenRouter
-and falls back to `DefaultDecider` (a fixed verb per event kind) if the call fails. The
-filter does not know which it is talking to.
+One method: `decide(ctx) -> Verdict`. These are the reusable kinds; each medium configures
+its own (text/decider.py, voice/decider.py) and its responder carries it. `JevDecider` asks
+TypeSafe's Jev through OpenRouter; `DefaultDecider` returns a fixed verb per event kind and
+is Jev's fallback.
 """
 
 from app.routing.deciders.default import DefaultDecider

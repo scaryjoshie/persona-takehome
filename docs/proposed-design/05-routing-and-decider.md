@@ -93,7 +93,19 @@ Interrupt is only safe at step boundaries. If a side-effecting tool is in flight
 
 ## The decider
 
-**Update 2026-09-26: Jev is live.** `typesafe/jev-1.13` is served through OpenRouter's Decisions API (`POST https://openrouter.ai/api/alpha/decisions`, not chat completions; it is absent from the chat model list). `app/routing/deciders/jev.py` asks one `choice` question over the three verbs, with state = channel, whether a response is in progress, whether the last agent turn asked a question, what is still needed, the recent conversation, and the new event described in plain English (`Payload.describe`). It is used whenever `OPENROUTER_API_KEY` is set, with `DefaultDecider` as the fallback on error or after 1.5 s. Measured: 140–500 ms per call, about $0.00002. Plain-English event descriptions mattered: sending the raw event JSON collapsed both test scenarios to "absorb"; describing the event restored interrupt-after-a-question vs defer-mid-explanation.
+**Update 2026-09-26: one decider per medium.** The filter's shape is shared (fixed verb from the event, else the decider, then the side-effect rule), but the judgment is not: interrupting a text reply means scrapping and rewriting it, while interrupting a call means handing the speaking model something to say now. So each responder carries its own decider, configured in `text/decider.py` and `voice/decider.py` (the question, what each verb means on that medium, and the fallback defaults). `routing/deciders/` holds only the reusable kinds: the Jev client and the defaults table. Measured with Jev, each medium's own wording:
+
+| Medium | Scenario | Verb | p |
+|---|---|---|---|
+| text | agent asked a question, reply being written, user typing | absorb | 0.78 |
+| text | reply being written, Gmail connects | interrupt | 0.68 |
+| voice | agent asked a question, user typing | interrupt | 0.61–0.65 |
+| voice | agent mid-explanation, user typing | defer | 0.71–0.72 |
+| voice | agent mid-explanation, Gmail connects | defer | 0.59 |
+
+Wording is load-bearing: two looser voice phrasings collapsed the first two voice cases to a near tie. Treat criteria text like prompt text, and re-measure when changing it.
+
+**Jev is live.** `typesafe/jev-1.13` is served through OpenRouter's Decisions API (`POST https://openrouter.ai/api/alpha/decisions`, not chat completions; it is absent from the chat model list). `app/routing/deciders/jev.py` asks one `choice` question over the three verbs, with state = channel, whether a response is in progress, whether the last agent turn asked a question, what is still needed, the recent conversation, and the new event described in plain English (`Payload.describe`). It is used whenever `OPENROUTER_API_KEY` is set, with `DefaultDecider` as the fallback on error or after 1.5 s. Measured: 140–500 ms per call, about $0.00002. Plain-English event descriptions mattered: sending the raw event JSON collapsed both test scenarios to "absorb"; describing the event restored interrupt-after-a-question vs defer-mid-explanation.
 
 Request shape: `{"model", "state": str|object|array, "questions": {key: {"type": "noul"|"choice"|"score", "instructions", "criteria"}}}`. Answers: noul → `{"noul": p}`; choice → `{"choice", "confidence", "probabilities"}`; score → `{"score", "confidence", "probabilities", "legend"}`. Source: https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request
 

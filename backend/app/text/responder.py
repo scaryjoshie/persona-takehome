@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.events.event import Event
+from app.routing.deciders import Decider
 from app.routing.responder import Responder
 from app.routing.types import Medium, Run, Verb
 from app.text.debounce import Debounce, DebouncePolicy
@@ -33,8 +34,15 @@ class TextResponder(Responder):
     medium: Medium = Medium.TEXT
 
     def __init__(
-        self, *, runner: Runner, timers: Timers, clock: Clock, policy: DebouncePolicy | None = None
+        self,
+        *,
+        runner: Runner,
+        decider: Decider,
+        timers: Timers,
+        clock: Clock,
+        policy: DebouncePolicy | None = None,
     ) -> None:
+        self.decider = decider
         self._runner = runner
         self._timers = timers
         self._clock = clock

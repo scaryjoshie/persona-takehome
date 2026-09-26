@@ -3,7 +3,9 @@ from __future__ import annotations
 from app.agent.call_notes import call_note
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
+from app.routing.deciders import DefaultDecider
 from app.routing.types import Verb
+from app.voice.decider import DEFAULTS as VOICE_DEFAULTS
 from app.voice.responder import VoiceResponder
 from tests.conftest import FakeClock, ev, typing, user_text
 
@@ -18,7 +20,9 @@ class Sink:
 
 def make(clock: FakeClock) -> tuple[VoiceResponder, Sink]:
     sink = Sink()
-    return VoiceResponder(sink=sink, notes=call_note, clock=clock), sink
+    return VoiceResponder(
+        sink=sink, notes=call_note, decider=DefaultDecider(VOICE_DEFAULTS), clock=clock
+    ), sink
 
 
 async def test_text_during_call_is_a_silent_note(clock: FakeClock) -> None:

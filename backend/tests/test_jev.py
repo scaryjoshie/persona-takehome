@@ -11,6 +11,7 @@ from app.calls.state import CallState
 from app.routing.deciders import DefaultDecider, JevDecider
 from app.routing.types import DecidedBy, Medium, RoutingContext, Run, Verb
 from app.text.events import AgentMessage
+from app.voice import decider as voice
 from tests.conftest import ev, typing
 
 NOW = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
@@ -32,7 +33,9 @@ def decider(handler: httpx.MockTransport, timeout: float = 1.5) -> JevDecider:
     return JevDecider(
         api_key="k",
         model="typesafe/jev-1.13",
-        fallback=DefaultDecider(),
+        question=voice.QUESTION,
+        criteria=voice.CRITERIA,
+        fallback=DefaultDecider(voice.DEFAULTS),
         client=httpx.AsyncClient(transport=handler),
         timeout=timeout,
     )
@@ -76,6 +79,14 @@ async def test_falls_back_on_error() -> None:
     v = await decider(httpx.MockTransport(lambda r: httpx.Response(500))).decide(ctx())
     assert v.by is DecidedBy.DEFAULT and v.verb is Verb.ABSORB
     assert v.note and v.note.startswith("jev failed")
+
+
+def test_each_medium_defines_the_verbs_differently() -> None:
+    from app.text import decider as text
+
+    assert set(text.CRITERIA) == set(voice.CRITERIA) == {Verb.INTERRUPT, Verb.ABSORB, Verb.DEFER}
+    assert text.QUESTION != voice.QUESTION
+    assert all(text.CRITERIA[v] != voice.CRITERIA[v] for v in text.CRITERIA)
 
 
 async def test_falls_back_on_timeout() -> None:

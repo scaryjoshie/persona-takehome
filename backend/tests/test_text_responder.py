@@ -4,7 +4,9 @@ import asyncio
 
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
+from app.routing.deciders import DefaultDecider
 from app.routing.types import Verb
+from app.text.decider import DEFAULTS as TEXT_DEFAULTS
 from app.text.events import UserMessage
 from app.text.responder import TextResponder
 from tests.conftest import FakeClock, FakeRunner, FakeTimers, ev, typing, user_text
@@ -12,7 +14,13 @@ from tests.conftest import FakeClock, FakeRunner, FakeTimers, ev, typing, user_t
 
 def make(clock: FakeClock, *, block: bool = False) -> tuple[TextResponder, FakeTimers, FakeRunner]:
     timers, runner = FakeTimers(clock), FakeRunner(block=block)
-    return TextResponder(runner=runner, timers=timers, clock=clock), timers, runner
+    return (
+        TextResponder(
+            runner=runner, decider=DefaultDecider(TEXT_DEFAULTS), timers=timers, clock=clock
+        ),
+        timers,
+        runner,
+    )
 
 
 async def wait_idle(responder: TextResponder) -> None:

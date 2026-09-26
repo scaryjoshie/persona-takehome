@@ -12,6 +12,7 @@ Glossary, since these words are ours:
   A run with a side effect in flight (today: a GPT-Live delegation; later: any non-atomic
   tool on the text side, marked by the reply runner around the call) is never interrupted;
   the filter degrades interrupt to defer.
-- **filter**: picks the verb. Fixed by the event kind when it can be; otherwise a decider.
+- **filter**: picks the verb. Fixed by the event kind when it can be; otherwise the
+  responder's own decider (each medium defines what the verbs mean for it).
 - **decision**: the logged record of one routing pass, for the debug panel and tests.
 """

@@ -20,18 +20,17 @@ from app.calls.events import CallEvent
 from app.database import SessionFactory, utc_now
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
-from app.routing.deciders import Decider, DefaultDecider, JevDecider
-from app.routing.filter import Filter
 from app.routing.responder import Responder
 from app.routing.router import Router
 from app.routing.types import Decision, Medium
-from app.settings import Settings
+from app.text.decider import text_decider
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.text.messenger import Messenger
 from app.text.reply import Reply
 from app.text.responder import TextResponder
 from app.timers import AsyncioTimers, Timers
 from app.users.live import LiveUser, LiveUsers
+from app.voice.decider import voice_decider
 from app.voice.events import VoiceUtterance
 from app.voice.responder import VoiceResponder
 
@@ -49,17 +48,6 @@ AnyPayload = Annotated[
     Field(discriminator="kind"),
 ]
 PAYLOADS: TypeAdapter[Payload] = TypeAdapter(AnyPayload)  # pyright: ignore[reportArgumentType]
-
-
-def decider_from(settings: Settings) -> Decider:
-    """Jev if an OpenRouter key is configured, otherwise the fixed defaults."""
-    if settings.openrouter_api_key is None:
-        return DefaultDecider()
-    return JevDecider(
-        api_key=settings.openrouter_api_key.get_secret_value(),
-        model=settings.jev_model,
-        fallback=DefaultDecider(),
-    )
 
 
 class _LiveVoice:
@@ -85,11 +73,12 @@ def build_app(
     messenger: Messenger,
     model: Model,
     app_base_url: str,
-    decider: Decider | None = None,
+    openrouter_key: str | None = None,
+    jev_model: str = "typesafe/jev-1.13",
     timers: Timers | None = None,
     clock: Callable[[], datetime] = utc_now,
 ) -> App:
-    router = Router(Filter(decider or DefaultDecider()), clock=clock)
+    router = Router(clock=clock)
     holder: list[Actions] = []
 
     def make_live_user(phone: str) -> LiveUser:
@@ -103,12 +92,18 @@ def build_app(
         )
         responders: dict[Medium, Responder] = {
             Medium.TEXT: TextResponder(
-                runner=handler, timers=timers or AsyncioTimers(), clock=clock
+                runner=handler,
+                decider=text_decider(openrouter_key=openrouter_key, jev_model=jev_model),
+                timers=timers or AsyncioTimers(),
+                clock=clock,
             ),
         }
         live = LiveUser(phone, responders)
         responders[Medium.VOICE] = VoiceResponder(
-            sink=_LiveVoice(live), notes=call_note, clock=clock
+            sink=_LiveVoice(live),
+            notes=call_note,
+            decider=voice_decider(openrouter_key=openrouter_key, jev_model=jev_model),
+            clock=clock,
         )
         return live
 

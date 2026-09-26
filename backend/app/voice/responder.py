@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.events.event import Event
+from app.routing.deciders import Decider
 from app.routing.responder import Responder
 from app.routing.types import Medium, Run, Verb
 from app.timers import Clock
@@ -31,7 +32,10 @@ class VoiceSink(Protocol):
 class VoiceResponder(Responder):
     medium: Medium = Medium.VOICE
 
-    def __init__(self, *, sink: VoiceSink, notes: NoteRenderer, clock: Clock) -> None:
+    def __init__(
+        self, *, sink: VoiceSink, notes: NoteRenderer, decider: Decider, clock: Clock
+    ) -> None:
+        self.decider = decider
         self._sink = sink
         self._notes = notes
         self._clock = clock
