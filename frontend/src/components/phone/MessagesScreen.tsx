@@ -63,6 +63,7 @@ export function MessagesScreen({
     setDraft(text);
     typingSignal.update(text);
   };
+  useEnterToSend(rootRef, send);
   const lastSentId = messages.findLast((m) => m.side === "sent")?.id;
   const endsSent = messages.at(-1)?.side === "sent";
 
@@ -175,4 +176,21 @@ function useTypingSignal(onTyping?: (active: boolean) => void) {
   };
   useEffect(() => () => clearTimeout(idle.current), []);
   return { update, stop };
+}
+
+/** Enter sends, Shift+Enter breaks the line, and neither fires while an IME is composing. */
+function useEnterToSend(root: React.RefObject<HTMLDivElement | null>, send: () => void) {
+  const latest = useRef(send);
+  latest.current = send;
+  useEffect(() => {
+    const textarea = root.current?.querySelector("textarea");
+    if (!textarea) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      latest.current();
+    };
+    textarea.addEventListener("keydown", onKeyDown);
+    return () => textarea.removeEventListener("keydown", onKeyDown);
+  }, [root]);
 }

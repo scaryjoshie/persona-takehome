@@ -416,8 +416,38 @@
         "title": "Origin",
         "type": "string"
       },
+      "Partial": {
+        "description": "A live caption: `text` is the turn's full transcript so far (replace, don't append).\n`final` closes the turn; the VoiceUtterance event with the same turn_id follows.",
+        "properties": {
+          "type": {
+            "const": "partial",
+            "default": "partial",
+            "title": "Type",
+            "type": "string"
+          },
+          "speaker": {
+            "$ref": "#/$defs/Speaker"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "final": {
+            "title": "Final",
+            "type": "boolean"
+          }
+        },
+        "required": ["type", "speaker", "turn_id", "text", "final"],
+        "title": "Partial",
+        "type": "object"
+      },
       "SlotChanged": {
         "additionalProperties": false,
+        "description": "The agent recorded a name or the help need. The pipeline fills in `old` and drops the\nevent if the value did not change.",
         "properties": {
           "kind": {
             "const": "slot_changed",
@@ -426,17 +456,28 @@
             "type": "string"
           },
           "slot": {
+            "enum": ["agent_name", "user_name", "help_need"],
             "title": "Slot",
             "type": "string"
           },
-          "old": {
-            "title": "Old"
-          },
           "new": {
-            "title": "New"
+            "title": "New",
+            "type": "string"
+          },
+          "old": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Old"
           }
         },
-        "required": ["kind", "slot", "old", "new"],
+        "required": ["kind", "slot", "new", "old"],
         "title": "SlotChanged",
         "type": "object"
       },
@@ -777,6 +818,7 @@
       "mapping": {
         "call": "#/$defs/CallMessage",
         "event": "#/$defs/EventMessage",
+        "partial": "#/$defs/Partial",
         "slots": "#/$defs/SlotsMessage",
         "snapshot": "#/$defs/Snapshot",
         "typing": "#/$defs/TypingMessage"
@@ -798,6 +840,9 @@
       },
       {
         "$ref": "#/$defs/TypingMessage"
+      },
+      {
+        "$ref": "#/$defs/Partial"
       }
     ]
   },
@@ -989,6 +1034,7 @@
       },
       "SlotChanged": {
         "additionalProperties": false,
+        "description": "The agent recorded a name or the help need. The pipeline fills in `old` and drops the\nevent if the value did not change.",
         "properties": {
           "kind": {
             "const": "slot_changed",
@@ -997,17 +1043,28 @@
             "type": "string"
           },
           "slot": {
+            "enum": ["agent_name", "user_name", "help_need"],
             "title": "Slot",
             "type": "string"
           },
-          "old": {
-            "title": "Old"
-          },
           "new": {
-            "title": "New"
+            "title": "New",
+            "type": "string"
+          },
+          "old": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Old"
           }
         },
-        "required": ["kind", "slot", "old", "new"],
+        "required": ["kind", "slot", "new", "old"],
         "title": "SlotChanged",
         "type": "object"
       },

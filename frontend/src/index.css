@@ -30,9 +30,5 @@ body,
 }
 .transcript-word {
   display: inline-block;
-  margin-right: 0.28em;
   animation: word-in 180ms ease-out both;
-}
-.transcript-word:last-of-type {
-  margin-right: 0;
 }

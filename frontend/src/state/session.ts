@@ -3,11 +3,12 @@ import type {
   CallAction,
   CallFailReason,
   CallState,
-  IncomingMessage,
+  ServerMessage,
   Medium,
   PartialMessage,
   Slots,
   Snapshot,
+  Speaker,
   WireEvent,
 } from "../types";
 import type { ConnectionStatus, Transport } from "../transport/types";
@@ -20,11 +21,15 @@ export interface SessionState {
   call: CallState;
   floor: Medium;
   agentTyping: boolean;
-  /** Live transcript fragments by turn, dropped once the turn's utterance event lands. */
-  partials: Record<string, PartialMessage>;
+  /**
+   * The turn each speaker is saying right now, dropped once that speaker's utterance lands. Keyed
+   * by speaker, not turn id: the voice layer can stream a turn's fragments under one id and record
+   * it under another, and a fragment keyed by the stale id would never be cleared.
+   */
+  partials: Partial<Record<Speaker, PartialMessage>>;
 }
 
-type Action = { type: "status"; status: ConnectionStatus } | { type: "message"; message: IncomingMessage };
+type Action = { type: "status"; status: ConnectionStatus } | { type: "message"; message: ServerMessage };
 
 function fromSnapshot(s: Snapshot, status: ConnectionStatus): SessionState {
   return { status, events: s.events, slots: s.slots, call: s.call, floor: s.floor, agentTyping: false, partials: {} };
@@ -41,9 +46,9 @@ function reduce(state: SessionState, action: Action): SessionState {
       if (last && m.event.seq <= last.seq) return state; // replayed after a reconnect
       const p = m.event.payload;
       let partials = state.partials;
-      if (p.kind === "voice_utterance" && partials[p.turn_id]) {
+      if (p.kind === "voice_utterance" && partials[p.speaker]) {
         partials = { ...partials };
-        delete partials[p.turn_id];
+        delete partials[p.speaker];
       }
       return { ...state, events: [...state.events, m.event], partials };
     }
@@ -59,7 +64,7 @@ function reduce(state: SessionState, action: Action): SessionState {
     case "typing":
       return { ...state, agentTyping: m.active };
     case "partial":
-      return { ...state, partials: { ...state.partials, [m.turn_id]: m } };
+      return { ...state, partials: { ...state.partials, [m.speaker]: m } };
   }
 }
 

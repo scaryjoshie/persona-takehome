@@ -122,9 +122,10 @@ function StageView({ conversation: c, isNew = false, entered = false }: StageVie
     // The stage settles in as the frost lifts: a slight rise to full size and brightness.
     <motion.div
       className="h-full"
-      initial={entered ? { opacity: 0.55, scale: 0.97 } : false}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+      initial={entered ? { opacity: 0, scale: 0.96, filter: "blur(8px)" } : false}
+      // Drop the filter once settled: a leftover blur(0px) still costs a compositing layer over the orb.
+      animate={{ opacity: 1, scale: 1, filter: "blur(0px)", transitionEnd: { filter: "none" } }}
+      transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
     >
       <Stage
         phone={

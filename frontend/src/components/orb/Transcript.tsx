@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 export interface TranscriptLine {
@@ -32,10 +33,12 @@ export function Transcript({ lines, limit = 4, className }: Props) {
             className={l.speaker === "agent" ? "text-neutral-300" : "text-neutral-500"}
           >
             {l.text.split(" ").map((word, i) => (
-              // Keys by position, so only newly arrived words animate in.
-              <span key={i} className="transcript-word">
-                {word}
-              </span>
+              // Keyed by position, so only newly arrived words animate in. The space sits outside
+              // the inline-block word so it survives layout and copy-paste.
+              <Fragment key={i}>
+                {i > 0 && " "}
+                <span className="transcript-word">{word}</span>
+              </Fragment>
             ))}
             {l.partial && <span className="animate-pulse text-neutral-400">▍</span>}
           </motion.li>

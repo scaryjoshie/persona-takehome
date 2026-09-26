@@ -49,11 +49,14 @@ export function PhoneEntry({ initial = "", error, busy = false, onSubmit }: Prop
       onSubmit={submit}
       initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
       animate={{ opacity: 1, backdropFilter: "blur(40px)" }}
-      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] } }}
+      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { duration: 1.2, ease: [0.4, 0, 0.2, 1] } }}
       transition={{ duration: 0.6 }}
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-black/40"
     >
-      <motion.div className="text-center" exit={{ y: -12, opacity: 0, transition: { duration: 0.35 } }}>
+      <motion.div
+        className="text-center"
+        exit={{ y: -8, opacity: 0, filter: "blur(4px)", transition: { duration: 0.4 } }}
+      >
         <h1 className="text-2xl font-medium text-white">Enter your phone number</h1>
         <p className="mt-2 text-sm text-neutral-400">It's how Persona knows it's you.</p>
       </motion.div>

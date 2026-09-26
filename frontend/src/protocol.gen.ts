@@ -2,7 +2,7 @@
 
 export type ClientMessage = SendMessage | SetTyping | CallCommand | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
-export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage;
+export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | Partial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
 export type Channel = "text" | "voice" | "system";
 export type Speaker = "user" | "agent";
@@ -108,11 +108,15 @@ export interface ToolCall {
     [k: string]: unknown;
   } | null;
 }
+/**
+ * The agent recorded a name or the help need. The pipeline fills in `old` and drops the
+ * event if the value did not change.
+ */
 export interface SlotChanged {
   kind: "slot_changed";
-  slot: string;
-  old: unknown;
-  new: unknown;
+  slot: "agent_name" | "user_name" | "help_need";
+  new: string;
+  old: string | null;
 }
 export interface Graduated {
   kind: "graduated";
@@ -172,4 +176,15 @@ export interface CallMessage {
 export interface TypingMessage {
   type: "typing";
   active: boolean;
+}
+/**
+ * A live caption: `text` is the turn's full transcript so far (replace, don't append).
+ * `final` closes the turn; the VoiceUtterance event with the same turn_id follows.
+ */
+export interface Partial {
+  type: "partial";
+  speaker: Speaker;
+  turn_id: string;
+  text: string;
+  final: boolean;
 }
