@@ -1,147 +1,88 @@
-"""The text responder: when the debounce says now, run one reply; handle events that
-arrive while a reply is running."""
+"""The text medium. Stateless: every decision is made from the log and the user's state.
+
+- A message, a typing change, or a call/Gmail outcome: schedule a ReplyDue check.
+- ReplyDue: if nothing is waiting, drop it. If it is too early (the user is still going),
+  check again later. If Jev thinks the user is mid-thought and there is time, check again
+  shortly. Otherwise record ReplyStarted and start the reply in the background.
+
+Duplicate checks are harmless: once ReplyStarted is recorded, nothing is waiting.
+"""
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-
+from app.events.decision import Decision
 from app.events.event import Event
-from app.routing.deciders import Decider
-from app.routing.responder import Responder
-from app.routing.types import Medium, Run, Verb
-from app.text.debounce import Debounce, DebouncePolicy
-from app.text.events import Typing, UserMessage
-from app.timers import Clock, TimerHandle, Timers
+from app.events.payload import Channel, Origin
+from app.jev import Jev
+from app.pipeline import Context
+from app.text.events import ReplyDue, ReplyStarted, UserMessage
+from app.text.reply import Replier
+from app.text.timing import Timing, delay, waiting
+from app.users.user import User
+
+FINISHED_QUESTION = (
+    "Has the user finished what they wanted to say, so that now is a good moment to reply?"
+)
+# Hold only when Jev is confident the user is mid-thought. Measured 2026-09-26: fragments
+# ("so basically", "i was thinking and", "hold on") score 0.10–0.15; "hey" and "ok thanks!"
+# 0.35–0.50; complete asks ("call me Sam", "what can you do?") 0.80–0.91.
+MID_THOUGHT_BELOW = 0.25
 
 
-@dataclass(frozen=True)
-class RunRequest:
-    trigger: Event
-    buffered: tuple[Event, ...]
+class TextResponder:
+    def __init__(self, replier: Replier, *, jev: Jev | None = None, timing: Timing | None = None):
+        self._replier = replier
+        self._jev = jev
+        self._timing = timing or Timing()
+
+    async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
+        if not isinstance(event.payload, ReplyDue):
+            return self._schedule(event, user, ctx)
+        return await self._reply_due(event, user, ctx)
+
+    def _schedule(self, event: Event, user: User, ctx: Context) -> Decision:
+        pending = waiting(ctx.recent)
+        if not pending:
+            return Decision(trigger_kind=event.kind, verb="ignore", note="nothing waiting")
+        seconds = delay(pending, user.typing_since, ctx.pipeline.now(), self._timing)
+        ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
+        return Decision(trigger_kind=event.kind, verb="schedule", note=f"check in {seconds:.1f}s")
+
+    async def _reply_due(self, event: Event, user: User, ctx: Context) -> Decision | None:
+        pending = waiting(ctx.recent)
+        if not pending:
+            return None  # an earlier check already started the reply
+        now = ctx.pipeline.now()
+        seconds = delay(pending, user.typing_since, now, self._timing)
+        if seconds > 0.05:
+            ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
+            return Decision(trigger_kind=event.kind, verb="wait", note=f"{seconds:.1f}s more")
+        last = pending[-1]
+        since_last = (now - last.ts).total_seconds()
+        if (
+            self._jev is not None
+            and isinstance(last.payload, UserMessage)
+            and since_last < self._timing.unfinished_extend
+        ):
+            finished = await self._jev.yes_probability(FINISHED_QUESTION, _state(ctx))
+            if finished is not None and finished < MID_THOUGHT_BELOW:
+                ctx.later(1.0, Origin.SYSTEM, Channel.TEXT, ReplyDue())
+                return Decision(
+                    trigger_kind=event.kind,
+                    verb="wait",
+                    by="jev",
+                    confidence=1 - finished,
+                    note="user seems mid-thought",
+                )
+        await ctx.record(Origin.TEXT_AGENT, Channel.TEXT, ReplyStarted(through_seq=last.seq))
+        ctx.pipeline.spawn(self._replier.reply(ctx.phone, last.seq))
+        return Decision(trigger_kind=event.kind, verb="reply", note=f"through event {last.seq}")
 
 
-@dataclass(frozen=True)
-class RunResult:
-    asked_question: bool = False
-
-
-Runner = Callable[[RunRequest], Awaitable[RunResult]]
-
-
-class TextResponder(Responder):
-    medium: Medium = Medium.TEXT
-
-    def __init__(
-        self,
-        *,
-        runner: Runner,
-        decider: Decider,
-        timers: Timers,
-        clock: Clock,
-        policy: DebouncePolicy | None = None,
-    ) -> None:
-        self.decider = decider
-        self._runner = runner
-        self._timers = timers
-        self._clock = clock
-        self._debounce = Debounce(clock, policy)
-        self._run: Run | None = None
-        self._task: asyncio.Task[None] | None = None
-        self._timer: TimerHandle | None = None
-        self._deferred: Event | None = None
-        self._asked_question = False
-
-    @property
-    def run(self) -> Run | None:
-        return self._run
-
-    @property
-    def task(self) -> asyncio.Task[None] | None:
-        """The reply in progress, for callers that need to await it (tests do)."""
-        return self._task
-
-    # ---- responder --------------------------------------------------------------
-
-    async def start(self, event: Event) -> None:
-        match event.payload:
-            case UserMessage():
-                self._debounce.add(event)
-                self._arm()
-            case Typing(active=active):
-                self._debounce.typing = active
-                if self._debounce:
-                    self._arm()
-            case _:  # system outcomes (call ended, gmail connected) are answered now
-                self._debounce.add(event)
-                self._reply(event)
-
-    async def apply(self, verb: Verb, event: Event) -> None:
-        match verb:
-            case Verb.INTERRUPT:
-                self._cancel()
-                self._debounce.add(event)
-                if isinstance(event.payload, UserMessage):
-                    self._arm()
-                else:
-                    self._reply(event)
-            case Verb.ABSORB:
-                if isinstance(event.payload, Typing):
-                    self._debounce.typing = event.payload.active
-                    if self._debounce:
-                        self._arm()
-            case Verb.DEFER:
-                self._deferred = event
-            case Verb.START:
-                raise ValueError("START is not a verb a responder applies")
-
-    # ---- reply lifecycle ------------------------------------------------------------
-
-    def _arm(self) -> None:
-        """(Re)schedule a reply for when the debounce says so."""
-        if self._timer:
-            self._timer.cancel()
-        trigger = self._debounce.latest
-        self._timer = self._timers.call_later(self._debounce.delay(), lambda: self._reply(trigger))
-
-    def _reply(self, trigger: Event) -> None:
-        if self._timer:
-            self._timer.cancel()
-            self._timer = None
-        if self._reply_in_progress():
-            return  # _after picks the buffer up when the current reply ends
-        request = RunRequest(trigger=trigger, buffered=self._debounce.take())
-        self._run = Run(
-            medium=Medium.TEXT,
-            started=self._clock(),
-            last_agent_turn_was_question=self._asked_question,
-        )
-        self._task = asyncio.create_task(self._execute(request))
-
-    async def _execute(self, request: RunRequest) -> None:
-        try:
-            result = await self._runner(request)
-            self._asked_question = result.asked_question
-        finally:
-            self._run = None
-            self._task = None
-            self._after()
-
-    def _after(self) -> None:
-        deferred, self._deferred = self._deferred, None
-        if deferred:
-            self._debounce.add(deferred)
-            self._reply(deferred)
-        elif self._debounce:
-            self._arm()
-
-    def _reply_in_progress(self) -> bool:
-        return self._task is not None and not self._task.done()
-
-    def _cancel(self) -> None:
-        if self._reply_in_progress():
-            assert self._task is not None
-            self._task.cancel()
-        self._task = None
-        self._run = None
+def _state(ctx: Context) -> dict[str, object]:
+    conversation: list[str] = []
+    for event in ctx.recent[-12:]:
+        turn = event.payload.turn(event.ts)
+        if turn is not None:
+            conversation.append(f"{turn.role.value}: {turn.text}")
+    return {"channel": "text messages", "conversation": conversation}

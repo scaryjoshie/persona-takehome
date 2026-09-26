@@ -93,7 +93,11 @@ Interrupt is only safe at step boundaries. If a side-effecting tool is in flight
 
 ## The decider
 
-**Update 2026-09-26: one decider per medium.** The filter's shape is shared (fixed verb from the event, else the decider, then the side-effect rule), but the judgment is not: interrupting a text reply means scrapping and rewriting it, while interrupting a call means handing the speaking model something to say now. So each responder carries its own decider, configured in `text/decider.py` and `voice/decider.py` (the question, what each verb means on that medium, and the fallback defaults). `routing/deciders/` holds only the reusable kinds: the Jev client and the defaults table. Measured with Jev, each medium's own wording:
+**Update 2026-09-26 (restructure): no routing package.** The pipeline switches on the stored floor and calls the medium's `handle`. Each medium decides with its own vocabulary:
+- **Text** is stateless. A message, typing change, or call/Gmail outcome schedules a `ReplyDue` check; the check drops itself if nothing is waiting, waits longer if the user is still going, asks Jev "has the user finished?" (holds only below 0.25), otherwise records `ReplyStarted` and replies. Interrupt is "discard if superseded": before each bubble, the reply checks for any newer event that wants a reply.
+- **Voice** sends notes straight in when the agent is quiet; while it is speaking, a user text interrupts and other events ask Jev for interrupt/absorb/defer (fallback: typing absorb, Gmail defer). Interrupt degrades to defer while a tool is running.
+
+**Earlier update 2026-09-26: one decider per medium.** The filter's shape is shared (fixed verb from the event, else the decider, then the side-effect rule), but the judgment is not: interrupting a text reply means scrapping and rewriting it, while interrupting a call means handing the speaking model something to say now. So each responder carries its own decider, configured in `text/decider.py` and `voice/decider.py` (the question, what each verb means on that medium, and the fallback defaults). `routing/deciders/` holds only the reusable kinds: the Jev client and the defaults table. Measured with Jev, each medium's own wording:
 
 | Medium | Scenario | Verb | p |
 |---|---|---|---|

@@ -1,19 +1,23 @@
-"""The voice responder for GPT-Live. There is no cancel: interrupt = say it now,
-absorb = silent note, defer = wait for the inferred turn boundary, then say it.
-The run is inferred and fed by the voice handler. Note wording is injected
-(see app/agent/notes.py) so this module knows nothing about the domain."""
+"""The voice medium: what to do with an event that arrives during a call.
+
+When the agent is not speaking, the note goes in straight away. While it is speaking, pick
+a verb: interrupt (the voice works it in now), absorb (a silent note), or defer (hold it
+until the current sentence ends). A text from the user always interrupts; other events
+ask Jev, with fixed defaults if Jev is unavailable.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
+from app.events.decision import Decision
 from app.events.event import Event
-from app.routing.deciders import Decider
-from app.routing.responder import Responder
-from app.routing.types import Medium, Run, Verb
-from app.timers import Clock
+from app.jev import Jev
+from app.pipeline import Context
+from app.text.events import UserMessage
+from app.users.user import User
 
 
 @dataclass(frozen=True)
@@ -22,71 +26,104 @@ class Note:
     speak: bool
 
 
-NoteRenderer = Callable[[Event], Note | None]
+NoteFor = Callable[[Event], Note | None]
 
 
-class VoiceSink(Protocol):
-    async def send_to_call(self, text: str, *, speak: bool) -> None: ...
+class Session(Protocol):
+    async def send(self, content: str, /, *, respond: bool | None = None) -> None: ...
 
 
-class VoiceResponder(Responder):
-    medium: Medium = Medium.VOICE
+@dataclass
+class LiveCall:
+    """The in-process state of one call. Updated by the call's event loop (call.py)."""
 
-    def __init__(
-        self, *, sink: VoiceSink, notes: NoteRenderer, decider: Decider, clock: Clock
-    ) -> None:
-        self.decider = decider
-        self._sink = sink
+    session: Session
+    speaking: bool = False
+    tool_running: bool = False
+    asked_question: bool = False
+    deferred: list[str] = field(default_factory=lambda: [])
+
+    async def send(self, text: str, *, speak: bool) -> None:
+        await self.session.send(text, respond=speak)
+
+    async def turn_complete(self, *, asked_question: bool) -> None:
+        self.speaking = False
+        self.asked_question = asked_question
+        deferred, self.deferred = self.deferred, []
+        for text in deferred:
+            await self.send(text, speak=True)
+
+
+QUESTION = (
+    "A new event arrived while the assistant is responding on a phone call. "
+    "How should the assistant handle it?"
+)
+# Measured 2026-09-26: this wording separates "user typing after the agent asked a question"
+# (interrupt) from "user typing while the agent explains" (defer); looser variants did not.
+CRITERIA = {
+    "interrupt": (
+        "The event is a reply to something the assistant is waiting on, or needs a response "
+        "right now. Address it immediately."
+    ),
+    "absorb": "The event is background information the assistant should know but not remark on.",
+    "defer": (
+        "The event deserves a response, but the assistant is mid-response on something else "
+        "and should finish first."
+    ),
+}
+DEFAULTS = {"typing": "absorb", "gmail": "defer"}
+
+
+class VoiceResponder:
+    def __init__(self, *, notes: NoteFor, jev: Jev | None = None) -> None:
+        self.calls: dict[str, LiveCall] = {}  # phone → the call in progress
         self._notes = notes
-        self._clock = clock
-        self._run: Run | None = None
-        self._deferred: list[Event] = []
-        self._asked_question = False
+        self._jev = jev
 
-    @property
-    def run(self) -> Run | None:
-        return self._run
-
-    # ---- fed by the voice handler -----------------------------------------
-
-    def on_agent_speaking(self) -> None:
-        if self._run is None:
-            self._run = Run(
-                medium=Medium.VOICE,
-                started=self._clock(),
-                inferred=True,
-                last_agent_turn_was_question=self._asked_question,
-            )
-
-    def on_delegation(self, in_flight: bool) -> None:
-        if self._run:
-            self._run = self._run.model_copy(update={"side_effect_in_flight": in_flight})
-
-    async def on_turn_complete(self, *, asked_question: bool = False) -> None:
-        self._run = None
-        self._asked_question = asked_question
-        deferred, self._deferred = self._deferred, []
-        for event in deferred:
-            await self._inject(event, speak=True)
-
-    # ---- responder protocol ---------------------------------------------------
-
-    async def start(self, event: Event) -> None:
-        await self._inject(event)
-
-    async def apply(self, verb: Verb, event: Event) -> None:
-        match verb:
-            case Verb.INTERRUPT:
-                await self._inject(event, speak=True)
-            case Verb.ABSORB:
-                await self._inject(event, speak=False)
-            case Verb.DEFER:
-                self._deferred.append(event)
-            case Verb.START:
-                raise ValueError("START is not a verb a responder applies")
-
-    async def _inject(self, event: Event, *, speak: bool | None = None) -> None:
+    async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
+        call = self.calls.get(ctx.phone)
         note = self._notes(event)
         if note is None:
-            return
-        await self._sink.send_to_call(note.text, speak=note.speak if speak is None else speak)
+            return None
+        if call is None:
+            return Decision(trigger_kind=event.kind, verb="drop", note="no call in progress")
+        if not call.speaking:
+            await call.send(note.text, speak=note.speak)
+            return Decision(trigger_kind=event.kind, verb="send", note="agent not speaking")
+        verb, by, confidence = await self._verb(event, call, ctx)
+        if call.tool_running and verb == "interrupt":
+            verb, by = "defer", f"{by}; a tool is running"
+        match verb:
+            case "interrupt":
+                await call.send(note.text, speak=True)
+            case "absorb":
+                await call.send(note.text, speak=False)
+            case _:
+                call.deferred.append(note.text)
+        return Decision(trigger_kind=event.kind, verb=verb, by=by, confidence=confidence)
+
+    async def _verb(
+        self, event: Event, call: LiveCall, ctx: Context
+    ) -> tuple[str, str, float | None]:
+        if isinstance(event.payload, UserMessage):
+            return "interrupt", "rule", None  # the user texted during the call
+        if self._jev is not None:
+            answer = await self._jev.choice(QUESTION, CRITERIA, _state(event, call, ctx))
+            if answer is not None:
+                return answer.choice, "jev", answer.probabilities.get(answer.choice)
+        return DEFAULTS.get(event.kind, "absorb"), "fallback", None
+
+
+def _state(event: Event, call: LiveCall, ctx: Context) -> dict[str, object]:
+    conversation: list[str] = []
+    for e in ctx.recent[-12:]:
+        turn = e.payload.turn(e.ts)
+        if turn is not None:
+            conversation.append(f"{turn.role.value}: {turn.text}")
+    return {
+        "channel": "voice call",
+        "assistant_currently_responding": call.speaking,
+        "assistant_last_turn_asked_a_question": call.asked_question,
+        "conversation": conversation,
+        "new_event": event.payload.describe(),
+    }

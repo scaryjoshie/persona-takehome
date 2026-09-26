@@ -5,12 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict
-
-if TYPE_CHECKING:
-    from app.routing.types import RoutingContext, Verb
 
 
 class Origin(StrEnum):
@@ -70,7 +67,3 @@ class Payload(BaseModel):
         """One plain-English line saying what happened, for classifiers like the Jev decider."""
         turn = self.turn(datetime.now())
         return turn.text if turn else self.model_dump_json()
-
-    def fixed_verb(self, ctx: RoutingContext) -> Verb | None:
-        """A verb this event always gets while a run is active, or None to ask the decider."""
-        return None

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict
 
 from app.agent.slots import Slots
@@ -9,8 +12,14 @@ from app.calls.events import Initiator
 from app.calls.state import CallPhase, CallState
 from app.database import aware
 from app.gmail.events import GmailPhase
-from app.routing.types import Medium
 from app.users.models import UserRow
+
+
+class Medium(StrEnum):
+    """Which medium has the floor: voice while a call is connected, text otherwise."""
+
+    TEXT = "text"
+    VOICE = "voice"
 
 
 class User(BaseModel):
@@ -20,6 +29,7 @@ class User(BaseModel):
     slots: Slots
     call: CallState
     floor: Medium
+    typing_since: datetime | None = None
 
     @classmethod
     def of(cls, row: UserRow) -> User:
@@ -42,4 +52,5 @@ class User(BaseModel):
                 ended_at=aware(row.call_ended_at) if row.call_ended_at else None,
             ),
             floor=Medium(row.floor),
+            typing_since=aware(row.typing_since) if row.typing_since else None,
         )

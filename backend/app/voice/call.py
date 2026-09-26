@@ -38,10 +38,10 @@ from app.calls.events import CallEvent, CallTransition
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.routing.types import Medium
 from app.text.messenger import Messenger
+from app.users.user import Medium
 from app.voice.events import Speaker, VoiceUtterance
-from app.voice.responder import VoiceResponder
+from app.voice.responder import LiveCall, VoiceResponder
 
 log = logging.getLogger(__name__)
 
@@ -72,19 +72,6 @@ class VoiceConfig:
     app_base_url: str
 
 
-class LiveSessionNotes:
-    """What the voice responder sends into the call: speakable text or a silent note."""
-
-    def __init__(self, session: RealtimeSession) -> None:
-        self._session = session
-
-    async def send(self, text: str, *, speak: bool) -> None:
-        await self._session.send(text, respond=speak)
-
-    async def close(self) -> None:
-        await self._session.close()
-
-
 async def run_call(
     websocket: WebSocket,
     *,
@@ -94,11 +81,9 @@ async def run_call(
     messenger: Messenger,
     push: Push,
     config: VoiceConfig,
+    voice: VoiceResponder,
 ) -> None:
     """Run one call until it ends. The caller has accepted the websocket."""
-    live = pipeline.live_users.get(phone)
-    voice = live.responders[Medium.VOICE]
-    assert isinstance(voice, VoiceResponder)
     user = await pipeline.user(phone)
     history = trim_history(
         to_model_messages(await pipeline.history(phone)),
@@ -141,8 +126,9 @@ async def run_call(
     realtime = agent.realtime(model, deps=deps, message_history=history)
     try:
         async with realtime.session() as session:
-            live.voice = LiveSessionNotes(session)
-            unsubscribe = live.subscribe(on_call_event, kinds={"call"})
+            call = LiveCall(session)
+            voice.calls[phone] = call
+            unsubscribe = pipeline.subscribe(phone, on_call_event, kinds={"call"})
             await pipeline.submit(
                 phone,
                 Origin.CALL,
@@ -159,9 +145,9 @@ async def run_call(
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
-                asyncio.create_task(_captions(session, phone, push, voice, open_turns)),
+                asyncio.create_task(_captions(session, phone, push, call, open_turns)),
                 asyncio.create_task(_turns(session, phone, pipeline, push, listener, open_turns)),
-                asyncio.create_task(_signals(session, voice)),
+                asyncio.create_task(_signals(session, call)),
             ]
             await ended.wait()
             unsubscribe()
@@ -177,7 +163,7 @@ async def run_call(
         log.exception("%s: voice session failed", phone)
         end(f"session_error: {type(exc).__name__}")
     finally:
-        live.voice = None
+        voice.calls.pop(phone, None)
         reason = outcome["reason"]
         if reason != "agent_hangup":  # end_call already recorded its own ended event
             await pipeline.submit(
@@ -217,13 +203,13 @@ async def _captions(
     session: RealtimeSession,
     phone: str,
     push: Push,
-    voice: VoiceResponder,
+    call: LiveCall,
     open_turns: dict[Speaker, tuple[str, str]],
 ) -> None:
     async for update in session.stream_transcripts(delta=True):
         speaker = _speaker_of(update.speaker)
         if speaker is Speaker.AGENT:
-            voice.on_agent_speaking()
+            call.speaking = True
         turn_id = f"{speaker.value}-{update.index}"  # Live numbers turns across both speakers
         open_turns[speaker] = (turn_id, update.transcript)
         await push(
@@ -264,16 +250,16 @@ async def _turns(
             listener.heard()
 
 
-async def _signals(session: RealtimeSession, voice: VoiceResponder) -> None:
+async def _signals(session: RealtimeSession, call: LiveCall) -> None:
     last_agent_text = ""
     async for event in session:
         match event:
             case FunctionToolCallEvent():
-                voice.on_delegation(True)
+                call.tool_running = True
             case FunctionToolResultEvent():
-                voice.on_delegation(False)
+                call.tool_running = False
             case RealtimeTurnCompleteEvent():
-                await voice.on_turn_complete(asked_question=last_agent_text.rstrip().endswith("?"))
+                await call.turn_complete(asked_question=last_agent_text.rstrip().endswith("?"))
             case _:
                 pass
         parts = session.new_messages()

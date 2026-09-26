@@ -8,6 +8,7 @@ import sys
 from app.agent.model import agent_model
 from app.database import create_schema, make_engine, make_sessions
 from app.events.payload import Channel, Origin
+from app.jev import Jev
 from app.main import build_app
 from app.settings import get_settings
 from app.text.events import UserMessage
@@ -26,16 +27,18 @@ async def main(phone: str) -> None:
     settings = get_settings()
     engine = make_engine(settings.database_url)
     await create_schema(engine)
+    jev = (
+        Jev(api_key=settings.openrouter_api_key.get_secret_value(), model=settings.jev_model)
+        if settings.openrouter_api_key
+        else None
+    )
     pipeline = build_app(
         db=make_sessions(engine),
         messenger=ConsoleMessenger(),
         model=agent_model(settings),
         app_base_url=settings.app_base_url,
-        openrouter_key=(
-            settings.openrouter_api_key.get_secret_value() if settings.openrouter_api_key else None
-        ),
-        jev_model=settings.jev_model,
-    )
+        jev=jev,
+    ).pipeline
     print(f"chatting as {phone}; ctrl-d to quit")
     loop = asyncio.get_running_loop()
     while True:

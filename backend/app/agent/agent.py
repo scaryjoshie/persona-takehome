@@ -16,8 +16,8 @@ from app.agent.events import Graduated, SlotChanged, ToolCall
 from app.calls.events import CallEvent, CallTransition, Initiator
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent, GmailPhase
-from app.routing.types import Medium
 from app.text.events import AgentMessage
+from app.users.user import Medium
 
 
 class Bubbles(BaseModel):

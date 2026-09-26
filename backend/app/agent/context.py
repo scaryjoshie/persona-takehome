@@ -8,7 +8,6 @@ from app.agent.slots import Slots
 from app.calls.state import CallState
 from app.events.event import Event
 from app.events.payload import Role, Turn
-from app.routing.types import RoutingContext
 
 
 def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
@@ -89,24 +88,3 @@ def state_block(slots: Slots, call: CallState) -> str:
         "still need: " + (", ".join(slots.missing()) or "nothing"),
     ]
     return "\n".join(lines)
-
-
-def decider_view(ctx: RoutingContext, *, max_chars: int = 1200) -> str:
-    """Compact rendering for a small classifier; the Jev wrapper budgets on this."""
-    run = "none"
-    if ctx.run:
-        run = (
-            f"{ctx.run.medium.value}, side_effect={ctx.run.side_effect_in_flight}, "
-            f"last_turn_question={ctx.run.last_agent_turn_was_question}, "
-            f"inferred={ctx.run.inferred}"
-        )
-    header = [
-        f"floor: {ctx.floor.value}; call: {ctx.call.phase.value}",
-        f"run: {run}",
-        f"trigger: {ctx.trigger.payload.model_dump_json()}",
-        "still need: " + (", ".join(ctx.still_missing) or "nothing"),
-        "recent:",
-    ]
-    body = "\n".join(f"  {t.role.value}: {t.text}" for t in turns(list(ctx.recent)))
-    text = "\n".join(header) + "\n" + body
-    return text if len(text) <= max_chars else text[-max_chars:]

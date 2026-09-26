@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import ClassVar, Literal
 
 from app.events.payload import Payload, Role, Turn
-
-if TYPE_CHECKING:
-    from app.routing.types import RoutingContext, Verb
 
 
 class CallTransition(StrEnum):
@@ -57,8 +54,3 @@ class CallEvent(Payload):
                 return Turn(Role.NOTE, f"call ended {t}, reason: {self.reason or 'unknown'}")
             case CallTransition.CONNECTING:
                 return None
-
-    def fixed_verb(self, ctx: RoutingContext) -> Verb | None:
-        from app.routing.types import Verb
-
-        return Verb.INTERRUPT  # an outcome always gets a reply

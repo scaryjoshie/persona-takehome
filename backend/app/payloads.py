@@ -12,16 +12,18 @@ from pydantic import Field, TypeAdapter
 
 from app.agent.events import Graduated, SlotChanged, ToolCall
 from app.calls.events import CallEvent
+from app.events.decision import Decision
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
-from app.routing.types import Decision
-from app.text.events import AgentMessage, Typing, UserMessage
+from app.text.events import AgentMessage, ReplyDue, ReplyStarted, Typing, UserMessage
 from app.voice.events import VoiceUtterance
 
 AnyPayload = Annotated[
     UserMessage
     | AgentMessage
     | Typing
+    | ReplyDue
+    | ReplyStarted
     | VoiceUtterance
     | ToolCall
     | SlotChanged

@@ -27,3 +27,4 @@ class UserRow(SQLModel, table=True):
     call_started_at: datetime | None = None
     call_ended_at: datetime | None = None
     floor: str = "text"
+    typing_since: datetime | None = None  # set while the user is typing a text

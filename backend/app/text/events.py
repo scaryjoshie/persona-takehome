@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from app.events.payload import Payload, Role, Turn
-
-if TYPE_CHECKING:
-    from app.routing.types import RoutingContext, Verb
 
 
 class UserMessage(Payload):
@@ -18,11 +15,6 @@ class UserMessage(Payload):
 
     def describe(self) -> str:
         return f"the user texted: {self.text}"
-
-    def fixed_verb(self, ctx: RoutingContext) -> Verb | None:
-        from app.routing.types import Verb
-
-        return Verb.INTERRUPT  # a message always wins
 
 
 class AgentMessage(Payload):
@@ -53,3 +45,20 @@ class Typing(Payload):
         if not self.active:
             return "the user stopped typing"
         return f"the user has been typing a text message for {self.seconds:.0f} seconds"
+
+
+class ReplyDue(Payload):
+    """Time to check whether to reply. Submitted by the text medium after a delay; never stored."""
+
+    kind: Literal["reply_due"] = "reply_due"
+    persists = False
+
+
+class ReplyStarted(Payload):
+    """The agent started replying to everything up to and including event `through_seq`.
+    Stored, so "is anything waiting for a reply?" is a question about the log."""
+
+    kind: Literal["reply_started"] = "reply_started"
+    routes = False
+
+    through_seq: int

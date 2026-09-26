@@ -14,7 +14,7 @@ from app.calls.state import CallState
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.payloads import AnyPayload
-from app.routing.types import Medium
+from app.users.user import Medium
 from app.voice.call import TranscriptPartial
 
 

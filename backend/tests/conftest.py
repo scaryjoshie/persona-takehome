@@ -6,25 +6,27 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from pydantic_ai.models.test import TestModel
+from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from app.agent.agent import agent
 from app.database import SessionFactory, create_schema, make_engine, make_sessions
+from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.main import build_app
-from app.pipeline import Pipeline
-from app.routing.deciders import DefaultDecider
-from app.routing.responder import Responder
-from app.routing.types import Medium, Run, Verb
+from app.main import App, build_app
+from app.pipeline import Context, Pipeline
 from app.text.events import Typing, UserMessage
-from app.text.responder import RunRequest, RunResult
+from app.text.reply import Replier
+from app.text.responder import TextResponder
+from app.users.user import Medium, User
 
-PHONE = "+15550001111"
+PHONE = "15550001111"
 
 
 class FakeClock:
     def __init__(self) -> None:
-        self.t = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+        self.t = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
 
     def __call__(self) -> datetime:
         return self.t
@@ -32,38 +34,36 @@ class FakeClock:
     def advance(self, seconds: float) -> None:
         self.t += timedelta(seconds=seconds)
 
-    def set_ts(self, ts: float) -> None:
-        self.t = datetime.fromtimestamp(ts, tz=UTC)
-
 
 class FakeTimers:
     """Records timers; tests fire them explicitly and the clock jumps to the due time."""
 
     def __init__(self, clock: FakeClock) -> None:
         self.clock = clock
-        self._entries: list[tuple[float, Callable[[], None], bool]] = []
+        self._entries: list[tuple[datetime, Callable[[], None], bool]] = []
 
     def call_later(self, delay: float, cb: Callable[[], None]) -> _Handle:
-        self._entries.append((self.clock().timestamp() + delay, cb, False))
+        self._entries.append((self.clock() + timedelta(seconds=delay), cb, False))
         return _Handle(self, len(self._entries) - 1)
 
-    def _cancel(self, idx: int) -> None:
+    def cancel(self, idx: int) -> None:
         due, cb, _ = self._entries[idx]
         self._entries[idx] = (due, cb, True)
 
     @property
     def pending(self) -> list[float]:
-        now = self.clock().timestamp()
-        return [round(due - now, 3) for due, _, cancelled in self._entries if not cancelled]
+        now = self.clock()
+        return sorted(
+            round((due - now).total_seconds(), 3) for due, _, done in self._entries if not done
+        )
 
     def fire_next(self) -> None:
-        live = [(i, due) for i, (due, _, c) in enumerate(self._entries) if not c]
+        live = [(i, due) for i, (due, _, done) in enumerate(self._entries) if not done]
         assert live, "nothing scheduled"
         i, due = min(live, key=lambda x: x[1])
         cb = self._entries[i][1]
-        self._cancel(i)
-        if due > self.clock().timestamp():
-            self.clock.set_ts(due)
+        self.cancel(i)
+        self.clock.t = max(self.clock.t, due)
         cb()
 
 
@@ -72,53 +72,7 @@ class _Handle:
         self._timers, self._idx = timers, idx
 
     def cancel(self) -> None:
-        self._timers._cancel(self._idx)  # pyright: ignore[reportPrivateUsage]
-
-
-class FakeRunner:
-    def __init__(self, *, block: bool = False) -> None:
-        self.requests: list[RunRequest] = []
-        self.block = block
-        self.release = asyncio.Event()
-        self.cancelled = 0
-
-    async def __call__(self, request: RunRequest) -> RunResult:
-        self.requests.append(request)
-        if self.block:
-            try:
-                await self.release.wait()
-            except asyncio.CancelledError:
-                self.cancelled += 1
-                raise
-        return RunResult(asked_question=True)
-
-
-class FakeResponder(Responder):
-    def __init__(self, medium: Medium, clock: FakeClock) -> None:
-        self.medium = medium
-        self.decider = DefaultDecider({"typing": Verb.ABSORB, "gmail": Verb.DEFER})
-        self._clock = clock
-        self._run: Run | None = None
-        self.log: list[tuple[str, str]] = []
-
-    @property
-    def run(self) -> Run | None:
-        return self._run
-
-    def begin(self, *, side_effect: bool = False, question: bool = False) -> None:
-        self._run = Run(
-            medium=self.medium,
-            started=self._clock(),
-            side_effect_in_flight=side_effect,
-            last_agent_turn_was_question=question,
-        )
-
-    async def start(self, event: Event) -> None:
-        self.log.append(("start", event.kind))
-        self.begin()
-
-    async def apply(self, verb: Verb, event: Event) -> None:
-        self.log.append((verb.value, event.kind))
+        self._timers.cancel(self._idx)
 
 
 class CapturingMessenger:
@@ -133,12 +87,42 @@ class CapturingMessenger:
         self.typing.append(active)
 
 
+class FakeResponder:
+    """Records what it was handed and decides nothing."""
+
+    def __init__(self) -> None:
+        self.handled: list[str] = []
+
+    async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
+        self.handled.append(event.kind)
+        return Decision(trigger_kind=event.kind, verb="seen")
+
+
+async def reply_hi(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+    return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": ["hi"]})])
+
+
+async def no_sleep(seconds: float) -> None:
+    return None
+
+
+async def settle(pipeline: Pipeline) -> None:
+    """Wait until background work (replies, delayed submits) has finished."""
+    for _ in range(50):
+        pending = [t for t in pipeline._background if not t.done()]  # pyright: ignore[reportPrivateUsage]
+        if not pending:
+            await asyncio.sleep(0)
+            if not [t for t in pipeline._background if not t.done()]:  # pyright: ignore[reportPrivateUsage]
+                return
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
 def ev(
     payload: Payload, origin: Origin = Origin.USER, channel: Channel = Channel.TEXT, seq: int = 0
 ) -> Event:
     return Event(
         seq=seq,
-        ts=datetime(2026, 9, 25, 12, 0, tzinfo=UTC),
+        ts=datetime(2026, 9, 26, 12, 0, tzinfo=UTC),
         origin=origin,
         channel=channel,
         payload=payload,
@@ -177,21 +161,29 @@ def messenger() -> CapturingMessenger:
 
 
 @pytest.fixture
-def pipeline(
+def app(
     db: SessionFactory, messenger: CapturingMessenger, clock: FakeClock, timers: FakeTimers
-) -> Pipeline:
-    return build_app(
+) -> App:
+    built = build_app(
         db=db,
         messenger=messenger,
-        model=TestModel(),
+        model=FunctionModel(reply_hi),
         app_base_url="http://x",
         timers=timers,
         clock=clock,
     )
+    replier = Replier(
+        agent,
+        pipeline=built.pipeline,
+        messenger=messenger,
+        model=FunctionModel(reply_hi),
+        app_base_url="http://x",
+        sleep=no_sleep,
+    )
+    built.pipeline.responders[Medium.TEXT] = TextResponder(replier)
+    return built
 
 
-def fake_responders(
-    clock: FakeClock,
-) -> tuple[FakeResponder, FakeResponder, dict[Medium, Responder]]:
-    text, voice = FakeResponder(Medium.TEXT, clock), FakeResponder(Medium.VOICE, clock)
-    return text, voice, {Medium.TEXT: text, Medium.VOICE: voice}
+@pytest.fixture
+def pipeline(app: App) -> Pipeline:
+    return app.pipeline

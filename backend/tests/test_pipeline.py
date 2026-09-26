@@ -6,14 +6,15 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
 from app.pipeline import Pipeline
-from app.routing.types import Medium
 from app.text.events import AgentMessage, Typing, UserMessage
-from tests.conftest import PHONE, FakeClock, FakeTimers, fake_responders
+from app.users.user import Medium
+from tests.conftest import PHONE, FakeClock, FakeResponder, FakeTimers
 
 
-def swap_responders(pipeline: Pipeline, clock: FakeClock):  # type: ignore[no-untyped-def]
-    text, voice, responders = fake_responders(clock)
-    pipeline.live_users.get(PHONE).responders = responders
+def swap_responders(pipeline: Pipeline, clock: FakeClock) -> tuple[FakeResponder, FakeResponder]:
+    text, voice = FakeResponder(), FakeResponder()
+    pipeline.responders[Medium.TEXT] = text
+    pipeline.responders[Medium.VOICE] = voice
     return text, voice
 
 
@@ -50,13 +51,8 @@ async def test_submit_persists_routes_and_orders(pipeline: Pipeline, clock: Fake
     assert kinds == ["user_message", "call", "call", "call", "user_message", "call", "user_message"]
     assert "typing" not in [e.kind for e in history]
     assert [e.seq for e in history] == list(range(1, len(history) + 1))
-    assert voice.log == [("start", "user_message")]  # only "two", while connected
-    assert text.log == [
-        ("start", "user_message"),
-        ("absorb", "typing"),
-        ("interrupt", "call"),
-        ("interrupt", "user_message"),
-    ]
+    assert voice.handled == ["user_message"]  # only "two", while connected
+    assert text.handled == ["user_message", "typing", "call", "user_message"]
     user = await a.user(PHONE)
     assert user.floor is Medium.TEXT and user.call.reason == "user_hangup"
 
@@ -64,9 +60,11 @@ async def test_submit_persists_routes_and_orders(pipeline: Pipeline, clock: Fake
 async def test_publish_reaches_subscribers_with_kind_filter(pipeline: Pipeline) -> None:
     seen: list[str] = []
     thread: list[str] = []
-    rt = pipeline.live_users.get(PHONE)
-    rt.subscribe(lambda e: seen.append(e.kind))
-    rt.subscribe(lambda e: thread.append(e.kind), kinds={"user_message", "agent_message"})
+    swap_responders(pipeline, FakeClock())
+    pipeline.subscribe(PHONE, lambda e: seen.append(e.kind))
+    pipeline.subscribe(
+        PHONE, lambda e: thread.append(e.kind), kinds={"user_message", "agent_message"}
+    )
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="x"))
     await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, AgentMessage(text="y"))
     assert seen == ["user_message", "decision", "agent_message"]
@@ -79,7 +77,7 @@ async def test_route_override_and_record_only_kinds(pipeline: Pipeline, clock: F
         PHONE, Origin.USER, Channel.TEXT, UserMessage(text="replayed"), route=False
     )
     await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, AgentMessage(text="bubble"))
-    assert text.log == []
+    assert text.handled == []
     assert [e.kind for e in await pipeline.history(PHONE)] == ["user_message", "agent_message"]
 
 
@@ -88,7 +86,7 @@ async def test_invalid_call_transition_is_dropped(pipeline: Pipeline, clock: Fak
     result = await pipeline.submit(
         PHONE, Origin.CALL, Channel.SYSTEM, CallEvent(transition=CallTransition.ENDED)
     )
-    assert result is None and text.log == [] and await pipeline.history(PHONE) == []
+    assert result is None and text.handled == [] and await pipeline.history(PHONE) == []
 
 
 async def test_gmail_outcomes_route_but_link_sent_does_not(
@@ -101,7 +99,7 @@ async def test_gmail_outcomes_route_but_link_sent_does_not(
     await pipeline.submit(
         PHONE, Origin.GOOGLE, Channel.SYSTEM, GmailEvent(phase=GmailPhase.CONNECTED, email="a@b.c")
     )
-    assert text.log == [("start", "gmail")]
+    assert text.handled == ["gmail"]
 
 
 async def test_slot_events_update_the_user_and_repeat_values_are_dropped(

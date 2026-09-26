@@ -6,20 +6,24 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.calls.state import CallPhase, CallState
-from app.routing.types import Medium
 from app.users.models import UserRow
-from app.users.user import User
+from app.users.user import Medium, User
 
 
 async def ensure_user(session: AsyncSession, phone: str, *, now: datetime) -> User:
+    """Get the user, creating them if new. Safe when two requests create the same user at
+    once (two browser tabs connecting): the insert is skipped if the row already exists."""
     row = await session.get(UserRow, phone)
     if row is None:
-        row = UserRow(phone=phone, created_at=now)
-        session.add(row)
-        await session.flush()
+        await session.exec(  # pyright: ignore[reportCallIssue, reportArgumentType]
+            sqlite_insert(UserRow).values(phone=phone, created_at=now).on_conflict_do_nothing()
+        )
+        row = await session.get(UserRow, phone)
+        assert row is not None
     return User.of(row)
 
 
@@ -47,6 +51,13 @@ async def set_call(session: AsyncSession, phone: str, call: CallState) -> User:
     row.call_started_at = call.started_at
     row.call_ended_at = call.ended_at
     row.floor = (Medium.VOICE if call.phase is CallPhase.CONNECTED else Medium.TEXT).value
+    await session.flush()
+    return User.of(row)
+
+
+async def set_typing(session: AsyncSession, phone: str, since: datetime | None) -> User:
+    row = await _row(session, phone)
+    row.typing_since = since
     await session.flush()
     return User.of(row)
 

@@ -7,32 +7,26 @@
 - **One long-running process** (see [11-hosting.md](11-hosting.md)), deployed on Fly.io or similar with a persistent volume for SQLite.
 - **Models:** one OpenAI model for the shared agent (`gpt-6-sol` class; exact id to confirm), used directly for text and as the Live delegation backend, so voice is an extension of the text agent (see 15). GPT-Live (`gpt-live-1`) speaks. OpenRouter only for auxiliary work: one-shot tasks, the harness personas. `gpt-realtime-2.1` kept as the voice fallback behind the same interface. Model ids live in tier constants and settings, not scattered.
 
-## Layout (as built, 2026-09-26)
+## Layout (as built, 2026-09-26, after the restructure)
 
 ```
 backend/app/
-  main.py               entry point: assembles the payload union, wires live users + actions; FastAPI app (slice 2b)
-  settings.py           pydantic-settings; nothing else reads the environment
-  database.py           async engine, session factory, schema creation
-  pipeline.py           submit: the one door for events (save, applying state changes; publish; route)
-  timers.py             timer abstraction so responders test without sleeping
-  events/   payload.py (Payload base, Origin, Channel, Role, Turn)  event.py (Event)  models.py  service.py
-  users/    models.py (user row: identity + state columns)  user.py (User frozen value)  service.py
-            live.py (LiveUser: the in-process part of a user — lock, responders, voice session, subscribers; LiveUsers registry)
-  calls/    events.py (CallEvent, CallTransition, Initiator)  state.py (CallPhase, CallState, next_state)
-  gmail/    events.py (GmailPhase, GmailEvent)   [+ models.py, oauth.py, inbox.py in slice 4]
-  text/     events.py (UserMessage, AgentMessage, Typing)  responder.py (waits for the user to finish, runs one reply, can cancel)
-            reply.py (one agent run + bubble delivery)  messenger.py (outbound port)
-  voice/    events.py (VoiceUtterance)  responder.py (forwards events into the call as notes)   [+ session.py in slice 3]
-  routing/  __init__.py (glossary)  types.py  responder.py (abstract base)  deciders/ (Jev client, defaults table)
-            route.py (one function: pick the responder, start or decide a verb, apply it)
-  agent/    agent.py (the shared pydantic-ai agent + tools)  deps.py  prompts.py + prompts/*.md
-            context.py (renders the log for a model)  call_notes.py (how a text event is worded on a call)
-            slots.py (Slots)  events.py (SlotChanged, ToolCall, Graduated)  model.py (the agent's model from settings)
-  cli.py    talk to the agent from a terminal
-backend/tests/          one file per section; fakes in conftest; temp SQLite per test
-frontend/               Vite + React phone UI (owned by the frontend agent)
+  main.py        build_app (pipeline + the two media) and the FastAPI app
+  pipeline.py    submit: save (applying state changes), publish, hand to the medium with the floor
+  payloads.py    every event kind in one union
+  jev.py         Jev client (OpenRouter Decisions API); returns None on failure
+  database.py  settings.py  timers.py  cli.py
+  events/   payload.py  event.py  decision.py  models.py  service.py
+  users/    models.py  user.py (User, Medium)  service.py
+  calls/    events.py  state.py
+  gmail/    events.py
+  text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  messenger.py
+  voice/    events.py  responder.py (VoiceResponder, LiveCall)  call.py (one call: audio, captions, listener)
+  agent/    agent.py  deps.py  prompts.py + prompts/*.md  context.py  call_notes.py  slots.py  events.py  model.py
+  web/      protocol.py  routes.py  sockets.py  schema.py
 ```
+
+The medium contract is one method, `handle(event, user, ctx) -> Decision | None`. Each medium owns its own vocabulary. The text medium is stateless (decisions come from the log and the user row); the voice medium's only in-process state is the live call.
 
 ## Build order, in slices that each demo on their own
 

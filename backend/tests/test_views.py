@@ -7,10 +7,10 @@ from app.agent.events import ToolCall
 from app.agent.slots import Slots
 from app.calls.events import CallEvent, CallTransition
 from app.calls.state import CallPhase, CallState
+from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Role
 from app.gmail.events import GmailEvent, GmailPhase
-from app.routing.types import DecidedBy, Decision, Verb
 from app.text.events import AgentMessage, UserMessage
 from app.voice.events import Speaker, VoiceUtterance
 from tests.conftest import ev
@@ -45,9 +45,7 @@ def seeded() -> list[Event]:
             Channel.VOICE,
         ),
         ev(
-            Decision(
-                trigger_kind="typing", verb=Verb.ABSORB, by=DecidedBy.DEFAULT, confidence=0.5, ms=1
-            ),
+            Decision(trigger_kind="typing", verb="absorb", by="fallback"),
             S,
             C,
         ),

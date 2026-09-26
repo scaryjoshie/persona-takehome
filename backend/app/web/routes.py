@@ -16,6 +16,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.text.events import Typing, UserMessage
+from app.voice.responder import VoiceResponder
 from app.web.protocol import (
     CLIENT_MESSAGE,
     CallAction,
@@ -46,9 +47,10 @@ AUDIO_BUSY = 4409  # a call is already running for this user (another tab)
 AUDIO_NO_CALL = 4400  # no call is being connected; send accept or start first
 
 
-def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> APIRouter:
+def make_router(
+    pipeline: Pipeline, sockets: Sockets, run_call: CallRunner, voice: VoiceResponder
+) -> APIRouter:
     router = APIRouter()
-    calls_running: set[str] = set()
 
     async def snapshot(phone: str) -> Snapshot:
         user = await pipeline.user(phone)
@@ -69,7 +71,6 @@ def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> A
         phone = normalize(phone)
         await websocket.accept()
         sockets.add(phone, websocket)
-        live = pipeline.live_users.get(phone)
 
         async def send(message: BaseModel) -> None:
             with contextlib.suppress(Exception):  # this socket closed; its finally cleans up
@@ -84,7 +85,7 @@ def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> A
                 await send(SlotsMessage(slots=user.slots))
                 await send(CallMessage(call=user.call))
 
-        unsubscribe = live.subscribe(on_event)
+        unsubscribe = pipeline.subscribe(phone, on_event)
         typing_since: float | None = None
         try:
             await websocket.send_text((await snapshot(phone)).model_dump_json())
@@ -125,18 +126,14 @@ def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> A
         """The call itself: PCM16 mono 24 kHz both ways. Closing this socket hangs up."""
         phone = normalize(phone)
         user = await pipeline.user(phone)
-        if phone in calls_running:
+        if phone in voice.calls:
             await websocket.close(code=AUDIO_BUSY)
             return
         if user.call.phase is not CallPhase.CONNECTING:
             await websocket.close(code=AUDIO_NO_CALL)
             return
-        calls_running.add(phone)
-        try:
-            await websocket.accept()
-            await run_call(websocket, phone)
-        finally:
-            calls_running.discard(phone)
+        await websocket.accept()
+        await run_call(websocket, phone)
 
     return router
 

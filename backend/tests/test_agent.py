@@ -9,10 +9,9 @@ from app.agent.deps import Deps
 from app.agent.events import SlotChanged
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.routing.types import Medium
 from app.text.events import UserMessage
-from app.text.reply import Reply
-from app.text.responder import RunRequest
+from app.text.reply import Replier
+from app.users.user import Medium
 from tests.conftest import PHONE, CapturingMessenger
 
 
@@ -31,9 +30,8 @@ async def run_text(
     async def sleep(s: float) -> None:
         sleeps.append(s)
 
-    handler = Reply(
+    replier = Replier(
         agent,
-        phone=PHONE,
         pipeline=pipeline,
         messenger=messenger,
         model=model,
@@ -45,7 +43,7 @@ async def run_text(
     )
     assert trigger is not None
     with agent.override(model=model):
-        await handler(RunRequest(trigger=trigger, buffered=(trigger,)))
+        await replier.reply(PHONE, trigger.seq)
 
 
 async def test_handler_runs_tools_and_delivers_bubbles(

@@ -6,9 +6,8 @@ from dataclasses import dataclass
 
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
-from app.routing.types import Medium
 from app.text.messenger import Messenger
-from app.users.user import User
+from app.users.user import Medium, User
 
 
 @dataclass

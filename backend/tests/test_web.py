@@ -42,7 +42,7 @@ async def fake_call(websocket: WebSocket, phone: str) -> None:
 def client(tmp_path: Path) -> Iterator[TestClient]:
     engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'web.db'}")
     sockets = Sockets()
-    pipeline = build_app(
+    built = build_app(
         db=make_sessions(engine),
         messenger=WebMessenger(sockets),
         model=FunctionModel(reply_hi),
@@ -56,7 +56,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         await engine.dispose()
 
     web = FastAPI(lifespan=lifespan)
-    web.include_router(make_router(pipeline, sockets, fake_call))
+    web.include_router(make_router(built.pipeline, sockets, fake_call, built.voice))
     with TestClient(web) as c:
         yield c
 
