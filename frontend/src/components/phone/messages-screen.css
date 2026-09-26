@@ -131,3 +131,68 @@
     animation: none;
   }
 }
+
+/* Links. Inline ones keep the bubble's color, underlined, as Messages draws them. */
+.messages-screen .message-inline-link {
+  color: inherit;
+  text-decoration: underline;
+}
+/* A link card replaces the bubble: no padding or tail mask, its own rounded shape. */
+.messages-screen .message-link .message-bubble {
+  padding: 0;
+  background: none;
+  -webkit-mask-box-image: none;
+  overflow: visible;
+}
+.messages-screen .link-preview {
+  display: flex;
+  flex-direction: column;
+  width: 250px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #3a3a3c;
+  color: #fff;
+  text-decoration: none;
+}
+.messages-screen .link-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.91;
+  object-fit: cover;
+  background: #2c2c2e;
+}
+.messages-screen .link-preview-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 10px;
+}
+.messages-screen .link-preview-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 6px;
+}
+.messages-screen .link-preview-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  text-align: left;
+}
+.messages-screen .link-preview-title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.messages-screen .link-preview-domain {
+  overflow: hidden;
+  font-size: 13px;
+  color: rgba(235, 235, 245, 0.6);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

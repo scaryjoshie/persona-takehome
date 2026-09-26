@@ -32,6 +32,7 @@ const schema = {
     ClientMessage: { ...roots.client_message, title: "ClientMessage" },
     ServerMessage: { ...roots.server_message, title: "ServerMessage" },
     Payload: { ...roots.payload, title: "Payload" },
+    Preview: { ...roots.preview, title: "Preview" },
   },
   $defs: defs,
 };

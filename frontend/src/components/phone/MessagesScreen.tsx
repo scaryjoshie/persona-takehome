@@ -16,6 +16,8 @@ import {
 } from "framework7-react";
 import { IOSKeyboard, IOSStatusBar, KB_DARK, KB_H, STATUS_H, Scaled } from "./vendor/ios-chrome";
 import { SCREEN } from "./IPhone17Pro";
+import { LinkPreview } from "./LinkPreview";
+import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
 import "./messages-screen.css";
 
 export interface ThreadMessage {
@@ -105,12 +107,22 @@ export function MessagesScreen({
               <br />
               Today 9:41 AM
             </MessagesTitle>
-            {messages.map((m, i) => {
-              const first = messages[i - 1]?.side !== m.side;
-              const last = messages[i + 1]?.side !== m.side;
-              const footer = endsSent && m.id === lastSentId ? "Delivered" : undefined;
+            {bubblesFor(messages).map((b, i, all) => {
+              const first = all[i - 1]?.side !== b.side;
+              const last = all[i + 1]?.side !== b.side;
+              const footer = endsSent && b.messageId === lastSentId && last ? "Delivered" : undefined;
               return (
-                <Message key={m.id} type={m.side} text={m.text} first={first} last={last} tail={last} footer={footer} />
+                <Message
+                  key={b.key}
+                  type={b.side}
+                  first={first}
+                  last={last}
+                  tail={last && !b.link}
+                  footer={footer}
+                  className={b.link ? "message-link" : undefined}
+                >
+                  <span slot="text">{b.link ? <LinkPreview url={b.link} /> : <LinkedText text={b.text} />}</span>
+                </Message>
               );
             })}
             {typing && <Message type="received" typing first last tail />}
@@ -193,4 +205,44 @@ function useEnterToSend(root: React.RefObject<HTMLDivElement | null>, send: () =
     textarea.addEventListener("keydown", onKeyDown);
     return () => textarea.removeEventListener("keydown", onKeyDown);
   }, [root]);
+}
+
+interface Bubble {
+  key: string;
+  messageId: string;
+  side: ThreadMessage["side"];
+  text: string;
+  /** Set for a link card. */
+  link?: string;
+}
+
+/** As in Messages: a lone link becomes a card; text with a link shows the text, then the card. */
+function bubblesFor(messages: ThreadMessage[]): Bubble[] {
+  return messages.flatMap((m): Bubble[] => {
+    const link = firstLink(m.text);
+    const base = { messageId: m.id, side: m.side, text: m.text };
+    if (!link) return [{ ...base, key: m.id }];
+    if (isOnlyLink(m.text)) return [{ ...base, key: m.id, link }];
+    return [
+      { ...base, key: m.id },
+      { ...base, key: `${m.id}:link`, link },
+    ];
+  });
+}
+
+/** Message text with its links made tappable. */
+function LinkedText({ text }: { text: string }) {
+  return (
+    <>
+      {splitLinks(text).map((part, i) =>
+        part.href ? (
+          <a key={i} className="message-inline-link" href={part.href} target="_blank" rel="noreferrer">
+            {part.text}
+          </a>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
 }

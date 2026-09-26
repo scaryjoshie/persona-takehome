@@ -9,14 +9,17 @@ export type Speaker = "user" | "agent";
 export type CallTransition = "ringing" | "connecting" | "connected" | "declined" | "failed" | "ended";
 export type Initiator = "agent" | "user";
 export type GmailPhase = "link_sent" | "connected" | "failed" | "skipped";
-export type Verb = "start" | "interrupt" | "absorb" | "defer";
-export type DecidedBy = "fixed" | "default" | "jev" | "model";
 export type CallPhase = "none" | "ringing" | "connecting" | "connected" | "ended";
+/**
+ * Which medium has the floor: voice while a call is connected, text otherwise.
+ */
 export type Medium = "text" | "voice";
 export type Payload =
   | UserMessage
   | AgentMessage
   | Typing
+  | ReplyDue
+  | ReplyStarted
   | VoiceUtterance
   | ToolCall
   | SlotChanged
@@ -60,6 +63,8 @@ export interface WireEvent {
     | UserMessage
     | AgentMessage
     | Typing
+    | ReplyDue
+    | ReplyStarted
     | VoiceUtterance
     | ToolCall
     | SlotChanged
@@ -87,6 +92,20 @@ export interface Typing {
   kind: "typing";
   active: boolean;
   seconds: number;
+}
+/**
+ * Time to check whether to reply. Submitted by the text medium after a delay; never stored.
+ */
+export interface ReplyDue {
+  kind: "reply_due";
+}
+/**
+ * The agent started replying to everything up to and including event `through_seq`.
+ * Stored, so "is anything waiting for a reply?" is a question about the log.
+ */
+export interface ReplyStarted {
+  kind: "reply_started";
+  through_seq: number;
 }
 /**
  * One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.
@@ -133,16 +152,12 @@ export interface GmailEvent {
   phase: GmailPhase;
   email: string | null;
 }
-/**
- * Logged for every routed event. The debug panel and the harness read these.
- */
 export interface Decision {
   kind: "decision";
   trigger_kind: string;
-  verb: Verb;
-  by: DecidedBy;
-  confidence: number;
-  ms: number;
+  verb: string;
+  by: string;
+  confidence: number | null;
   note: string | null;
 }
 export interface Slots {
@@ -187,4 +202,12 @@ export interface TranscriptPartial {
   turn_id: string;
   text: string;
   final: boolean;
+}
+export interface Preview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  site_name: string | null;
+  icon: string | null;
 }

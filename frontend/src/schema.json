@@ -287,14 +287,8 @@
         "title": "Channel",
         "type": "string"
       },
-      "DecidedBy": {
-        "enum": ["fixed", "default", "jev", "model"],
-        "title": "DecidedBy",
-        "type": "string"
-      },
       "Decision": {
         "additionalProperties": false,
-        "description": "Logged for every routed event. The debug panel and the harness read these.",
         "properties": {
           "kind": {
             "const": "decision",
@@ -307,18 +301,25 @@
             "type": "string"
           },
           "verb": {
-            "$ref": "#/$defs/Verb"
+            "title": "Verb",
+            "type": "string"
           },
           "by": {
-            "$ref": "#/$defs/DecidedBy"
+            "default": "rule",
+            "title": "By",
+            "type": "string"
           },
           "confidence": {
-            "title": "Confidence",
-            "type": "number"
-          },
-          "ms": {
-            "title": "Ms",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence"
           },
           "note": {
             "anyOf": [
@@ -333,7 +334,7 @@
             "title": "Note"
           }
         },
-        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "ms", "note"],
+        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "note"],
         "title": "Decision",
         "type": "object"
       },
@@ -407,6 +408,7 @@
         "type": "string"
       },
       "Medium": {
+        "description": "Which medium has the floor: voice while a call is connected, text otherwise.",
         "enum": ["text", "voice"],
         "title": "Medium",
         "type": "string"
@@ -415,6 +417,40 @@
         "enum": ["user", "text_agent", "voice_agent", "call", "google", "system"],
         "title": "Origin",
         "type": "string"
+      },
+      "ReplyDue": {
+        "additionalProperties": false,
+        "description": "Time to check whether to reply. Submitted by the text medium after a delay; never stored.",
+        "properties": {
+          "kind": {
+            "const": "reply_due",
+            "default": "reply_due",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "title": "ReplyDue",
+        "type": "object"
+      },
+      "ReplyStarted": {
+        "additionalProperties": false,
+        "description": "The agent started replying to everything up to and including event `through_seq`.\nStored, so \"is anything waiting for a reply?\" is a question about the log.",
+        "properties": {
+          "kind": {
+            "const": "reply_started",
+            "default": "reply_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "through_seq": {
+            "title": "Through Seq",
+            "type": "integer"
+          }
+        },
+        "required": ["kind", "through_seq"],
+        "title": "ReplyStarted",
+        "type": "object"
       },
       "SlotChanged": {
         "additionalProperties": false,
@@ -697,11 +733,6 @@
         "title": "UserMessage",
         "type": "object"
       },
-      "Verb": {
-        "enum": ["start", "interrupt", "absorb", "defer"],
-        "title": "Verb",
-        "type": "string"
-      },
       "VoiceUtterance": {
         "additionalProperties": false,
         "description": "One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.",
@@ -766,6 +797,8 @@
                 "decision": "#/$defs/Decision",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
+                "reply_due": "#/$defs/ReplyDue",
+                "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
                 "tool_call": "#/$defs/ToolCall",
                 "typing": "#/$defs/Typing",
@@ -783,6 +816,12 @@
               },
               {
                 "$ref": "#/$defs/Typing"
+              },
+              {
+                "$ref": "#/$defs/ReplyDue"
+              },
+              {
+                "$ref": "#/$defs/ReplyStarted"
               },
               {
                 "$ref": "#/$defs/VoiceUtterance"
@@ -929,14 +968,8 @@
         "title": "CallTransition",
         "type": "string"
       },
-      "DecidedBy": {
-        "enum": ["fixed", "default", "jev", "model"],
-        "title": "DecidedBy",
-        "type": "string"
-      },
       "Decision": {
         "additionalProperties": false,
-        "description": "Logged for every routed event. The debug panel and the harness read these.",
         "properties": {
           "kind": {
             "const": "decision",
@@ -949,18 +982,25 @@
             "type": "string"
           },
           "verb": {
-            "$ref": "#/$defs/Verb"
+            "title": "Verb",
+            "type": "string"
           },
           "by": {
-            "$ref": "#/$defs/DecidedBy"
+            "default": "rule",
+            "title": "By",
+            "type": "string"
           },
           "confidence": {
-            "title": "Confidence",
-            "type": "number"
-          },
-          "ms": {
-            "title": "Ms",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence"
           },
           "note": {
             "anyOf": [
@@ -975,7 +1015,7 @@
             "title": "Note"
           }
         },
-        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "ms", "note"],
+        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "note"],
         "title": "Decision",
         "type": "object"
       },
@@ -1031,6 +1071,40 @@
         "enum": ["agent", "user"],
         "title": "Initiator",
         "type": "string"
+      },
+      "ReplyDue": {
+        "additionalProperties": false,
+        "description": "Time to check whether to reply. Submitted by the text medium after a delay; never stored.",
+        "properties": {
+          "kind": {
+            "const": "reply_due",
+            "default": "reply_due",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "title": "ReplyDue",
+        "type": "object"
+      },
+      "ReplyStarted": {
+        "additionalProperties": false,
+        "description": "The agent started replying to everything up to and including event `through_seq`.\nStored, so \"is anything waiting for a reply?\" is a question about the log.",
+        "properties": {
+          "kind": {
+            "const": "reply_started",
+            "default": "reply_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "through_seq": {
+            "title": "Through Seq",
+            "type": "integer"
+          }
+        },
+        "required": ["kind", "through_seq"],
+        "title": "ReplyStarted",
+        "type": "object"
       },
       "SlotChanged": {
         "additionalProperties": false,
@@ -1151,11 +1225,6 @@
         "title": "UserMessage",
         "type": "object"
       },
-      "Verb": {
-        "enum": ["start", "interrupt", "absorb", "defer"],
-        "title": "Verb",
-        "type": "string"
-      },
       "VoiceUtterance": {
         "additionalProperties": false,
         "description": "One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.",
@@ -1202,6 +1271,8 @@
         "decision": "#/$defs/Decision",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
+        "reply_due": "#/$defs/ReplyDue",
+        "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
         "tool_call": "#/$defs/ToolCall",
         "typing": "#/$defs/Typing",
@@ -1219,6 +1290,12 @@
       },
       {
         "$ref": "#/$defs/Typing"
+      },
+      {
+        "$ref": "#/$defs/ReplyDue"
+      },
+      {
+        "$ref": "#/$defs/ReplyStarted"
       },
       {
         "$ref": "#/$defs/VoiceUtterance"
@@ -1242,5 +1319,76 @@
         "$ref": "#/$defs/Decision"
       }
     ]
+  },
+  "preview": {
+    "properties": {
+      "url": {
+        "title": "Url",
+        "type": "string"
+      },
+      "title": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Title"
+      },
+      "description": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Description"
+      },
+      "image": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Image"
+      },
+      "site_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Site Name"
+      },
+      "icon": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Icon"
+      }
+    },
+    "required": ["url", "title", "description", "image", "site_name", "icon"],
+    "title": "Preview",
+    "type": "object"
   }
 }
