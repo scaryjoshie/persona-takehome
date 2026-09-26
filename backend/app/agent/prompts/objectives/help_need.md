@@ -8,4 +8,3 @@ Keep it to one short question.
 - the thing they keep putting off
 - what's on their plate this week
 - the errand or admin they'd happily never do again
-- what they'd do with an hour back this week

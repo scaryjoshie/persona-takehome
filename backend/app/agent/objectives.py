@@ -25,12 +25,12 @@ import zlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from app.agent.events import CallOptOut, Graduated, SlotChanged
+from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.gmail.events import GmailEvent
-from app.text.events import AgentMessage, ReplyStarted
+from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
@@ -48,6 +48,8 @@ class Situation:
     asks: int = 0  # agent turns since onboarding last moved forward
     said: tuple[str, ...] = ()  # the agent's recent lines, lowercased, so scripts don't repeat
     after_call: bool = False  # a call just ended and nothing has been texted since
+    they_asked: bool = False  # their latest text is a question: answer first, push nothing
+    card_mentioned: bool = False  # the contact card was already pointed out
 
 
 @dataclass(frozen=True)
@@ -67,8 +69,16 @@ OBJECTIVES: tuple[Objective, ...] = (
     # (the opener, the call offer) would count against it.
     Objective(
         "agent_name",
-        done=lambda s: s.slots.agent_name is not None,
-        scenarios=(("no call", lambda s: s.slots.no_calls and s.medium is Medium.TEXT),),
+        # A name for the agent is nice to have: someone who led with a real task and gave
+        # their own name shouldn't be held up for it.
+        done=lambda s: (
+            s.slots.agent_name is not None
+            or (s.slots.help_need is not None and s.slots.user_name is not None)
+        ),
+        scenarios=(
+            ("no call", lambda s: s.slots.no_calls and s.medium is Medium.TEXT),
+            ("on a call", lambda s: s.medium is Medium.VOICE),
+        ),
     ),
     # Right after the name: point them at the contact card, once, so it's sorted before
     # moving on. One turn, then it parks whether or not they saved it.
@@ -76,7 +86,7 @@ OBJECTIVES: tuple[Objective, ...] = (
         "contact",
         # The agent can't see whether they saved it (that's on their phone): one mention,
         # then it parks, and it's behind them once they've given their own name.
-        done=lambda s: s.slots.user_name is not None,
+        done=lambda s: s.slots.user_name is not None or s.card_mentioned,
         max_asks=1,
         scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
     ),
@@ -163,7 +173,12 @@ def _block(
     scenario = objective.scenario(s)
     script = sections.get(f"script: {scenario}") if scenario else None
     script = script or sections.get("script")
-    if script and s.asks == 0 and not s.after_call:  # the clean case only
+    if s.they_asked:
+        parts.append(
+            "They just asked you something: answer that. Bring this step in only if it follows "
+            "naturally; otherwise leave it for another message."
+        )
+    if script and s.asks == 0 and not s.after_call and not s.they_asked:  # the clean case
         fresh = [v for v in variants(script) if _norm(v) not in s.said]
         if not fresh:
             parts.append("You've already asked this in those words; ask differently this time.")
@@ -199,8 +214,27 @@ def guidance(
         asks=asks_since_progress(events),
         said=tuple(_norm(t) for t in _agent_lines(events)),
         after_call=medium is Medium.TEXT and _call_just_ended(events),
+        they_asked=medium is Medium.TEXT and "?" in _latest_text(events),
+        card_mentioned=_card_mentioned(events),
     )
     return render(s, user.phone, OBJECTIVE_TEXTS)
+
+
+def _latest_text(events: Sequence[Event]) -> str:
+    return next(
+        (e.payload.text for e in reversed(events) if isinstance(e.payload, UserMessage)), ""
+    )
+
+
+def _card_mentioned(events: Sequence[Event]) -> bool:
+    """Did the agent point out its contact card after the latest one went out?"""
+    for event in reversed(events):
+        p = event.payload
+        if isinstance(p, ContactCard):
+            return False
+        if isinstance(p, AgentMessage | VoiceUtterance) and "card" in (p.text or "").lower():
+            return True
+    return False
 
 
 def _agent_lines(events: Sequence[Event]) -> list[str]:

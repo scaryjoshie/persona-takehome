@@ -61,7 +61,7 @@ def test_scripts_are_picked_per_user_and_stable() -> None:
 
 def test_a_scenario_swaps_the_script() -> None:
     text = render(situation(no_calls=True), "1", OBJECTIVE_TEXTS)
-    assert "texting works too" in text
+    assert "texting works" in text
 
 
 def test_the_name_goes_into_the_script() -> None:
@@ -126,3 +126,14 @@ def test_the_ask_gets_an_angle_that_varies_by_user() -> None:
         for phone in ("1", "2", "3", "4", "5", "6")
     }
     assert len(angles) > 1 and all("Your angle for this" in a for a in angles)
+
+
+def test_after_a_question_nothing_gets_pushed() -> None:
+    asked = Situation(Slots(), Medium.TEXT, they_asked=True)
+    text = render(asked, "1", OBJECTIVE_TEXTS)
+    assert "answer that" in text and "use this line" not in text
+
+
+def test_a_task_first_user_is_not_held_up_for_the_agent_name() -> None:
+    task_first = situation(user_name="Sam", help_need="landlord won't fix the heater")
+    assert open_name(task_first) == "gmail"
