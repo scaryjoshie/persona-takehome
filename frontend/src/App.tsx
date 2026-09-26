@@ -157,6 +157,7 @@ function StageView({ conversation: c, isNew = false, entered = false }: StageVie
               onReact={c.react}
               contactOffer={c.contactOffer}
               onSaveContact={c.saveContact}
+              onSendDraft={c.sendDraft}
               onTyping={c.setTyping}
               onCall={c.startCall}
               initialDraft={isNew ? FIRST_MESSAGE : ""}

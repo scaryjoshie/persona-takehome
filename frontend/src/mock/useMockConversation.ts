@@ -4,6 +4,7 @@ import type { CallPhase } from "../components/phone/CallIsland";
 import type { TranscriptLine } from "../components/orb/Transcript";
 import {
   AGENT_NAME,
+  DRAFT_BODY,
   INTRO,
   RANDOM_AGENT_LINES,
   RANDOM_USER_LINES,
@@ -159,10 +160,37 @@ export function useMockConversation(): Conversation {
       setTimeout(() => setMessages((m) => [...m, { ...card, ts: new Date().toISOString() }]), 2000);
       return;
     }
+    if (!first && draftReply(text)) return;
     if (!first) return void setTimeout(() => agentSays(), 600);
     setTimeout(() => react(id, "❤️", "agent"), 900);
     INTRO.forEach((line, i) => setTimeout(() => agentSays(line), 600 + i * 1600));
   };
+
+  // Email drafts: "email …" gets a draft with no recipient; an address then fills it in place.
+  const draftReply = (text: string): boolean => {
+    const open = messages.findLast((m) => m.draft && m.draft.status === "draft")?.draft;
+    const address = text.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0];
+    if (open && address) {
+      updateDraft(open.ref, { to: address });
+      setTimeout(() => agentSays("added them. tap send when it looks right."), 600);
+      return true;
+    }
+    if (!/\bemail\b/i.test(text)) return false;
+    const draft = { ref: nextId(), to: "", subject: "Friday deadline", body: DRAFT_BODY, status: "draft" as const };
+    setTimeout(() => agentSays("on it. here's a draft. who should it go to?"), 600);
+    setTimeout(
+      () =>
+        setMessages((m) => [
+          ...m,
+          { id: nextId(), side: "received", text: draft.subject, ts: new Date().toISOString(), draft },
+        ]),
+      1800,
+    );
+    return true;
+  };
+  const updateDraft = (ref: string, patch: Partial<NonNullable<ThreadMessage["draft"]>>) =>
+    setMessages((all) => all.map((m) => (m.draft?.ref === ref ? { ...m, draft: { ...m.draft, ...patch } } : m)));
+  const sendDraft = (ref: string) => setTimeout(() => updateDraft(ref, { status: "sent" }), 700);
 
   const offered = messages.findLast((m) => m.contact)?.contact?.name ?? null;
   return {
@@ -170,6 +198,7 @@ export function useMockConversation(): Conversation {
     contactName,
     contactOffer: offered && offered !== contactName ? offered : null,
     saveContact: () => setContactName(offered),
+    sendDraft,
     messages,
     receipt: "Delivered",
     agentTyping: typing,

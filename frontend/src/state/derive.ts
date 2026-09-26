@@ -2,6 +2,7 @@ import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
 import type { TranscriptPartial, WireEvent } from "../types";
 import type { Reaction } from "../components/phone/Tapback";
+import type { Draft } from "../components/phone/EmailDraftCard";
 
 /** The texts in both directions, as the phone shows them, with their tapbacks and quoted replies. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
@@ -36,6 +37,11 @@ type Unresolved = ThreadMessage & { replyToId?: string; replyToText?: string | n
 
 /** Each thread message, with the id (and text) of the message it replies to, resolved afterwards. */
 function messagesOf(events: WireEvent[]): Unresolved[] {
+  // An email draft is re-posted on every edit under the same ref: show one card per ref, where the
+  // first version appeared, with the latest version's contents.
+  const latestDraft = new Map<string, Draft>();
+  for (const e of events) if (e.payload.kind === "email_draft") latestDraft.set(e.payload.ref, e.payload);
+  const placed = new Set<string>();
   return events.flatMap((e): Unresolved[] => {
     const p = e.payload;
     const base = { id: String(e.seq), ts: e.ts };
@@ -47,6 +53,12 @@ function messagesOf(events: WireEvent[]): Unresolved[] {
       case "voice_note": {
         const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms ?? 0, transcript: p.transcript };
         return [{ ...base, side: "sent", text: "", voice, audioId: p.audio_id }];
+      }
+      case "email_draft": {
+        if (placed.has(p.ref)) return [];
+        placed.add(p.ref);
+        const draft = latestDraft.get(p.ref)!;
+        return [{ ...base, side: "received", text: draft.subject || "Email draft", draft }];
       }
       case "contact_card":
         return [{ ...base, side: "received", text: p.name, contact: { name: p.name } }];

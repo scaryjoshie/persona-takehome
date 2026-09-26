@@ -38,6 +38,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
     contactName,
     contactOffer: contactOffer(events, contactName),
     saveContact: () => transport.send({ type: "contact", action: "save" }),
+    sendDraft: (ref) => transport.send({ type: "draft", action: "send", ref }),
     messages,
     receipt,
     agentTyping: state.agentTyping,

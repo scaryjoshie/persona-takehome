@@ -49,3 +49,10 @@ export function speechLevel(t: number): number {
   const phrase = 0.65 + 0.35 * Math.sin(2 * Math.PI * 0.7 * t);
   return 0.25 + 0.65 * syllables * phrase;
 }
+
+export const DRAFT_BODY = `Hi Professor,
+
+I wanted to check on the deadline for Friday's assignment. Is it due at the start of class or by midnight?
+
+Thanks,
+Sam`;

@@ -20,6 +20,7 @@ import { LinkPreview } from "./LinkPreview";
 import { VoiceNoteBubble, type VoiceNote } from "./VoiceNoteBubble";
 import { ReactionBadges, TapbackMenu, type Reaction } from "./Tapback";
 import { ContactBanner, ContactCardBubble } from "./ContactCard";
+import { EmailDraftCard, type Draft } from "./EmailDraftCard";
 import { useLongPress } from "../../lib/useLongPress";
 import { LiveWaveform } from "../ui/live-waveform";
 import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
@@ -42,6 +43,8 @@ export interface ThreadMessage {
   replyTo?: Pick<ThreadMessage, "id" | "side" | "text">;
   /** Set for the agent's contact card attachment. */
   contact?: { name: string };
+  /** Set for an email the agent drafted; always the latest version of it. */
+  draft?: Draft;
 }
 
 interface Props {
@@ -66,6 +69,8 @@ interface Props {
   /** A contact name the user has not saved yet; shows the "updated their name" banner. */
   contactOffer?: string | null;
   onSaveContact?: () => void;
+  /** Sends the agent's email draft with this ref. */
+  onSendDraft?: (ref: string) => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -83,6 +88,7 @@ export function MessagesScreen({
   onReact,
   contactOffer = null,
   onSaveContact,
+  onSendDraft,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
@@ -235,7 +241,15 @@ export function MessagesScreen({
                   tail={last && !b.link}
                   footer={footer}
                   className={
-                    b.link ? "message-link" : b.voice ? "message-voice" : b.contact ? "message-contact" : undefined
+                    b.link
+                      ? "message-link"
+                      : b.voice
+                        ? "message-voice"
+                        : b.contact
+                          ? "message-contact"
+                          : b.draft
+                            ? "message-draft"
+                            : undefined
                   }
                 >
                   {b.key === b.messageId && message.replyTo && (
@@ -247,7 +261,9 @@ export function MessagesScreen({
                     <ReactionBadges slot="content-start" reactions={message.reactions} side={b.side} />
                   )}
                   <PressableText slot="text" onPress={press(message)}>
-                    {b.contact ? (
+                    {b.draft ? (
+                      <EmailDraftCard draft={b.draft} onSend={onSendDraft} />
+                    ) : b.contact ? (
                       <ContactCardBubble
                         name={b.contact.name}
                         saved={contactOffer !== b.contact.name}
@@ -402,6 +418,7 @@ interface Bubble {
   link?: string;
   voice?: VoiceNote;
   contact?: { name: string };
+  draft?: Draft;
 }
 
 /** As in Messages: a lone link becomes a card; text with a link shows the text, then the card. */
@@ -410,6 +427,7 @@ function bubblesFor(messages: ThreadMessage[]): Bubble[] {
     const base = { messageId: m.id, side: m.side, text: m.text };
     if (m.voice) return [{ ...base, key: m.id, voice: m.voice }];
     if (m.contact) return [{ ...base, key: m.id, contact: m.contact }];
+    if (m.draft) return [{ ...base, key: m.id, draft: m.draft }];
     const link = firstLink(m.text);
     if (!link) return [{ ...base, key: m.id }];
     if (isOnlyLink(m.text)) return [{ ...base, key: m.id, link }];
