@@ -7,6 +7,8 @@ that lights up during calls. Vite, React 19, TypeScript, Tailwind 4.
 pnpm install
 pnpm fetch-bezel   # downloads Apple's iPhone 17 Pro bezel into public/bezels/ (gitignored, see below)
 pnpm dev           # http://localhost:5173; /api and /ws proxy to FastAPI on :8000
+                   # (cd backend && uv run uvicorn app.main:app --reload)
+pnpm gen-types     # after the backend's schema changes; see "Wire types" below
 pnpm build         # dist/, served by FastAPI in production
 pnpm typecheck
 ```
@@ -20,24 +22,43 @@ pnpm typecheck
 - **Orb.** Off (dim) with no call, on while connected, speaking while the agent has the floor, driven by
   an output level. Under it, the transcript writes in word by word, then mute and hang up.
 
-Today all of it runs on a mock (`src/mock/`): scripted texts, an incoming call every so often, a
-scripted call exchange. The real backend contract (`src/state/`, `src/transport/`, `src/audio/`,
-`src/types.ts`) is implemented against `docs/proposed-design/14-frontend-contract.md` but not yet
-connected to the UI; wiring it in replaces the mock hook and nothing else.
+It runs against the backend: the phone-number screen creates or resumes the user, the thread
+and typing come from the server's event stream, and the composer sends typing signals. A number
+that has never texted starts with "Hey, what's a Persona?" in the composer. Add `?mock` to the URL
+to run on an offline stand-in instead (`src/mock/`), which needs no API keys.
+
+Calls reach the server but have no audio yet: the backend's audio socket is the next slice, so a
+call attempt fails cleanly with `audio_socket` and the agent carries on by text.
+
+## Wire types
+
+`src/protocol.gen.ts` is generated from the backend's JSON Schema and never edited by hand:
+
+```
+cd backend && uv run python -m app.web.schema > ../frontend/src/schema.json
+cd frontend && pnpm gen-types
+```
+
+`src/types.ts` re-exports it and adds only what the schema does not cover yet (live transcript
+partials, which arrive with the voice layer).
 
 ## Layout
 
 ```
 src/
-  App.tsx                    composes the stage from the components below
+  App.tsx                    entry, then the stage for the live or mock conversation
   components/
     phone/                   IPhone17Pro (bezel), MessagesScreen (Framework7), CallIsland, vendored status bar
     orb/                     VoiceOrb (orb-ui), Transcript
     call/                    CallControls (mute, hang up)
     stage/                   Stage: phone left, orb column right
     ui/dynamic-island.tsx    the island shell (vendored)
-  mock/                      the demo choreography: useMockPhone, data
-  state/ transport/ audio/   backend contract: reducer, WebSocket client, PCM worklets (not wired yet)
+  conversation/              the Conversation interface the stage renders, and its live source
+  state/                     reducer over snapshot + event stream, derived views (thread, transcript)
+  transport/                 WebSocket client for /api/session, /ws and /ws/audio
+  audio/                     mic capture and playback worklets, PCM16 mono 24 kHz
+  mock/                      the offline stand-in behind ?mock
+  protocol.gen.ts            generated wire types
   index.css                  Tailwind + Framework7 in cascade layers
 ```
 
@@ -55,4 +76,5 @@ into the other's components.
 | Status bar, keyboard | [zoewu-creator/texting-ui-templates](https://github.com/zoewu-creator/texting-ui-templates), vendored in `components/phone/vendor/` | MIT |
 | Dynamic Island shell | [beUI](https://beui.dev/components/blocks/dynamic-island), vendored in `components/ui/` | MIT |
 | Voice orb | [orb-ui](https://orb-ui.com), cloud theme | MIT |
+| Phone-number blanks | [input-otp](https://input-otp.rodz.dev) | MIT |
 | Motion, icons outside the phone | [motion](https://motion.dev), [lucide](https://lucide.dev) | MIT, ISC |

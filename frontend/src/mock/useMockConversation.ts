@@ -2,34 +2,39 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import { CONVERSATION, INTRO, RANDOM_AGENT_LINES, RANDOM_USER_LINES, CALL_SCRIPT, nextId, pick } from "./data";
+import {
+  AGENT_NAME,
+  INTRO,
+  RANDOM_AGENT_LINES,
+  RANDOM_USER_LINES,
+  CALL_SCRIPT,
+  nextId,
+  pick,
+  speechLevel,
+} from "./data";
+import type { Conversation } from "../conversation/types";
 
-export interface MockCall {
+interface MockCall {
   phase: CallPhase;
-  seconds: number;
-  expanded: boolean;
-}
-
-interface Options {
-  /** A new user starts with an empty thread, and nothing happens until they send something. */
-  newUser: boolean;
-  /** False while the phone-number screen is up. */
-  running: boolean;
+  startedAt: number | null;
 }
 
 /**
- * Mock conversation state. Autoplay: every few seconds the agent types for a second and a random
+ * An offline stand-in for the backend (`?mock`), for working on the UI without API keys. Every
+ * number is new: the thread starts empty and stays quiet until the first message. Autoplay: every few seconds the agent types for a second and a random
  * line lands; every fifth tick the agent calls. During an active call a scripted exchange plays
  * as transcript lines, with `speaking` true while the agent has the floor.
  */
-export function useMockPhone({ newUser, running }: Options) {
-  const [messages, setMessages] = useState<ThreadMessage[]>(newUser ? [] : CONVERSATION);
-  const autoplay = running && messages.length > 0;
+export function useMockConversation(): Conversation {
+  const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const autoplay = messages.length > 0;
   const [typing, setTyping] = useState(false);
   const [call, setCall] = useState<MockCall | null>(null);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
+  const speakingRef = useRef(speaking);
+  speakingRef.current = speaking;
   const callRef = useRef(call);
   callRef.current = call;
   const tick = useRef(0);
@@ -48,7 +53,7 @@ export function useMockPhone({ newUser, running }: Options) {
     const t = setInterval(() => {
       tick.current += 1;
       if (callRef.current) return;
-      if (tick.current % 5 === 0) return setCall({ phase: "incoming", seconds: 0, expanded: false });
+      if (tick.current % 5 === 0) return setCall({ phase: "incoming", startedAt: null });
       if (Math.random() < 0.7) agentSays();
       else userSays();
     }, 4000);
@@ -58,12 +63,10 @@ export function useMockPhone({ newUser, running }: Options) {
   // Outgoing calls connect after a moment; active calls keep a clock and play the scripted exchange.
   useEffect(() => {
     if (call?.phase === "calling") {
-      const t = setTimeout(() => setCall((c) => (c ? { ...c, phase: "active" } : c)), 2500);
+      const t = setTimeout(() => setCall({ phase: "active", startedAt: Date.now() }), 2500);
       return () => clearTimeout(t);
     }
     if (call?.phase !== "active") return;
-    const clock = setInterval(() => setCall((c) => (c ? { ...c, seconds: c.seconds + 1 } : c)), 1000);
-
     let i = 0;
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -99,7 +102,6 @@ export function useMockPhone({ newUser, running }: Options) {
     timers.push(setTimeout(next, 800));
     return () => {
       cancelled = true;
-      clearInterval(clock);
       timers.forEach(clearTimeout);
       setSpeaking(false);
     };
@@ -107,11 +109,11 @@ export function useMockPhone({ newUser, running }: Options) {
 
   const startCall = () => {
     setTranscript([]);
-    setCall({ phase: "calling", seconds: 0, expanded: false });
+    setCall({ phase: "calling", startedAt: null });
   };
   const accept = () => {
     setTranscript([]);
-    setCall({ phase: "active", seconds: 0, expanded: false });
+    setCall({ phase: "active", startedAt: Date.now() });
   };
   const decline = () => setCall(null);
   const end = () => {
@@ -120,7 +122,6 @@ export function useMockPhone({ newUser, running }: Options) {
     setTimeout(() => agentSays("ok, that was fun."), 800);
   };
   const toggleMute = () => setMuted((m) => !m);
-  const toggleExpanded = () => setCall((c) => (c ? { ...c, expanded: !c.expanded } : c));
   const send = (text: string) => {
     const first = messages.length === 0;
     userSays(text);
@@ -129,18 +130,20 @@ export function useMockPhone({ newUser, running }: Options) {
   };
 
   return {
+    agentName: AGENT_NAME,
     messages,
-    typing,
-    call,
+    agentTyping: typing,
+    callPhase: call?.phase ?? null,
+    callStartedAt: call?.startedAt ?? null,
     transcript,
-    speaking,
     muted,
+    outputLevel: () => (speakingRef.current ? speechLevel(performance.now() / 1000) : 0),
+    send,
+    setTyping: () => {},
     startCall,
     accept,
     decline,
-    end,
-    toggleExpanded,
+    hangUp: end,
     toggleMute,
-    send,
   };
 }

@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage, Snapshot } from "../types";
+import type { ClientMessage, IncomingMessage, Snapshot } from "../types";
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
@@ -14,9 +14,10 @@ export interface AudioLink {
 
 /** Everything the UI can do to the backend. */
 export interface Transport {
+  /** Creates or resumes the user for `phone`, opens the socket, and returns the thread so far. */
   connect(phone: string): Promise<Snapshot>;
   send(msg: ClientMessage): void;
-  onMessage(cb: (msg: ServerMessage) => void): () => void;
+  onMessage(cb: (msg: IncomingMessage) => void): () => void;
   onStatus(cb: (status: ConnectionStatus) => void): () => void;
   openAudio(): AudioLink;
   close(): void;

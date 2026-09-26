@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage, Snapshot } from "../types";
+import type { ClientMessage, IncomingMessage, Snapshot } from "../types";
 import { Emitter, type AudioLink, type ConnectionStatus, type Transport } from "./types";
 
 function wsUrl(path: string): string {
@@ -11,7 +11,7 @@ export class WsTransport implements Transport {
   private phone = "";
   private closed = false;
   private retries = 0;
-  private messages = new Emitter<ServerMessage>();
+  private messages = new Emitter<IncomingMessage>();
   private status = new Emitter<ConnectionStatus>();
 
   async connect(phone: string): Promise<Snapshot> {
@@ -38,7 +38,7 @@ export class WsTransport implements Transport {
     };
     ws.onmessage = (e) => {
       try {
-        this.messages.emit(JSON.parse(e.data as string) as ServerMessage);
+        this.messages.emit(JSON.parse(e.data as string) as IncomingMessage);
       } catch (err) {
         console.warn("bad server message", err);
       }
@@ -56,7 +56,7 @@ export class WsTransport implements Transport {
     else console.warn("socket not open, dropped", msg);
   }
 
-  onMessage(cb: (msg: ServerMessage) => void): () => void {
+  onMessage(cb: (msg: IncomingMessage) => void): () => void {
     return this.messages.on(cb);
   }
 

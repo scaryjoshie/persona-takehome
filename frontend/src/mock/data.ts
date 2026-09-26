@@ -1,24 +1,10 @@
-import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
 
 export const AGENT_NAME = "Juno";
 
-/** What Persona suggests a new user send first; it waits in the composer. */
-export const FIRST_MESSAGE = "Hey, what's a Persona?";
-
 export const INTRO = [
   "hey! I'm your new assistant from Persona. think of me as someone who takes things off your plate.",
   "first things first: what do you want to call me?",
-];
-
-export const CONVERSATION: ThreadMessage[] = [
-  { id: "1", side: "sent", text: "hey" },
-  { id: "2", side: "received", text: "hey! I'm your new assistant from Persona." },
-  { id: "3", side: "received", text: "first things first: what do you want to call me?" },
-  { id: "4", side: "sent", text: "Juno" },
-  { id: "5", side: "received", text: "Juno it is." },
-  { id: "6", side: "received", text: "mind if I call you real quick? it's faster than typing all this out." },
-  { id: "7", side: "sent", text: "sure, go for it" },
 ];
 
 export const RANDOM_AGENT_LINES = [

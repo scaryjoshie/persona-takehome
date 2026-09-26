@@ -34,6 +34,8 @@ interface Props {
   onCall?: () => void;
   /** Text already in the composer when the screen appears. */
   initialDraft?: string;
+  /** True while the user is composing: on the first keystroke, false on send, clear, or 3 s idle. */
+  onTyping?: (active: boolean) => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -45,14 +47,21 @@ export function MessagesScreen({
   onSend,
   onCall,
   initialDraft = "",
+  onTyping,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
+  const typingSignal = useTypingSignal(onTyping);
   const rootRef = useRef<HTMLDivElement>(null);
   useStickToBottom(rootRef, messages.length, typing);
   const send = () => {
     if (!draft.trim()) return;
+    typingSignal.stop();
     onSend?.(draft.trim());
     setDraft("");
+  };
+  const edit = (text: string) => {
+    setDraft(text);
+    typingSignal.update(text);
   };
   const lastSentId = messages.findLast((m) => m.side === "sent")?.id;
   const endsSent = messages.at(-1)?.side === "sent";
@@ -79,7 +88,7 @@ export function MessagesScreen({
           <Messagebar
             placeholder="iMessage"
             value={draft}
-            onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
+            onInput={(e) => edit((e.target as HTMLTextAreaElement).value)}
             onSubmit={send}
           >
             <Link slot="inner-start" iconF7="plus" />
@@ -143,4 +152,27 @@ function useStickToBottom(root: React.RefObject<HTMLDivElement | null>, count: n
     const el = root.current?.querySelector<HTMLElement>(".page-content");
     if (el && atBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [root, count, typing]);
+}
+
+const TYPING_IDLE_MS = 3000;
+
+/** Turns keystrokes into typing on/off signals: on at the first character, off when idle or cleared. */
+function useTypingSignal(onTyping?: (active: boolean) => void) {
+  const active = useRef(false);
+  const idle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const stop = () => {
+    clearTimeout(idle.current);
+    if (active.current) onTyping?.(false);
+    active.current = false;
+  };
+  const update = (text: string) => {
+    if (!text.trim()) return stop();
+    if (!active.current) onTyping?.(true);
+    active.current = true;
+    clearTimeout(idle.current);
+    idle.current = setTimeout(stop, TYPING_IDLE_MS);
+  };
+  useEffect(() => () => clearTimeout(idle.current), []);
+  return { update, stop };
 }

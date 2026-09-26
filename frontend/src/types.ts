@@ -1,140 +1,20 @@
-// Protocol types, mirrored from backend/app/core/types.py and docs 09/14.
-// To be replaced by generated types once the backend exports its JSON schema.
+// Wire types are generated from the backend's schema (src/protocol.gen.ts, `pnpm gen-types`).
+// Only what the schema does not cover yet lives here.
+import type { ServerMessage } from "./protocol.gen";
 
-export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
-export type Channel = "text" | "voice" | "system";
-export type Medium = "text" | "voice";
+export type * from "./protocol.gen";
 
-export type CallPhase = "none" | "ringing" | "connecting" | "connected" | "ended";
-export type CallTransition = "ringing" | "connecting" | "connected" | "declined" | "failed" | "ended";
-export type GmailPhase = "link_sent" | "connected" | "failed" | "skipped";
-/** null means not asked yet. */
-export type GmailStatus = null | "link_sent" | "connected" | "failed" | "skipped";
-
-export type Verb = "interrupt" | "absorb" | "defer";
-export type DecidedBy = "fixed" | "default" | "jev" | "model";
-
-export type Payload =
-  | { kind: "user_message"; text: string }
-  | { kind: "agent_message"; text: string; from_call: boolean }
-  | {
-      kind: "voice_utterance";
-      speaker: "user" | "agent";
-      text: string | null;
-      turn_id: string;
-      inferred: boolean;
-    }
-  | { kind: "tool_call"; name: string; args: Record<string, unknown>; result?: Record<string, unknown> | null }
-  | { kind: "slot_changed"; slot: string; old: unknown; new: unknown }
-  | {
-      kind: "call";
-      transition: CallTransition;
-      reason?: string | null;
-      call_id?: string | null;
-      initiated_by?: "agent" | "user" | null;
-    }
-  | { kind: "gmail"; phase: GmailPhase; email?: string | null }
-  | {
-      kind: "decision";
-      trigger_kind: string;
-      verb: Verb | "start";
-      by: DecidedBy;
-      confidence: number;
-      ms: number;
-      note?: string | null;
-    }
-  | { kind: "graduated" };
-
-export type PayloadKind = Payload["kind"];
-export type PayloadOf<K extends PayloadKind> = Extract<Payload, { kind: K }>;
-
-export interface Event {
-  seq: number;
-  ts: string;
-  origin: Origin;
-  channel: Channel;
-  payload: Payload;
-}
-
-export interface Slots {
-  agent_name: string | null;
-  user_name: string | null;
-  help_need: string | null;
-  gmail: GmailStatus;
-  gmail_email: string | null;
-  graduated: boolean;
-}
-
-export interface CallState {
-  phase: CallPhase;
-  reason: string | null;
-  call_id: string | null;
-  initiated_by: "agent" | "user" | null;
-  started_at: string | null;
-  ended_at: string | null;
-}
-
-export interface Snapshot {
-  events: Event[];
-  slots: Slots;
-  call: CallState;
-  floor: Medium;
-}
-
-export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
-export type CallFailReason = "mic_denied" | "audio_socket";
-
-export type ClientMessage =
-  | { type: "message"; text: string }
-  | { type: "typing"; active: boolean }
-  | { type: "call"; action: CallAction; reason?: CallFailReason }
-  | { type: "reset" };
-
-export interface PartialTranscript {
+/** A live transcript fragment, cumulative for its turn. The backend adds it with the voice layer. */
+export interface PartialMessage {
+  type: "partial";
   speaker: "user" | "agent";
   turn_id: string;
   text: string;
   final: boolean;
 }
 
-export type ServerMessage =
-  | ({ type: "snapshot" } & Snapshot)
-  | { type: "event"; event: Event }
-  | { type: "slots"; slots: Slots }
-  | { type: "call"; call: CallState }
-  | { type: "typing"; active: boolean }
-  | ({ type: "partial" } & PartialTranscript);
+/** Everything the browser socket can receive. */
+export type IncomingMessage = ServerMessage | PartialMessage;
 
-export const EMPTY_SLOTS: Slots = {
-  agent_name: null,
-  user_name: null,
-  help_need: null,
-  gmail: null,
-  gmail_email: null,
-  graduated: false,
-};
-
-export const EMPTY_CALL: CallState = {
-  phase: "none",
-  reason: null,
-  call_id: null,
-  initiated_by: null,
-  started_at: null,
-  ended_at: null,
-};
-
-export function missingSlots(s: Slots): string[] {
-  const out: string[] = [];
-  if (s.agent_name === null) out.push("agent_name");
-  if (s.user_name === null) out.push("user_name");
-  if (s.help_need === null) out.push("help_need");
-  if (s.gmail === null || s.gmail === "link_sent" || s.gmail === "failed") out.push("gmail");
-  return out;
-}
-
-export const SLOT_LABELS: Record<string, string> = {
-  agent_name: "agent name",
-  user_name: "your name",
-  help_need: "help with",
-  gmail: "gmail",
-};
+/** Why the browser could not bring call audio up; sent with the `failed` call action. */
+export type CallFailReason = "mic_denied" | "audio_socket";

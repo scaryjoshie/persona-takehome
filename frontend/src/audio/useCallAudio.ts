@@ -61,7 +61,6 @@ export function useCallAudio(transport: Transport, call: CallState, actions: Ses
     audioRef.current?.setMuted(m);
   }, []);
 
-  const getInputLevel = useCallback(() => audioRef.current?.inputLevel.current ?? 0, []);
   const getOutputLevel = useCallback(() => audioRef.current?.outputLevel.current ?? 0, []);
 
   return {
@@ -72,7 +71,6 @@ export function useCallAudio(transport: Transport, call: CallState, actions: Ses
     muted,
     setMuted,
     busyTab,
-    getInputLevel,
     getOutputLevel,
   };
 }

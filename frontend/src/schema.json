@@ -1,0 +1,1189 @@
+{
+  "client_message": {
+    "$defs": {
+      "CallAction": {
+        "enum": ["start", "accept", "decline", "hangup", "failed"],
+        "title": "CallAction",
+        "type": "string"
+      },
+      "CallCommand": {
+        "properties": {
+          "type": {
+            "const": "call",
+            "default": "call",
+            "title": "Type",
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/$defs/CallAction"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          }
+        },
+        "required": ["type", "action", "reason"],
+        "title": "CallCommand",
+        "type": "object"
+      },
+      "Reset": {
+        "properties": {
+          "type": {
+            "const": "reset",
+            "default": "reset",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": ["type"],
+        "title": "Reset",
+        "type": "object"
+      },
+      "SendMessage": {
+        "properties": {
+          "type": {
+            "const": "message",
+            "default": "message",
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": ["type", "text"],
+        "title": "SendMessage",
+        "type": "object"
+      },
+      "SetTyping": {
+        "properties": {
+          "type": {
+            "const": "typing",
+            "default": "typing",
+            "title": "Type",
+            "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": ["type", "active"],
+        "title": "SetTyping",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "call": "#/$defs/CallCommand",
+        "message": "#/$defs/SendMessage",
+        "reset": "#/$defs/Reset",
+        "typing": "#/$defs/SetTyping"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/SendMessage"
+      },
+      {
+        "$ref": "#/$defs/SetTyping"
+      },
+      {
+        "$ref": "#/$defs/CallCommand"
+      },
+      {
+        "$ref": "#/$defs/Reset"
+      }
+    ]
+  },
+  "server_message": {
+    "$defs": {
+      "AgentMessage": {
+        "additionalProperties": false,
+        "description": "A bubble that was sent. Recorded, never routed.",
+        "properties": {
+          "kind": {
+            "const": "agent_message",
+            "default": "agent_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "from_call": {
+            "default": false,
+            "title": "From Call",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "text", "from_call"],
+        "title": "AgentMessage",
+        "type": "object"
+      },
+      "CallEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "call",
+            "default": "call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "transition": {
+            "$ref": "#/$defs/CallTransition"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Id"
+          },
+          "initiated_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Initiator"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": ["kind", "transition", "reason", "call_id", "initiated_by"],
+        "title": "CallEvent",
+        "type": "object"
+      },
+      "CallMessage": {
+        "properties": {
+          "type": {
+            "const": "call",
+            "default": "call",
+            "title": "Type",
+            "type": "string"
+          },
+          "call": {
+            "$ref": "#/$defs/CallState"
+          }
+        },
+        "required": ["type", "call"],
+        "title": "CallMessage",
+        "type": "object"
+      },
+      "CallPhase": {
+        "enum": ["none", "ringing", "connecting", "connected", "ended"],
+        "title": "CallPhase",
+        "type": "string"
+      },
+      "CallState": {
+        "properties": {
+          "phase": {
+            "$ref": "#/$defs/CallPhase",
+            "default": "none"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Id"
+          },
+          "initiated_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Initiator"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ended At"
+          }
+        },
+        "required": ["phase", "reason", "call_id", "initiated_by", "started_at", "ended_at"],
+        "title": "CallState",
+        "type": "object"
+      },
+      "CallTransition": {
+        "enum": ["ringing", "connecting", "connected", "declined", "failed", "ended"],
+        "title": "CallTransition",
+        "type": "string"
+      },
+      "Channel": {
+        "enum": ["text", "voice", "system"],
+        "title": "Channel",
+        "type": "string"
+      },
+      "DecidedBy": {
+        "enum": ["fixed", "default", "jev", "model"],
+        "title": "DecidedBy",
+        "type": "string"
+      },
+      "Decision": {
+        "additionalProperties": false,
+        "description": "Logged for every routed event. The debug panel and the harness read these.",
+        "properties": {
+          "kind": {
+            "const": "decision",
+            "default": "decision",
+            "title": "Kind",
+            "type": "string"
+          },
+          "trigger_kind": {
+            "title": "Trigger Kind",
+            "type": "string"
+          },
+          "verb": {
+            "$ref": "#/$defs/Verb"
+          },
+          "by": {
+            "$ref": "#/$defs/DecidedBy"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "ms": {
+            "title": "Ms",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "ms", "note"],
+        "title": "Decision",
+        "type": "object"
+      },
+      "EventMessage": {
+        "properties": {
+          "type": {
+            "const": "event",
+            "default": "event",
+            "title": "Type",
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/$defs/WireEvent"
+          }
+        },
+        "required": ["type", "event"],
+        "title": "EventMessage",
+        "type": "object"
+      },
+      "GmailEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "gmail",
+            "default": "gmail",
+            "title": "Kind",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/$defs/GmailPhase"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Email"
+          }
+        },
+        "required": ["kind", "phase", "email"],
+        "title": "GmailEvent",
+        "type": "object"
+      },
+      "GmailPhase": {
+        "enum": ["link_sent", "connected", "failed", "skipped"],
+        "title": "GmailPhase",
+        "type": "string"
+      },
+      "Graduated": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "graduated",
+            "default": "graduated",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "title": "Graduated",
+        "type": "object"
+      },
+      "Initiator": {
+        "enum": ["agent", "user"],
+        "title": "Initiator",
+        "type": "string"
+      },
+      "Medium": {
+        "enum": ["text", "voice"],
+        "title": "Medium",
+        "type": "string"
+      },
+      "Origin": {
+        "enum": ["user", "text_agent", "voice_agent", "call", "google", "system"],
+        "title": "Origin",
+        "type": "string"
+      },
+      "SlotChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "slot_changed",
+            "default": "slot_changed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "old": {
+            "title": "Old"
+          },
+          "new": {
+            "title": "New"
+          }
+        },
+        "required": ["kind", "slot", "old", "new"],
+        "title": "SlotChanged",
+        "type": "object"
+      },
+      "Slots": {
+        "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Agent Name"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "User Name"
+          },
+          "help_need": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Help Need"
+          },
+          "gmail": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/GmailPhase"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "gmail_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Gmail Email"
+          },
+          "graduated": {
+            "default": false,
+            "title": "Graduated",
+            "type": "boolean"
+          }
+        },
+        "required": ["agent_name", "user_name", "help_need", "gmail", "gmail_email", "graduated"],
+        "title": "Slots",
+        "type": "object"
+      },
+      "SlotsMessage": {
+        "properties": {
+          "type": {
+            "const": "slots",
+            "default": "slots",
+            "title": "Type",
+            "type": "string"
+          },
+          "slots": {
+            "$ref": "#/$defs/Slots"
+          }
+        },
+        "required": ["type", "slots"],
+        "title": "SlotsMessage",
+        "type": "object"
+      },
+      "Snapshot": {
+        "properties": {
+          "type": {
+            "const": "snapshot",
+            "default": "snapshot",
+            "title": "Type",
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/$defs/WireEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "slots": {
+            "$ref": "#/$defs/Slots"
+          },
+          "call": {
+            "$ref": "#/$defs/CallState"
+          },
+          "floor": {
+            "$ref": "#/$defs/Medium"
+          }
+        },
+        "required": ["type", "events", "slots", "call", "floor"],
+        "title": "Snapshot",
+        "type": "object"
+      },
+      "Speaker": {
+        "enum": ["user", "agent"],
+        "title": "Speaker",
+        "type": "string"
+      },
+      "ToolCall": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          }
+        },
+        "required": ["kind", "name", "args", "result"],
+        "title": "ToolCall",
+        "type": "object"
+      },
+      "Typing": {
+        "additionalProperties": false,
+        "description": "Coalesced client-side. Routed, never stored.",
+        "properties": {
+          "kind": {
+            "const": "typing",
+            "default": "typing",
+            "title": "Kind",
+            "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "seconds": {
+            "default": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": ["kind", "active", "seconds"],
+        "title": "Typing",
+        "type": "object"
+      },
+      "TypingMessage": {
+        "properties": {
+          "type": {
+            "const": "typing",
+            "default": "typing",
+            "title": "Type",
+            "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": ["type", "active"],
+        "title": "TypingMessage",
+        "type": "object"
+      },
+      "UserMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "user_message",
+            "default": "user_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "text"],
+        "title": "UserMessage",
+        "type": "object"
+      },
+      "Verb": {
+        "enum": ["start", "interrupt", "absorb", "defer"],
+        "title": "Verb",
+        "type": "string"
+      },
+      "VoiceUtterance": {
+        "additionalProperties": false,
+        "description": "One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.",
+        "properties": {
+          "kind": {
+            "const": "voice_utterance",
+            "default": "voice_utterance",
+            "title": "Kind",
+            "type": "string"
+          },
+          "speaker": {
+            "$ref": "#/$defs/Speaker"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "inferred": {
+            "default": true,
+            "title": "Inferred",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "speaker", "text", "turn_id", "inferred"],
+        "title": "VoiceUtterance",
+        "type": "object"
+      },
+      "WireEvent": {
+        "description": "The event envelope as the browser sees it, with the payload typed as the full union.",
+        "properties": {
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/$defs/Origin"
+          },
+          "channel": {
+            "$ref": "#/$defs/Channel"
+          },
+          "payload": {
+            "discriminator": {
+              "mapping": {
+                "agent_message": "#/$defs/AgentMessage",
+                "call": "#/$defs/CallEvent",
+                "decision": "#/$defs/Decision",
+                "gmail": "#/$defs/GmailEvent",
+                "graduated": "#/$defs/Graduated",
+                "slot_changed": "#/$defs/SlotChanged",
+                "tool_call": "#/$defs/ToolCall",
+                "typing": "#/$defs/Typing",
+                "user_message": "#/$defs/UserMessage",
+                "voice_utterance": "#/$defs/VoiceUtterance"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/UserMessage"
+              },
+              {
+                "$ref": "#/$defs/AgentMessage"
+              },
+              {
+                "$ref": "#/$defs/Typing"
+              },
+              {
+                "$ref": "#/$defs/VoiceUtterance"
+              },
+              {
+                "$ref": "#/$defs/ToolCall"
+              },
+              {
+                "$ref": "#/$defs/SlotChanged"
+              },
+              {
+                "$ref": "#/$defs/Graduated"
+              },
+              {
+                "$ref": "#/$defs/CallEvent"
+              },
+              {
+                "$ref": "#/$defs/GmailEvent"
+              },
+              {
+                "$ref": "#/$defs/Decision"
+              }
+            ],
+            "title": "Payload"
+          }
+        },
+        "required": ["seq", "ts", "origin", "channel", "payload"],
+        "title": "WireEvent",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "call": "#/$defs/CallMessage",
+        "event": "#/$defs/EventMessage",
+        "slots": "#/$defs/SlotsMessage",
+        "snapshot": "#/$defs/Snapshot",
+        "typing": "#/$defs/TypingMessage"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/Snapshot"
+      },
+      {
+        "$ref": "#/$defs/EventMessage"
+      },
+      {
+        "$ref": "#/$defs/SlotsMessage"
+      },
+      {
+        "$ref": "#/$defs/CallMessage"
+      },
+      {
+        "$ref": "#/$defs/TypingMessage"
+      }
+    ]
+  },
+  "payload": {
+    "$defs": {
+      "AgentMessage": {
+        "additionalProperties": false,
+        "description": "A bubble that was sent. Recorded, never routed.",
+        "properties": {
+          "kind": {
+            "const": "agent_message",
+            "default": "agent_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "from_call": {
+            "default": false,
+            "title": "From Call",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "text", "from_call"],
+        "title": "AgentMessage",
+        "type": "object"
+      },
+      "CallEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "call",
+            "default": "call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "transition": {
+            "$ref": "#/$defs/CallTransition"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Call Id"
+          },
+          "initiated_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Initiator"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": ["kind", "transition", "reason", "call_id", "initiated_by"],
+        "title": "CallEvent",
+        "type": "object"
+      },
+      "CallTransition": {
+        "enum": ["ringing", "connecting", "connected", "declined", "failed", "ended"],
+        "title": "CallTransition",
+        "type": "string"
+      },
+      "DecidedBy": {
+        "enum": ["fixed", "default", "jev", "model"],
+        "title": "DecidedBy",
+        "type": "string"
+      },
+      "Decision": {
+        "additionalProperties": false,
+        "description": "Logged for every routed event. The debug panel and the harness read these.",
+        "properties": {
+          "kind": {
+            "const": "decision",
+            "default": "decision",
+            "title": "Kind",
+            "type": "string"
+          },
+          "trigger_kind": {
+            "title": "Trigger Kind",
+            "type": "string"
+          },
+          "verb": {
+            "$ref": "#/$defs/Verb"
+          },
+          "by": {
+            "$ref": "#/$defs/DecidedBy"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "ms": {
+            "title": "Ms",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": ["kind", "trigger_kind", "verb", "by", "confidence", "ms", "note"],
+        "title": "Decision",
+        "type": "object"
+      },
+      "GmailEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "gmail",
+            "default": "gmail",
+            "title": "Kind",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/$defs/GmailPhase"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Email"
+          }
+        },
+        "required": ["kind", "phase", "email"],
+        "title": "GmailEvent",
+        "type": "object"
+      },
+      "GmailPhase": {
+        "enum": ["link_sent", "connected", "failed", "skipped"],
+        "title": "GmailPhase",
+        "type": "string"
+      },
+      "Graduated": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "graduated",
+            "default": "graduated",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "title": "Graduated",
+        "type": "object"
+      },
+      "Initiator": {
+        "enum": ["agent", "user"],
+        "title": "Initiator",
+        "type": "string"
+      },
+      "SlotChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "slot_changed",
+            "default": "slot_changed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "old": {
+            "title": "Old"
+          },
+          "new": {
+            "title": "New"
+          }
+        },
+        "required": ["kind", "slot", "old", "new"],
+        "title": "SlotChanged",
+        "type": "object"
+      },
+      "Speaker": {
+        "enum": ["user", "agent"],
+        "title": "Speaker",
+        "type": "string"
+      },
+      "ToolCall": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          }
+        },
+        "required": ["kind", "name", "args", "result"],
+        "title": "ToolCall",
+        "type": "object"
+      },
+      "Typing": {
+        "additionalProperties": false,
+        "description": "Coalesced client-side. Routed, never stored.",
+        "properties": {
+          "kind": {
+            "const": "typing",
+            "default": "typing",
+            "title": "Kind",
+            "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "seconds": {
+            "default": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": ["kind", "active", "seconds"],
+        "title": "Typing",
+        "type": "object"
+      },
+      "UserMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "user_message",
+            "default": "user_message",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "text"],
+        "title": "UserMessage",
+        "type": "object"
+      },
+      "Verb": {
+        "enum": ["start", "interrupt", "absorb", "defer"],
+        "title": "Verb",
+        "type": "string"
+      },
+      "VoiceUtterance": {
+        "additionalProperties": false,
+        "description": "One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.",
+        "properties": {
+          "kind": {
+            "const": "voice_utterance",
+            "default": "voice_utterance",
+            "title": "Kind",
+            "type": "string"
+          },
+          "speaker": {
+            "$ref": "#/$defs/Speaker"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "inferred": {
+            "default": true,
+            "title": "Inferred",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "speaker", "text", "turn_id", "inferred"],
+        "title": "VoiceUtterance",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "agent_message": "#/$defs/AgentMessage",
+        "call": "#/$defs/CallEvent",
+        "decision": "#/$defs/Decision",
+        "gmail": "#/$defs/GmailEvent",
+        "graduated": "#/$defs/Graduated",
+        "slot_changed": "#/$defs/SlotChanged",
+        "tool_call": "#/$defs/ToolCall",
+        "typing": "#/$defs/Typing",
+        "user_message": "#/$defs/UserMessage",
+        "voice_utterance": "#/$defs/VoiceUtterance"
+      },
+      "propertyName": "kind"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/UserMessage"
+      },
+      {
+        "$ref": "#/$defs/AgentMessage"
+      },
+      {
+        "$ref": "#/$defs/Typing"
+      },
+      {
+        "$ref": "#/$defs/VoiceUtterance"
+      },
+      {
+        "$ref": "#/$defs/ToolCall"
+      },
+      {
+        "$ref": "#/$defs/SlotChanged"
+      },
+      {
+        "$ref": "#/$defs/Graduated"
+      },
+      {
+        "$ref": "#/$defs/CallEvent"
+      },
+      {
+        "$ref": "#/$defs/GmailEvent"
+      },
+      {
+        "$ref": "#/$defs/Decision"
+      }
+    ]
+  }
+}

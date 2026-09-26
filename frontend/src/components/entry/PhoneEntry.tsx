@@ -8,6 +8,10 @@ const DIGITS = 10;
 interface Props {
   /** Prefills the blanks, e.g. the number used last time. */
   initial?: string;
+  /** Shown under the blanks, e.g. when the server cannot be reached. */
+  error?: string | null;
+  /** True while the number is being checked. */
+  busy?: boolean;
   onSubmit: (digits: string) => void;
 }
 
@@ -31,13 +35,13 @@ const Punct = ({ children }: { children: string }) => (
  * The first screen: everything behind it frosted, ten blanks that fill as you type (input-otp, MIT),
  * and a blue arrow that appears once the number is complete.
  */
-export function PhoneEntry({ initial = "", onSubmit }: Props) {
+export function PhoneEntry({ initial = "", error, busy = false, onSubmit }: Props) {
   const [value, setValue] = useState(initial);
   const complete = value.length === DIGITS;
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (complete) onSubmit(value);
+    if (complete && !busy) onSubmit(value);
   };
 
   return (
@@ -88,13 +92,14 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           <AnimatePresence>
             {complete && (
               <motion.button
+                disabled={busy}
                 type="submit"
                 aria-label="Continue"
                 initial={{ scale: 0.4, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.4, opacity: 0, transition: { duration: 0.12 } }}
                 transition={{ type: "spring", duration: 0.45, bounce: 0.4 }}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0a84ff] text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0a84ff] text-white disabled:opacity-50"
               >
                 <ArrowUp className="h-5 w-5" strokeWidth={2.75} />
               </motion.button>
@@ -102,6 +107,10 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           </AnimatePresence>
         </div>
       </div>
+
+      <p role="alert" className="h-5 text-sm text-[#ff453a]">
+        {error}
+      </p>
     </motion.form>
   );
 }
