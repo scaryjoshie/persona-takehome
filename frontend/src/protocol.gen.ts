@@ -2,7 +2,7 @@
 
 export type ClientMessage = SendMessage | SetTyping | CallCommand | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
-export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | Partial;
+export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
 export type Channel = "text" | "voice" | "system";
 export type Speaker = "user" | "agent";
@@ -181,7 +181,7 @@ export interface TypingMessage {
  * A live caption: `text` is the turn's full transcript so far (replace, don't append).
  * `final` closes the turn; the VoiceUtterance event with the same turn_id follows.
  */
-export interface Partial {
+export interface TranscriptPartial {
   type: "partial";
   speaker: Speaker;
   turn_id: string;

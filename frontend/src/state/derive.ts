@@ -1,6 +1,6 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import type { PartialMessage, WireEvent } from "../types";
+import type { TranscriptPartial, WireEvent } from "../types";
 
 /** The texts in both directions, as the phone shows them. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
@@ -19,7 +19,7 @@ export function threadMessages(events: WireEvent[]): ThreadMessage[] {
  */
 export function transcriptLines(
   events: WireEvent[],
-  partials: Partial<Record<string, PartialMessage>>,
+  partials: Partial<Record<string, TranscriptPartial>>,
 ): TranscriptLine[] {
   const start = events.findLastIndex((e) => e.payload.kind === "call" && e.payload.transition === "connected");
   if (start < 0) return [];

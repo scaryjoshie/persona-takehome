@@ -416,35 +416,6 @@
         "title": "Origin",
         "type": "string"
       },
-      "Partial": {
-        "description": "A live caption: `text` is the turn's full transcript so far (replace, don't append).\n`final` closes the turn; the VoiceUtterance event with the same turn_id follows.",
-        "properties": {
-          "type": {
-            "const": "partial",
-            "default": "partial",
-            "title": "Type",
-            "type": "string"
-          },
-          "speaker": {
-            "$ref": "#/$defs/Speaker"
-          },
-          "turn_id": {
-            "title": "Turn Id",
-            "type": "string"
-          },
-          "text": {
-            "title": "Text",
-            "type": "string"
-          },
-          "final": {
-            "title": "Final",
-            "type": "boolean"
-          }
-        },
-        "required": ["type", "speaker", "turn_id", "text", "final"],
-        "title": "Partial",
-        "type": "object"
-      },
       "SlotChanged": {
         "additionalProperties": false,
         "description": "The agent recorded a name or the help need. The pipeline fills in `old` and drops the\nevent if the value did not change.",
@@ -638,6 +609,35 @@
         "title": "ToolCall",
         "type": "object"
       },
+      "TranscriptPartial": {
+        "description": "A live caption: `text` is the turn's full transcript so far (replace, don't append).\n`final` closes the turn; the VoiceUtterance event with the same turn_id follows.",
+        "properties": {
+          "type": {
+            "const": "partial",
+            "default": "partial",
+            "title": "Type",
+            "type": "string"
+          },
+          "speaker": {
+            "$ref": "#/$defs/Speaker"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "final": {
+            "title": "Final",
+            "type": "boolean"
+          }
+        },
+        "required": ["type", "speaker", "turn_id", "text", "final"],
+        "title": "TranscriptPartial",
+        "type": "object"
+      },
       "Typing": {
         "additionalProperties": false,
         "description": "Coalesced client-side. Routed, never stored.",
@@ -818,7 +818,7 @@
       "mapping": {
         "call": "#/$defs/CallMessage",
         "event": "#/$defs/EventMessage",
-        "partial": "#/$defs/Partial",
+        "partial": "#/$defs/TranscriptPartial",
         "slots": "#/$defs/SlotsMessage",
         "snapshot": "#/$defs/Snapshot",
         "typing": "#/$defs/TypingMessage"
@@ -842,7 +842,7 @@
         "$ref": "#/$defs/TypingMessage"
       },
       {
-        "$ref": "#/$defs/Partial"
+        "$ref": "#/$defs/TranscriptPartial"
       }
     ]
   },

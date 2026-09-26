@@ -5,7 +5,7 @@ import type {
   CallState,
   ServerMessage,
   Medium,
-  PartialMessage,
+  TranscriptPartial,
   Slots,
   Snapshot,
   Speaker,
@@ -21,12 +21,8 @@ export interface SessionState {
   call: CallState;
   floor: Medium;
   agentTyping: boolean;
-  /**
-   * The turn each speaker is saying right now, dropped once that speaker's utterance lands. Keyed
-   * by speaker, not turn id: the voice layer can stream a turn's fragments under one id and record
-   * it under another, and a fragment keyed by the stale id would never be cleared.
-   */
-  partials: Partial<Record<Speaker, PartialMessage>>;
+  /** The turn each speaker is saying right now; a speaker says one thing at a time. Dropped once that speaker's utterance lands. */
+  partials: Partial<Record<Speaker, TranscriptPartial>>;
 }
 
 type Action = { type: "status"; status: ConnectionStatus } | { type: "message"; message: ServerMessage };
