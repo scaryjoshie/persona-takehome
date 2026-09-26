@@ -20,11 +20,12 @@ from app.calls.events import CallEvent
 from app.database import SessionFactory, utc_now
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
-from app.routing.deciders import Decider, DefaultDecider
+from app.routing.deciders import Decider, DefaultDecider, JevDecider
 from app.routing.filter import Filter
 from app.routing.responder import Responder
 from app.routing.router import Router
 from app.routing.types import Decision, Medium
+from app.settings import Settings
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.text.messenger import Messenger
 from app.text.reply import Reply
@@ -48,6 +49,17 @@ AnyPayload = Annotated[
     Field(discriminator="kind"),
 ]
 PAYLOADS: TypeAdapter[Payload] = TypeAdapter(AnyPayload)  # pyright: ignore[reportArgumentType]
+
+
+def decider_from(settings: Settings) -> Decider:
+    """Jev if an OpenRouter key is configured, otherwise the fixed defaults."""
+    if settings.openrouter_api_key is None:
+        return DefaultDecider()
+    return JevDecider(
+        api_key=settings.openrouter_api_key.get_secret_value(),
+        model=settings.jev_model,
+        fallback=DefaultDecider(),
+    )
 
 
 class _LiveVoice:

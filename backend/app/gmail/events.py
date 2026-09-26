@@ -26,6 +26,11 @@ class GmailEvent(Payload):
         """Connected and failed need a reaction; link_sent and skipped are the agent's own doing."""
         return self.phase in self.OUTCOMES
 
+    def describe(self) -> str:
+        if self.phase is GmailPhase.CONNECTED:
+            return "the user's Gmail just finished connecting"
+        return f"Gmail: {self.phase.value.replace('_', ' ')}"
+
     def turn(self, at: datetime) -> Turn | None:
         match self.phase:
             case GmailPhase.CONNECTED:

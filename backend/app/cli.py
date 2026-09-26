@@ -8,7 +8,7 @@ import sys
 from app.agent.model import agent_model
 from app.database import create_schema, make_engine, make_sessions
 from app.events.payload import Channel, Origin
-from app.main import build_app
+from app.main import build_app, decider_from
 from app.settings import get_settings
 from app.text.events import UserMessage
 
@@ -31,6 +31,7 @@ async def main(phone: str) -> None:
         messenger=ConsoleMessenger(),
         model=agent_model(settings),
         app_base_url=settings.app_base_url,
+        decider=decider_from(settings),
     )
     print(f"chatting as {phone}; ctrl-d to quit")
     loop = asyncio.get_running_loop()

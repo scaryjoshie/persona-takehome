@@ -28,8 +28,9 @@ class Settings(BaseSettings):
 
     openai_realtime_model: str = "gpt-realtime-2.1"  # fallback voice layer
 
-    # OpenRouter: auxiliary only (one-shot tasks, harness personas).
+    # OpenRouter: the Jev decider (routing judgment calls) and auxiliary tasks.
     openrouter_api_key: SecretStr | None = None
+    jev_model: str = "typesafe/jev-1.13"
 
     # Storage
     database_url: str = "sqlite+aiosqlite:///./onboarding.db"
@@ -44,7 +45,6 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
 
     # Optional
-    jev_api_key: SecretStr | None = None
     logfire_token: SecretStr | None = None
     debug: bool = False
 

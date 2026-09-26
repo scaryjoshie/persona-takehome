@@ -16,6 +16,9 @@ class UserMessage(Payload):
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.USER, self.text)
 
+    def describe(self) -> str:
+        return f"the user texted: {self.text}"
+
     def fixed_verb(self, ctx: RoutingContext) -> Verb | None:
         from app.routing.types import Verb
 
@@ -45,3 +48,8 @@ class Typing(Payload):
 
     active: bool
     seconds: float = 0.0
+
+    def describe(self) -> str:
+        if not self.active:
+            return "the user stopped typing"
+        return f"the user has been typing a text message for {self.seconds:.0f} seconds"

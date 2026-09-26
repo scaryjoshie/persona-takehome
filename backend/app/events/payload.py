@@ -64,6 +64,11 @@ class Payload(BaseModel):
         """Rendering for a model. None means the model never sees this event."""
         return None
 
+    def describe(self) -> str:
+        """One plain-English line saying what happened, for classifiers like the Jev decider."""
+        turn = self.turn(datetime.now())
+        return turn.text if turn else self.model_dump_json()
+
     def fixed_verb(self, ctx: RoutingContext) -> Verb | None:
         """A verb this event always gets while a run is active, or None to ask the decider."""
         return None

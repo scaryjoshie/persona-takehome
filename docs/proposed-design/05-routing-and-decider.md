@@ -93,6 +93,11 @@ Interrupt is only safe at step boundaries. If a side-effecting tool is in flight
 
 ## The decider
 
+**Update 2026-09-26: Jev is live.** `typesafe/jev-1.13` is served through OpenRouter's Decisions API (`POST https://openrouter.ai/api/alpha/decisions`, not chat completions; it is absent from the chat model list). `app/routing/deciders/jev.py` asks one `choice` question over the three verbs, with state = channel, whether a response is in progress, whether the last agent turn asked a question, what is still needed, the recent conversation, and the new event described in plain English (`Payload.describe`). It is used whenever `OPENROUTER_API_KEY` is set, with `DefaultDecider` as the fallback on error or after 1.5 s. Measured: 140–500 ms per call, about $0.00002. Plain-English event descriptions mattered: sending the raw event JSON collapsed both test scenarios to "absorb"; describing the event restored interrupt-after-a-question vs defer-mid-explanation.
+
+Request shape: `{"model", "state": str|object|array, "questions": {key: {"type": "noul"|"choice"|"score", "instructions", "criteria"}}}`. Answers: noul → `{"noul": p}`; choice → `{"choice", "confidence", "probabilities"}`; score → `{"score", "confidence", "probabilities", "legend"}`. Source: https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-questions-and-answers-request
+
+
 ```python
 class Decider(Protocol):
     async def decide(self, ctx: RoutingContext) -> Decision: ...
