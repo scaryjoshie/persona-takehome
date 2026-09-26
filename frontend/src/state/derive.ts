@@ -1,11 +1,15 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import type { TranscriptPartial, WireEvent } from "../types";
+import type { TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
 
 /** The texts in both directions, as the phone shows them. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
   return events.flatMap((e): ThreadMessage[] => {
-    const p = e.payload;
+    const p = e.payload as WireEvent["payload"] | VoiceNotePayload;
+    if (p.kind === "voice_note") {
+      const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms, transcript: p.transcript };
+      return [{ id: String(e.seq), side: "sent", text: "", ts: e.ts, voice, audioId: p.audio_id }];
+    }
     if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts }];
     if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text, ts: e.ts }];
     return [];
@@ -73,4 +77,8 @@ export function receiptLabel(events: WireEvent[]): string {
   if (!read) return "Delivered";
   const time = new Date(read.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   return `Read ${time}`;
+}
+
+export function voiceNoteUrl(audioId: string): string {
+  return `/api/voice-note/${encodeURIComponent(audioId)}`;
 }

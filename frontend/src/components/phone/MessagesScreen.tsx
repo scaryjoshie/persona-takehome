@@ -17,7 +17,10 @@ import {
 import { IOSKeyboard, IOSStatusBar, KB_DARK, KB_H, STATUS_H, Scaled } from "./vendor/ios-chrome";
 import { SCREEN } from "./IPhone17Pro";
 import { LinkPreview } from "./LinkPreview";
+import { VoiceNoteBubble, type VoiceNote } from "./VoiceNoteBubble";
+import { LiveWaveform } from "../ui/live-waveform";
 import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
+import { useVoiceRecorder, type Recording } from "../../audio/useVoiceRecorder";
 import "./messages-screen.css";
 
 export interface ThreadMessage {
@@ -26,6 +29,10 @@ export interface ThreadMessage {
   text: string;
   /** ISO time it was sent; the thread header shows the first one. */
   ts?: string;
+  /** Set for an audio message; `text` is then unused. */
+  voice?: VoiceNote;
+  /** The server's id for an audio message, once uploaded. */
+  audioId?: string;
 }
 
 interface Props {
@@ -42,6 +49,8 @@ interface Props {
   initialDraft?: string;
   /** True while the user is composing: on the first keystroke, false on send, clear, or 3 s idle. */
   onTyping?: (active: boolean) => void;
+  /** Sends a recorded audio message. The mic button is inert without it. */
+  onSendVoiceNote?: (recording: Recording) => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -55,6 +64,7 @@ export function MessagesScreen({
   onCall,
   initialDraft = "",
   onTyping,
+  onSendVoiceNote,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
@@ -72,6 +82,17 @@ export function MessagesScreen({
     typingSignal.update(text);
   };
   useEnterToSend(rootRef, send);
+
+  // Audio messages: the mic opens a recording bar; send stops and hands the clip up, ✕ discards it.
+  const recorder = useVoiceRecorder();
+  const [recording, setRecording] = useState(false);
+  const stopRecording = async (keep: boolean) => {
+    if (keep) {
+      const clip = await recorder.stop();
+      if (clip && clip.durationMs > 300) onSendVoiceNote?.(clip);
+    } else recorder.cancel();
+    setRecording(false);
+  };
   const lastSentId = messages.findLast((m) => m.side === "sent")?.id;
   const endsSent = messages.at(-1)?.side === "sent";
 
@@ -104,7 +125,47 @@ export function MessagesScreen({
             {draft ? (
               <Link slot="after-area" className="send-button" iconF7="arrow_up" onClick={send} aria-label="Send" />
             ) : (
-              <Link slot="inner-end" iconF7="mic" aria-label="Audio message" />
+              <Link
+                slot="inner-end"
+                iconF7="mic"
+                aria-label="Record audio message"
+                onClick={onSendVoiceNote ? () => setRecording(true) : undefined}
+              />
+            )}
+            {recording && (
+              <div slot="after-inner" className="recording-bar">
+                <button
+                  type="button"
+                  className="recording-cancel"
+                  aria-label="Discard"
+                  onClick={() => stopRecording(false)}
+                >
+                  <Icon f7="xmark" />
+                </button>
+                <div className="recording-pill">
+                  <span className="recording-dot" />
+                  <LiveWaveform
+                    active
+                    mode="scrolling"
+                    height={24}
+                    barWidth={2.5}
+                    barGap={2}
+                    barColor="#fff"
+                    className="recording-wave"
+                    onStreamReady={recorder.start}
+                    onError={() => stopRecording(false)}
+                  />
+                  <RecordingClock since={recorder.startedAt} />
+                </div>
+                <button
+                  type="button"
+                  className="recording-send"
+                  aria-label="Send audio message"
+                  onClick={() => stopRecording(true)}
+                >
+                  <Icon f7="arrow_up" />
+                </button>
+              </div>
             )}
           </Messagebar>
           <Messages scrollMessages={false}>
@@ -125,9 +186,17 @@ export function MessagesScreen({
                   last={last}
                   tail={last && !b.link}
                   footer={footer}
-                  className={b.link ? "message-link" : undefined}
+                  className={b.link ? "message-link" : b.voice ? "message-voice" : undefined}
                 >
-                  <span slot="text">{b.link ? <LinkPreview url={b.link} /> : <LinkedText text={b.text} />}</span>
+                  <span slot="text">
+                    {b.voice ? (
+                      <VoiceNoteBubble note={b.voice} />
+                    ) : b.link ? (
+                      <LinkPreview url={b.link} />
+                    ) : (
+                      <LinkedText text={b.text} />
+                    )}
+                  </span>
                 </Message>
               );
             })}
@@ -220,13 +289,15 @@ interface Bubble {
   text: string;
   /** Set for a link card. */
   link?: string;
+  voice?: VoiceNote;
 }
 
 /** As in Messages: a lone link becomes a card; text with a link shows the text, then the card. */
 function bubblesFor(messages: ThreadMessage[]): Bubble[] {
   return messages.flatMap((m): Bubble[] => {
-    const link = firstLink(m.text);
     const base = { messageId: m.id, side: m.side, text: m.text };
+    if (m.voice) return [{ ...base, key: m.id, voice: m.voice }];
+    const link = firstLink(m.text);
     if (!link) return [{ ...base, key: m.id }];
     if (isOnlyLink(m.text)) return [{ ...base, key: m.id, link }];
     return [
@@ -283,4 +354,16 @@ function threadDate(iso?: string): string {
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** Elapsed recording time, m:ss, ticking while recording. */
+function RecordingClock({ since }: { since: number | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, []);
+  // `since` arrives once the mic is live, which can be just after this clock last ticked.
+  const s = since === null ? 0 : Math.max(0, Math.floor((now - since) / 1000));
+  return <span className="recording-time">{`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`}</span>;
 }

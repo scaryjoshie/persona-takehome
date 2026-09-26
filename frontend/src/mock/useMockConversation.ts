@@ -13,6 +13,7 @@ import {
   speechLevel,
 } from "./data";
 import type { Conversation } from "../conversation/types";
+import type { Recording } from "../audio/useVoiceRecorder";
 
 interface MockCall {
   phase: CallPhase;
@@ -123,6 +124,14 @@ export function useMockConversation(): Conversation {
     setTimeout(() => agentSays("ok, that was fun."), 800);
   };
   const toggleMute = () => setMuted((m) => !m);
+  const sendVoiceNote = ({ blob, durationMs }: Recording) => {
+    const voice = { src: URL.createObjectURL(blob), durationMs };
+    setMessages((m) => [...m, { id: nextId(), side: "sent", text: "", ts: new Date().toISOString(), voice }]);
+    setTimeout(
+      () => agentSays("got your voice note. (the offline mock can't listen, but the real one transcribes it.)"),
+      900,
+    );
+  };
   const send = (text: string) => {
     const first = messages.length === 0;
     userSays(text);
@@ -141,6 +150,7 @@ export function useMockConversation(): Conversation {
     muted,
     outputLevel: () => (speakingRef.current ? speechLevel(performance.now() / 1000) : 0),
     send,
+    sendVoiceNote,
     setTyping: () => {},
     startCall,
     accept,

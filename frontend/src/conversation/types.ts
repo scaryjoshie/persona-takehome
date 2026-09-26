@@ -1,6 +1,7 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { TranscriptLine } from "../components/orb/Transcript";
+import type { Recording } from "../audio/useVoiceRecorder";
 
 /** What the stage renders, whichever source drives it: the live backend or the offline mock. */
 export interface Conversation {
@@ -19,6 +20,7 @@ export interface Conversation {
   /** The agent's voice level, 0..1, read every frame for the orb. */
   outputLevel: () => number;
   send: (text: string) => void;
+  sendVoiceNote: (recording: Recording) => void;
   setTyping: (active: boolean) => void;
   startCall: () => void;
   accept: () => void;
@@ -41,6 +43,7 @@ export const IDLE_CONVERSATION: Conversation = {
   muted: false,
   outputLevel: () => 0,
   send: noop,
+  sendVoiceNote: noop,
   setTyping: noop,
   startCall: noop,
   accept: noop,

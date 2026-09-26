@@ -20,6 +20,8 @@ export interface Transport {
   onMessage(cb: (msg: ServerMessage) => void): () => void;
   onStatus(cb: (status: ConnectionStatus) => void): () => void;
   openAudio(): AudioLink;
+  /** Uploads a recorded audio message; resolves with its id. Transcription follows as an event. */
+  uploadVoiceNote(audio: Blob): Promise<string>;
   close(): void;
 }
 

@@ -68,6 +68,14 @@ export class WsTransport implements Transport {
     return new WsAudioLink(wsUrl(`/ws/audio?phone=${encodeURIComponent(this.phone)}`));
   }
 
+  async uploadVoiceNote(audio: Blob): Promise<string> {
+    const form = new FormData();
+    form.append("audio", audio, audio.type.includes("mp4") ? "voice.m4a" : "voice.webm");
+    const res = await fetch(`/api/voice-note?phone=${encodeURIComponent(this.phone)}`, { method: "POST", body: form });
+    if (!res.ok) throw new Error(`voice note upload failed: ${res.status}`);
+    return ((await res.json()) as { audio_id: string }).audio_id;
+  }
+
   close(): void {
     this.closed = true;
     this.ws?.close();

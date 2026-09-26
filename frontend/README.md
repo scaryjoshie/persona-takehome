@@ -76,5 +76,6 @@ into the other's components.
 | Status bar, keyboard | [zoewu-creator/texting-ui-templates](https://github.com/zoewu-creator/texting-ui-templates), vendored in `components/phone/vendor/` | MIT |
 | Dynamic Island shell | [beUI](https://beui.dev/components/blocks/dynamic-island), vendored in `components/ui/` | MIT |
 | Voice orb | [orb-ui](https://orb-ui.com), cloud theme | MIT |
+| Audio message waveforms | [ElevenLabs UI](https://github.com/elevenlabs/ui) `Waveform` and `LiveWaveform`, vendored in `components/ui/` | MIT |
 | Phone-number blanks | [input-otp](https://input-otp.rodz.dev) | MIT |
 | Motion, icons outside the phone | [motion](https://motion.dev), [lucide](https://lucide.dev) | MIT, ISC |
