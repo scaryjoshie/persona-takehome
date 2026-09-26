@@ -56,7 +56,8 @@ def _page(title: str, body: str) -> HTMLResponse:
         f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
 <style>body{{font:16px/1.5 -apple-system,system-ui,sans-serif;max-width:420px;margin:48px auto;
-padding:0 16px;color:#111;background:#fafafa}}h1{{font-size:22px}}button,a.btn{{display:block;
+padding:0 16px;color:#111;background:#fafafa}}*{{box-sizing:border-box}}h1{{font-size:22px}}
+button,a.btn{{display:block;
 width:100%;padding:12px;margin:10px 0;border-radius:10px;border:1px solid #ccc;background:#fff;
 font:inherit;text-align:center;text-decoration:none;color:#111;cursor:pointer}}
 .primary{{background:#0a84ff;color:#fff;border-color:#0a84ff}}small{{color:#666}}</style>

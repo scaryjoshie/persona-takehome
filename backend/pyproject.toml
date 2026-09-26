@@ -30,11 +30,15 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
+[tool.ruff.lint.per-file-ignores]
+"evals/{scenarios,calls}.py" = ["ASYNC"]  # scripts: polling and blocking IO are fine
+
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
+ignore = ["evals/scenarios.py", "evals/calls.py"]  # scripts over untyped JSON
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
