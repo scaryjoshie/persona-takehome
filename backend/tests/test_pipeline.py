@@ -146,7 +146,7 @@ async def test_contact_saved_sets_what_the_phone_calls_the_agent(pipeline: Pipel
     saved = ContactSaved(name="Mila")
     assert await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, saved) is not None
     assert await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, saved) is None  # no change
-    assert (await pipeline.user(PHONE)).device.contact_name == "Mila"
+    assert (await pipeline.user(PHONE)).slots.contact_name == "Mila"
 
 
 async def test_declining_a_call_is_remembered(pipeline: Pipeline) -> None:

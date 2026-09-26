@@ -22,7 +22,6 @@ from app.web.protocol import (
     CallAction,
     CallCommand,
     CallMessage,
-    DeviceMessage,
     EventMessage,
     ReactCommand,
     Reset,
@@ -71,7 +70,6 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
         if event.kind in STATE_KINDS:
             user = await pipeline.user(phone)
             await send(SlotsMessage(slots=user.slots))
-            await send(DeviceMessage(device=user.device))
             await send(CallMessage(call=user.call))
 
     unsubscribe = pipeline.subscribe(phone, on_event)
@@ -141,7 +139,6 @@ async def snapshot(pipeline: Pipeline, phone: str) -> Snapshot:
     return Snapshot(
         events=[WireEvent.of(e) for e in await pipeline.history(phone)],
         slots=user.slots,
-        device=user.device,
         call=user.call,
         floor=user.floor,
     )

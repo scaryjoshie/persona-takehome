@@ -229,7 +229,7 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             email = email or user.slots.gmail_email
             await users.set_slots(s, user.phone, gmail=phase, gmail_email=email)
         case ContactSaved(name=name):
-            if user.device.contact_name == name:
+            if user.slots.contact_name == name:
                 return None
             await users.set_slots(s, user.phone, contact_name=name)
         case Graduated():

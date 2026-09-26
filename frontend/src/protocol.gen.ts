@@ -2,8 +2,7 @@
 
 export type ClientMessage = SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
-export type ServerMessage =
-  Snapshot | EventMessage | SlotsMessage | DeviceMessage | CallMessage | TypingMessage | TranscriptPartial;
+export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
 export type Channel = "text" | "voice" | "system";
 export type Speaker = "user" | "agent";
@@ -71,7 +70,6 @@ export interface Snapshot {
   type: "snapshot";
   events: WireEvent[];
   slots: Slots;
-  device: Device;
   call: CallState;
   floor: Medium;
 }
@@ -244,12 +242,6 @@ export interface Slots {
   gmail_email: string | null;
   graduated: boolean;
   no_calls: boolean;
-}
-/**
- * What only their phone knows, like what they saved the agent's contact as. The agent
- * never sees this; it drives the phone's display.
- */
-export interface Device {
   contact_name: string | null;
 }
 export interface CallState {
@@ -267,10 +259,6 @@ export interface EventMessage {
 export interface SlotsMessage {
   type: "slots";
   slots: Slots;
-}
-export interface DeviceMessage {
-  type: "device";
-  device: Device;
 }
 export interface CallMessage {
   type: "call";

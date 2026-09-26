@@ -550,47 +550,6 @@
         "title": "Decision",
         "type": "object"
       },
-      "Device": {
-        "description": "What only their phone knows, like what they saved the agent's contact as. The agent\nnever sees this; it drives the phone's display.",
-        "properties": {
-          "contact_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Contact Name"
-          }
-        },
-        "required": [
-          "contact_name"
-        ],
-        "title": "Device",
-        "type": "object"
-      },
-      "DeviceMessage": {
-        "properties": {
-          "type": {
-            "const": "device",
-            "default": "device",
-            "title": "Type",
-            "type": "string"
-          },
-          "device": {
-            "$ref": "#/$defs/Device"
-          }
-        },
-        "required": [
-          "type",
-          "device"
-        ],
-        "title": "DeviceMessage",
-        "type": "object"
-      },
       "EventMessage": {
         "properties": {
           "type": {
@@ -907,6 +866,18 @@
             "default": false,
             "title": "No Calls",
             "type": "boolean"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Contact Name"
           }
         },
         "required": [
@@ -916,7 +887,8 @@
           "gmail",
           "gmail_email",
           "graduated",
-          "no_calls"
+          "no_calls",
+          "contact_name"
         ],
         "title": "Slots",
         "type": "object"
@@ -958,9 +930,6 @@
           "slots": {
             "$ref": "#/$defs/Slots"
           },
-          "device": {
-            "$ref": "#/$defs/Device"
-          },
           "call": {
             "$ref": "#/$defs/CallState"
           },
@@ -972,7 +941,6 @@
           "type",
           "events",
           "slots",
-          "device",
           "call",
           "floor"
         ],
@@ -1355,7 +1323,6 @@
     "discriminator": {
       "mapping": {
         "call": "#/$defs/CallMessage",
-        "device": "#/$defs/DeviceMessage",
         "event": "#/$defs/EventMessage",
         "partial": "#/$defs/TranscriptPartial",
         "slots": "#/$defs/SlotsMessage",
@@ -1373,9 +1340,6 @@
       },
       {
         "$ref": "#/$defs/SlotsMessage"
-      },
-      {
-        "$ref": "#/$defs/DeviceMessage"
       },
       {
         "$ref": "#/$defs/CallMessage"

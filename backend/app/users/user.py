@@ -22,21 +22,11 @@ class Medium(StrEnum):
     VOICE = "voice"
 
 
-class Device(BaseModel):
-    """What only their phone knows, like what they saved the agent's contact as. The agent
-    never sees this; it drives the phone's display."""
-
-    model_config = ConfigDict(frozen=True, json_schema_serialization_defaults_required=True)
-
-    contact_name: str | None = None  # None = not saved
-
-
 class User(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     phone: str
     slots: Slots
-    device: Device
     call: CallState
     floor: Medium
     typing_since: datetime | None = None
@@ -52,9 +42,9 @@ class User(BaseModel):
                 gmail=GmailPhase(row.gmail) if row.gmail else None,
                 gmail_email=row.gmail_email,
                 graduated=row.graduated,
+                contact_name=row.contact_name,
                 no_calls=row.no_calls,
             ),
-            device=Device(contact_name=row.contact_name),
             call=CallState(
                 phase=CallPhase(row.call_phase),
                 reason=row.call_reason,

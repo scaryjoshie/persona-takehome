@@ -17,6 +17,9 @@ class Slots(BaseModel):
     gmail_email: str | None = None
     graduated: bool = False
     no_calls: bool = False  # they declined a call; don't offer again unless they ask
+    # Phone-only: what their phone has the agent saved as (None = not saved). Drives the
+    # phone's header; the agent never sees it (not routed, not in any prompt).
+    contact_name: str | None = None
 
     def missing(self) -> tuple[str, ...]:
         out: list[str] = []
