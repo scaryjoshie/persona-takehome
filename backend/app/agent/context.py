@@ -112,9 +112,14 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     if call.phase is CallPhase.CONNECTED:
         lines.append("You're on a call with them right now.")
     missing = slots.missing()
+    names_sorted = slots.agent_name is not None and slots.user_name is not None
+    if not names_sorted and "help_need" in missing:
+        missing = tuple(m for m in missing if m != "help_need")  # the ask comes after names
     lines.append(
         "Still missing: " + ", ".join(m.replace("_", " ") for m in missing) + "."
         if missing
         else "You have everything onboarding needs."
     )
+    if names_sorted and slots.help_need is None:
+        lines.append("Names are sorted, so when it fits naturally, it's time for the ask.")
     return "\n".join(lines)
