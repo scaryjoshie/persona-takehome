@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import ClassVar, Literal
 
 from app.events.base import Payload, Role, Turn
 
@@ -19,6 +19,12 @@ class GmailEvent(Payload):
 
     phase: GmailPhase
     email: str | None = None
+
+    OUTCOMES: ClassVar[frozenset[GmailPhase]] = frozenset({GmailPhase.CONNECTED, GmailPhase.FAILED})
+
+    def should_route(self) -> bool:
+        """Connected and failed need a reaction; link_sent and skipped are the agent's own doing."""
+        return self.phase in self.OUTCOMES
 
     def turn(self, at: datetime) -> Turn | None:
         match self.phase:
