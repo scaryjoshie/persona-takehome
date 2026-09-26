@@ -234,7 +234,7 @@ async def end_call(ctx: RunContext[Deps]) -> str:
     return "call ending"
 
 
-@agent.tool(prepare=not_the_voice)
+@agent.tool(prepare=only_text)  # never mid-call: onboarding wraps up by text afterwards
 async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     """Move the user into the main experience. Say what you will do first, in one line."""
     await _submit(ctx, Graduated())
