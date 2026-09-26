@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent import prompts
-from app.agent.agent import Bubbles, agent
-from app.agent.deps import AgentEnv
-from app.agent.events import SlotChanged
+from app.agent.agent import RING_SECONDS, Bubbles, agent
+from app.agent.deps import AgentEnv, Deps
+from app.agent.events import CallOptOut, SlotChanged
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
 from app.text.reply import Replier
-from app.users.user import Medium
-from tests.conftest import PHONE, CapturingMessenger
+from app.users.user import Medium, User
+from app.voice.call_state import CallPhase
+from tests.conftest import PHONE, CapturingMessenger, FakeTimers, settle
 
 
 def scripted(*responses: list[ToolCallPart]) -> FunctionModel:
@@ -117,3 +120,69 @@ async def test_naming_the_agent_sends_its_contact_card(
     assert "contact_card" in kinds and kinds[-1] == "agent_message"
     tapbacks = [e for e in await pipeline.history(PHONE) if e.kind == "reaction"]
     assert len(tapbacks) == 1 and tapbacks[0].payload.model_dump()["by"] == "agent"
+
+
+async def tools_for(
+    pipeline: Pipeline, messenger: CapturingMessenger, deps_of: Callable[[AgentEnv, User], Deps]
+) -> set[str]:
+    seen: set[str] = set()
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.update(t.name for t in info.function_tools)
+        return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": []})])
+
+    env = AgentEnv(pipeline, messenger, FunctionModel(fn), "")
+    with agent.override(model=FunctionModel(fn)):
+        await agent.run("ok", deps=deps_of(env, await pipeline.user(PHONE)), output_type=Bubbles)
+    return seen
+
+
+async def test_on_a_call_only_the_back_office_records_and_sends(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    voice = await tools_for(pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE))
+    assert voice == {"end_call"}
+    office = await tools_for(
+        pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE, back_office=True)
+    )
+    assert {"set_user_name", "send_gmail_link", "send_text", "end_call"} <= office
+    assert "start_call" not in office
+
+
+async def test_after_a_no_the_agent_calls_only_when_asked(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, CallOptOut())
+    seen: set[str] = set()
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.clear()
+        seen.update(t.name for t in info.function_tools)
+        return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": []})])
+
+    deps = AgentEnv(pipeline, messenger, FunctionModel(fn), "").deps(
+        await pipeline.user(PHONE), Medium.TEXT
+    )
+    with agent.override(model=FunctionModel(fn)):
+        await agent.run("what can you do", deps=deps, output_type=Bubbles)
+        assert "start_call" not in seen and "no_call" in seen
+        await agent.run("ok actually call me", deps=deps, output_type=Bubbles)
+        assert "start_call" in seen
+
+
+async def test_an_unanswered_call_becomes_a_missed_call(
+    pipeline: Pipeline, messenger: CapturingMessenger, timers: FakeTimers
+) -> None:
+    model = scripted(
+        [ToolCallPart("start_call", {"reason": "setup"})],
+        [ToolCallPart("final_result", {"bubbles": ["calling you now"]})],
+    )
+    await run_text(pipeline, messenger, model, [])
+    assert (await pipeline.user(PHONE)).call.phase is CallPhase.RINGING
+    assert RING_SECONDS in timers.pending
+    while (await pipeline.user(PHONE)).call.phase is CallPhase.RINGING:
+        timers.fire_next()
+        await settle(pipeline)
+    call = (await pipeline.user(PHONE)).call
+    assert call.phase is CallPhase.NONE and call.reason == "no_answer"
+    assert not (await pipeline.user(PHONE)).slots.no_calls  # missing a call isn't a no

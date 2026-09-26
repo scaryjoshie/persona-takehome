@@ -45,3 +45,15 @@ def test_only_outcomes_route() -> None:
     assert CallEvent(transition=CallTransition.DECLINED).should_route()
     assert not CallEvent(transition=CallTransition.RINGING).should_route()
     assert not CallEvent(transition=CallTransition.CONNECTED).should_route()
+
+
+def test_a_missed_call_timer_only_fails_its_own_attempt(clock: FakeClock) -> None:
+    ringing = step(CallState(), CallTransition.RINGING, clock, call_id="r1")
+    assert ringing.call_id == "r1"
+    stale = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id="old")
+    assert next_state(ringing, stale, clock()) is None
+    missed = step(ringing, CallTransition.FAILED, clock, reason="no_answer", call_id="r1")
+    assert missed.phase is CallPhase.NONE and missed.reason == "no_answer"
+    answered = step(ringing, CallTransition.CONNECTING, clock)
+    late = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id="r1")
+    assert next_state(answered, late, clock()) is None

@@ -185,6 +185,8 @@ RING_SECONDS = 30.0  # an unanswered call becomes a missed call
 @agent.tool(prepare=may_call)
 async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     """Call the user now. `reason`: a few words of background for the call, not a script."""
+    d = ctx.deps
+    call_id = uuid.uuid4().hex
     ringing = CallEvent(
         transition=CallTransition.RINGING,
         reason=reason,

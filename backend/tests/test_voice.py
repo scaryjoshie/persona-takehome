@@ -107,3 +107,28 @@ async def test_no_call_in_progress_drops(app: App) -> None:
     voice.calls.clear()
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="hello?"))
     assert (await last_decision(pipeline))["verb"] == "drop"
+
+
+async def test_talking_over_the_voice_hands_held_notes_in_silently(app: App) -> None:
+    pipeline, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    call.speaking = True
+    connected = GmailEvent(phase=GmailPhase.CONNECTED, email="s@x.com")
+    await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, connected)
+    assert len(call.deferred) == 1
+    await call.user_started()
+    assert call.deferred == [] and not call.speaking and session.sent[-1][1] is False
+
+
+async def test_nothing_reaches_a_call_that_ended(app: App) -> None:
+    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    call.closed = True
+    await call.send("late", speak=False)
+    assert session.sent == []
+
+
+async def test_held_background_goes_in_when_they_start_talking(app: App) -> None:
+    _, call, session = await on_a_call(app, VoiceResponder(notes=call_note))
+    call.hold("The Gmail link is in their texts.")
+    assert session.sent == []
+    await call.user_started()
+    assert session.sent == [("The Gmail link is in their texts.", False)] and call.held == []

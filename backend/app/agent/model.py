@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Literal, cast
+
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIResponsesModel
+from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.realtime.openai_live import OpenAILiveModel, OpenAILiveModelSettings
 
 from app.settings import Settings
+
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
 def _provider(settings: Settings) -> OpenAIProvider:
@@ -17,8 +21,11 @@ def _provider(settings: Settings) -> OpenAIProvider:
 
 
 def text_model(settings: Settings) -> Model:
+    effort = cast(ReasoningEffort, settings.agent_reasoning_effort)
     return OpenAIResponsesModel(
-        settings.agent_model.removeprefix("openai:"), provider=_provider(settings)
+        settings.agent_model.removeprefix("openai:"),
+        provider=_provider(settings),
+        settings=OpenAIResponsesModelSettings(openai_reasoning_effort=effort),
     )
 
 

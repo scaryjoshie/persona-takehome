@@ -16,3 +16,4 @@ ONBOARDING = read_md("onboarding")  # the job right now; every channel
 TEXT = read_md("text")  # the text channel's format
 CALL = read_md("call")  # the voice on a call
 LISTENER = read_md("listener")  # the back office during a call
+VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
