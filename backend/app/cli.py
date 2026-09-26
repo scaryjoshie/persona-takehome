@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.ai.models import agent_model
+from app.agent.model import agent_model
 from app.database import create_schema, make_engine, make_sessions
 from app.events.payload import Channel, Origin
 from app.main import build_app

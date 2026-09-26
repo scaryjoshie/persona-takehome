@@ -28,8 +28,7 @@ backend/app/
             filter.py (fixed verb or decider)  router.py (pure)
   agent/    agent.py (the shared pydantic-ai agent + tools)  deps.py  prompts.py + prompts/*.md
             context.py (renders the log for a model)  call_notes.py (how a text event is worded on a call)
-            slots.py (Slots)  events.py (SlotChanged, ToolCall, Graduated)
-  ai/       models.py (model construction from settings)
+            slots.py (Slots)  events.py (SlotChanged, ToolCall, Graduated)  model.py (the agent's model from settings)
   cli.py    talk to the agent from a terminal
 backend/tests/          one file per section; fakes in conftest; temp SQLite per test
 frontend/               Vite + React phone UI (owned by the frontend agent)
