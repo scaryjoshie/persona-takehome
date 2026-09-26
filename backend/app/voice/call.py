@@ -25,10 +25,10 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Literal, cast
+from typing import cast
 
 from fastapi import WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent, SpeechPart
 from pydantic_ai.realtime import RealtimeSession, RealtimeTurnCompleteEvent
 from pydantic_ai.realtime.openai_live import (
@@ -50,6 +50,7 @@ from app.users.user import Medium
 from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
+from app.web.protocol import TranscriptPartial
 
 log = logging.getLogger(__name__)
 
@@ -60,19 +61,6 @@ NOW = "Where things stand now:"
 STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
-
-
-class TranscriptPartial(BaseModel):
-    """A live caption: `text` is the turn's full transcript so far (replace, don't append).
-    `final` closes the turn; the VoiceUtterance event with the same turn_id follows."""
-
-    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
-
-    type: Literal["partial"] = "partial"
-    speaker: Speaker
-    turn_id: str
-    text: str
-    final: bool
 
 
 async def run_call(
