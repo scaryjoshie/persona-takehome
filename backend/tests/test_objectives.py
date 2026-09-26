@@ -137,3 +137,9 @@ def test_after_a_question_nothing_gets_pushed() -> None:
 def test_a_task_first_user_is_not_held_up_for_the_agent_name() -> None:
     task_first = situation(user_name="Sam", help_need="landlord won't fix the heater")
     assert open_name(task_first) == "gmail"
+
+
+def test_later_call_notes_carry_no_lines_to_repeat() -> None:
+    first = render(situation(Medium.VOICE), "1", OBJECTIVE_TEXTS)
+    later = render(Situation(Slots(), Medium.VOICE, scripts=False), "1", OBJECTIVE_TEXTS)
+    assert "use this line" in first and "use this line" not in later

@@ -126,7 +126,9 @@ async def run_call(
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
-            transcript = Transcript(phone, pipeline, push, call, Listener(env, call, phone))
+            listener = Listener(env, call, phone)
+            transcript = Transcript(phone, pipeline, push, call, listener)
+            listener.voice_now = transcript.voice_now
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
@@ -237,6 +239,11 @@ class Transcript:
             self._call.said(text)
         if speaker is Speaker.USER or PROMISE.search(text):
             self._listener.heard()
+
+    def voice_now(self) -> str | None:
+        """What the voice is saying right now, before its turn is logged."""
+        opened = self._open.get(Speaker.AGENT)
+        return opened[1].strip() if opened and opened[1].strip() else None
 
     async def finish(self) -> None:
         """The call ended mid-sentence: close those captions and record what was said, so
@@ -365,7 +372,8 @@ class StateNotes:
         self._task: asyncio.Task[None] | None = None
 
     async def send_now(self) -> None:
-        await self._call.send(await self._note(), speak=False)
+        """The first note: the only one with lines to say (updates repeat, lines shouldn't)."""
+        await self._call.send(await self._note(scripts=True), speak=False)
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():
@@ -373,14 +381,14 @@ class StateNotes:
 
     async def _hold_soon(self) -> None:
         await asyncio.sleep(self.SETTLE)
-        note = await self._note()
+        note = await self._note(scripts=False)
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
         await self._call.whisper(note)
 
-    async def _note(self) -> str:
+    async def _note(self, *, scripts: bool) -> str:
         user = await self._pipeline.user(self._phone)
         events = await self._pipeline.history(self._phone, limit=RECENT)
-        stage = guidance(user, events, Medium.VOICE)
+        stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
 
 
@@ -404,6 +412,7 @@ class Listener:
         self._phone = phone
         self._task: asyncio.Task[None] | None = None
         self._again = False
+        self.voice_now: Callable[[], str | None] = lambda: None
 
     def heard(self) -> None:
         if self._task and not self._task.done():
@@ -419,13 +428,16 @@ class Listener:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
                 history = to_model_messages(await pipeline.history(self._phone))
+                instructions = prompts.LISTENER
+                if line := self.voice_now():  # a turn is only logged once the voice finishes
+                    instructions += f'\n\nThe voice is mid-sentence right now, saying: "{line}"'
                 run = agent.run(
                     None,
                     message_history=history,
                     deps=self._env.deps(user, Medium.VOICE, back_office=True),
                     output_type=str,  # plain text: a structured note got answered in prose
                     model=self._env.model,
-                    instructions=prompts.LISTENER,
+                    instructions=instructions,
                     usage_limits=UsageLimits(request_limit=BACK_OFFICE_STEPS),
                 )
                 note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()

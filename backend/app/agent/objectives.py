@@ -50,6 +50,7 @@ class Situation:
     after_call: bool = False  # a call just ended and nothing has been texted since
     they_asked: bool = False  # their latest text is a question: answer first, push nothing
     card_mentioned: bool = False  # the contact card was already pointed out
+    scripts: bool = True  # on a call, only the note at the start carries lines to say
 
 
 @dataclass(frozen=True)
@@ -178,7 +179,8 @@ def _block(
             "They just asked you something: answer that. Bring this step in only if it follows "
             "naturally; otherwise leave it for another message."
         )
-    if script and s.asks == 0 and not s.after_call and not s.they_asked:  # the clean case
+    clean = s.asks == 0 and not s.after_call and not s.they_asked and s.scripts
+    if script and clean:
         fresh = [v for v in variants(script) if _norm(v) not in s.said]
         if not fresh:
             parts.append("You've already asked this in those words; ask differently this time.")
@@ -204,7 +206,12 @@ def _after(objective: Objective, s: Situation) -> Objective | None:
 
 
 def guidance(
-    user: User, events: Sequence[Event], medium: Medium, *, first_reply: bool = False
+    user: User,
+    events: Sequence[Event],
+    medium: Medium,
+    *,
+    first_reply: bool = False,
+    scripts: bool = True,
 ) -> str:
     """The open objective's guidance for this user, from their state and log."""
     s = Situation(
@@ -216,6 +223,7 @@ def guidance(
         after_call=medium is Medium.TEXT and _call_just_ended(events),
         they_asked=medium is Medium.TEXT and "?" in _latest_text(events),
         card_mentioned=_card_mentioned(events),
+        scripts=scripts,
     )
     return render(s, user.phone, OBJECTIVE_TEXTS)
 

@@ -35,6 +35,7 @@ LINES = {
     "bills": "Honestly, I keep forgetting to pay my bills on time.",
     "link": "Sure, text me the link.",
     "done": "Okay, I just connected it.",
+    "rename": "Actually, wait, can you change your name to Nova? N, O, V, A.",
 }
 
 
@@ -128,6 +129,17 @@ SCENARIOS: dict[str, list[str]] = {
         "text:sure call me",
         "accept",
         "say:real",
+        "say:bye",
+        "wait:10",
+    ],
+    "rename_on_call": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "say:yes",
+        "say:rename",
+        "say:siobhan",
         "say:bye",
         "wait:10",
     ],
