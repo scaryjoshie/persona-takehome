@@ -25,6 +25,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from app.agent.events import CallOptOut, Graduated, SlotChanged
+from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.gmail.events import GmailEvent
@@ -34,12 +35,7 @@ from app.voice.call_events import CallEvent, CallTransition
 from app.voice.call_state import CallState
 from app.voice.events import Speaker, VoiceUtterance
 
-PROGRESS = (
-    SlotChanged,
-    GmailEvent,
-    CallOptOut,
-    Graduated,
-)  # a step moved; asks restart
+PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
 
 
 @dataclass(frozen=True)
@@ -191,8 +187,6 @@ def guidance(
     user: User, events: Sequence[Event], medium: Medium, *, first_reply: bool = False
 ) -> str:
     """The open objective's guidance for this user, from their state and log."""
-    from app.agent.prompts import OBJECTIVE_TEXTS
-
     s = Situation(
         slots=user.slots,
         call=user.call,
@@ -234,16 +228,3 @@ def variants(script: str) -> list[str]:
 
 def pick_from(options: Sequence[str], seed: str) -> str:
     return options[zlib.crc32(seed.encode()) % len(options)]
-
-
-def parse(markdown: str) -> dict[str, str]:
-    """Split an objective file into its sections; the untitled top is the key ""."""
-    sections: dict[str, list[str]] = {"": []}
-    key = ""
-    for line in markdown.splitlines():
-        if line.startswith("## "):
-            key = line[3:].strip().lower()
-            sections[key] = []
-        else:
-            sections[key].append(line)
-    return {k: "\n".join(v).strip() for k, v in sections.items()}
