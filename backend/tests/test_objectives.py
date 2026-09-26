@@ -14,8 +14,6 @@ from tests.conftest import ev
 
 
 def situation(medium: Medium = Medium.TEXT, asks: int = 0, **slots: object) -> Situation:
-    """Slots as given; a named agent counts as saved in their contacts unless said otherwise."""
-    slots.setdefault("contact_name", slots.get("agent_name"))
     return Situation(
         slots=Slots(**slots),  # pyright: ignore[reportArgumentType]
         call=CallState(),
@@ -37,9 +35,8 @@ def test_every_objective_has_words_and_no_file_is_orphaned() -> None:
 def test_objectives_open_in_order() -> None:
     assert open_name(Situation(Slots(), CallState(), Medium.TEXT, first_reply=True)) == "opener"
     assert open_name(situation()) == "agent_name"
-    assert open_name(situation(agent_name="Mila", contact_name=None)) == "contact"
-    assert open_name(situation(agent_name="Mila", contact_name=None, asks=1)) == "user_name"
-    assert open_name(situation(agent_name="Mila")) == "user_name"
+    assert open_name(situation(agent_name="Mila")) == "contact"
+    assert open_name(situation(agent_name="Mila", asks=1)) == "user_name"
     assert open_name(situation(agent_name="Mila", user_name="Sam")) == "help_need"
     done = situation(agent_name="M", user_name="S", help_need="x", gmail="skipped")
     assert open_name(done) == "wrap_up"
@@ -52,8 +49,8 @@ def test_objectives_open_in_order() -> None:
 
 
 def test_each_channel_sees_its_own_part() -> None:
-    by_text = render(situation(agent_name="Mila"), "1", OBJECTIVE_TEXTS)
-    on_call = render(situation(Medium.VOICE, agent_name="Mila"), "1", OBJECTIVE_TEXTS)
+    by_text = render(situation(agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
+    on_call = render(situation(Medium.VOICE, agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
     assert "They typed it" in by_text and "texting how you spelled" not in by_text
     assert "texting how you spelled" in on_call and "They typed it" not in on_call
 
@@ -97,8 +94,20 @@ def test_asks_count_agent_turns_since_the_last_saved_step() -> None:
 
 
 def test_on_a_call_the_next_step_comes_along() -> None:
-    on_call = render(situation(Medium.VOICE, agent_name="Mila"), "1", OBJECTIVE_TEXTS)
+    on_call = render(situation(Medium.VOICE, agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
     assert "Right now: their name" in on_call and "Right now: the one thing" in on_call
     assert "(their name)" in on_call  # the name isn't known yet
-    by_text = render(situation(agent_name="Mila"), "1", OBJECTIVE_TEXTS)
+    by_text = render(situation(agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
     assert "Right now: the one thing" not in by_text
+
+
+def test_a_line_already_said_is_not_scripted_again() -> None:
+    lines = [v for v in OBJECTIVE_TEXTS["agent_name"]["script"].splitlines() if v.startswith("- ")]
+    said = tuple(" ".join(v[2:].lower().split())[:60] for v in lines)
+    text = render(Situation(Slots(), CallState(), Medium.TEXT, said=said), "1", OBJECTIVE_TEXTS)
+    assert "ask differently" in text
+
+
+def test_after_a_call_the_text_picks_up_from_it() -> None:
+    after = Situation(Slots(), CallState(), Medium.TEXT, after_call=True)
+    assert "A call just ended" in render(after, "1", OBJECTIVE_TEXTS)

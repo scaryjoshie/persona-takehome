@@ -58,15 +58,15 @@ class ContactCard(Payload):
 
 
 class ContactSaved(Payload):
-    """The user saved the agent's contact card. Sets what their phone calls the agent."""
+    """The user saved the agent's contact card. Sets what their phone calls the agent.
+
+    It happens on their phone, so the agent never learns of it: not routed, not in any
+    prompt. Only the phone's own display uses it."""
 
     kind: Literal["contact_saved"] = "contact_saved"
-    # Routed: saving the card is their answer to "save me", so the agent moves on to their name.
+    routes = False
 
     name: str
-
-    def turn(self, at: datetime) -> Turn | None:
-        return Turn(Role.NOTE, f"they saved your contact as {self.name}")
 
 
 class CallOptOut(Payload):

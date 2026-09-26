@@ -1,7 +1,7 @@
 Right now: your contact card. It just went to their texts with your new name. In one short line, tell them to tap it and save you, so they'll know it's you when you call.
 
 ## by text
-Just that, in its own bubble; don't ask their name in the same message. When they save it or reply, you'll move on.
+Its own bubble, then ask their name in the next bubble. You can't see whether they saved it, so don't ask or check.
 
 ## on a call
 Mention it in passing (they can save it after the call), then ask their name.

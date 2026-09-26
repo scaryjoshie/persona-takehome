@@ -21,12 +21,13 @@ import zlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
-from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
+from app.agent.events import CallOptOut, Graduated, SlotChanged
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.gmail.events import GmailEvent
-from app.text.events import ReplyStarted
+from app.text.events import AgentMessage, ReplyStarted
 from app.users.user import Medium, User
+from app.voice.call_events import CallEvent, CallTransition
 from app.voice.call_state import CallState
 from app.voice.events import Speaker, VoiceUtterance
 
@@ -35,7 +36,6 @@ PROGRESS = (
     GmailEvent,
     CallOptOut,
     Graduated,
-    ContactSaved,
 )  # a step moved; asks restart
 
 
@@ -48,6 +48,8 @@ class Situation:
     medium: Medium
     first_reply: bool = False
     asks: int = 0  # agent turns since onboarding last moved forward
+    said: tuple[str, ...] = ()  # the agent's recent lines, lowercased, so scripts don't repeat
+    after_call: bool = False  # a call just ended and nothing has been texted since
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,9 @@ OBJECTIVES: tuple[Objective, ...] = (
     # moving on. One turn, then it parks whether or not they saved it.
     Objective(
         "contact",
-        done=lambda s: s.slots.contact_name == s.slots.agent_name,
+        # The agent can't see whether they saved it (that's on their phone): one mention,
+        # then it parks, and it's behind them once they've given their own name.
+        done=lambda s: s.slots.user_name is not None,
         max_asks=1,
         scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
     ),
@@ -129,6 +133,11 @@ def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
         return ""
     objective, parked = found
     parts: list[str] = []
+    if s.after_call:
+        parts.append(
+            "A call just ended. Before anything else, pick up from where the call left off, "
+            "the way a person would after hanging up; the step below comes after that."
+        )
     if parked:
         parts.append(
             "You've asked about the earlier step enough for now; leave it and move on. "
@@ -157,10 +166,22 @@ def _block(
     script = sections.get(f"script: {scenario}") if scenario else None
     script = script or sections.get("script")
     if script:
-        line = pick(script, f"{phone}:{objective.name}:{scenario or ''}")
+        fresh = [v for v in variants(script) if _norm(v) not in s.said]
+        if not fresh:
+            parts.append("You've already asked this in those words; ask differently this time.")
+            return parts
+        line = pick_from(fresh, f"{phone}:{objective.name}:{scenario or ''}")
         line = line.replace("[name]", s.slots.user_name or "(their name)")
-        parts.append("Say this, as written, adjusting only to fit what they just said:\n" + line)
+        parts.append(
+            "When you ask this, use this line, fitted naturally to the moment. If something "
+            "else needs handling first (they went off topic, asked you something, a call just "
+            "ended), handle that first and bring this in after:\n" + line
+        )
     return parts
+
+
+def _norm(line: str) -> str:
+    return " ".join(line.lower().replace("[name]", "").split())[:60]
 
 
 def _after(objective: Objective, s: Situation) -> Objective | None:
@@ -180,14 +201,46 @@ def guidance(
         medium=medium,
         first_reply=first_reply,
         asks=asks_since_progress(events),
+        said=tuple(_norm(t) for t in _agent_lines(events)),
+        after_call=medium is Medium.TEXT and _call_just_ended(events),
     )
     return render(s, user.phone, OBJECTIVE_TEXTS)
 
 
+def _agent_lines(events: Sequence[Event]) -> list[str]:
+    out: list[str] = []
+    for event in events:
+        p = event.payload
+        if isinstance(p, AgentMessage) or (
+            isinstance(p, VoiceUtterance) and p.speaker is Speaker.AGENT and p.text
+        ):
+            out.append(p.text or "")
+    return out
+
+
+def _call_just_ended(events: Sequence[Event]) -> bool:
+    """The latest call event is its end, and nothing was texted to them after it."""
+    for event in reversed(events):
+        p = event.payload
+        if isinstance(p, AgentMessage):
+            return False
+        if isinstance(p, CallEvent):
+            return p.transition is CallTransition.ENDED
+    return False
+
+
+def variants(script: str) -> list[str]:
+    """A script's variants: one per `- ` bullet."""
+    return [ln[2:].strip() for ln in script.splitlines() if ln.startswith("- ")] or [script]
+
+
 def pick(script: str, seed: str) -> str:
-    """One variant (a `- ` bullet) per seed, stable across runs."""
-    variants = [ln[2:].strip() for ln in script.splitlines() if ln.startswith("- ")] or [script]
-    return variants[zlib.crc32(seed.encode()) % len(variants)]
+    """One variant per seed, stable across runs."""
+    return pick_from(variants(script), seed)
+
+
+def pick_from(options: Sequence[str], seed: str) -> str:
+    return options[zlib.crc32(seed.encode()) % len(options)]
 
 
 def parse(markdown: str) -> dict[str, str]:

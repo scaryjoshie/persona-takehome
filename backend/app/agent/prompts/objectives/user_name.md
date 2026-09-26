@@ -4,4 +4,4 @@ Right now: their name.
 They typed it, so just use it; no spelling check.
 
 ## on a call
-Check the spelling: say an easy one back, and for an unusual one say you're texting how you spelled it so they can fix it.
+You only heard it, so check the spelling unless it's completely obvious (Sam, Mike): for a common name, spell it back and ask ("J-O-N, right?"); for anything unusual, say you're texting how you spelled it so they can fix it (something like: texting you how i spelled that, fix it if i butchered it).

@@ -57,7 +57,7 @@ SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 # An agent turn wakes the back office only if it may have promised something a tool does.
 PROMISE = re.compile(r"\b(text|texting|texted|send|sending|link|spell|spelled|bye|goodbye)\b", re.I)
 NOW = "Where things stand now:"
-STATE_KINDS = {"slot_changed", "gmail", "contact_saved", "call_opt_out", "graduated"}
+STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
@@ -238,9 +238,16 @@ class Transcript:
             self._listener.heard()
 
     async def finish(self) -> None:
-        """The call ended: close captions cut off mid-sentence."""
-        for speaker, (turn_id, text) in self._open.items():
+        """The call ended mid-sentence: close those captions and record what was said, so
+        the text side knows (the voice may have been halfway through something)."""
+        for speaker, (turn_id, text) in list(self._open.items()):
             await self._show(speaker, turn_id, text, final=True)
+            if text.strip():
+                cut = VoiceUtterance(
+                    speaker=speaker, text=f"{text.strip()}... (cut off)", turn_id=turn_id
+                )
+                await self._pipeline.submit(self._phone, Origin.VOICE_AGENT, Channel.VOICE, cut)
+        self._open.clear()
 
     async def _show(self, speaker: Speaker, turn_id: str, text: str, *, final: bool) -> None:
         partial = TranscriptPartial(speaker=speaker, turn_id=turn_id, text=text, final=final)
