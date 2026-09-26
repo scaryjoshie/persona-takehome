@@ -19,6 +19,7 @@ import { SCREEN } from "./IPhone17Pro";
 import { LinkPreview } from "./LinkPreview";
 import { VoiceNoteBubble, type VoiceNote } from "./VoiceNoteBubble";
 import { ReactionBadges, TapbackMenu, type Reaction } from "./Tapback";
+import { ContactBanner, ContactCardBubble } from "./ContactCard";
 import { useLongPress } from "../../lib/useLongPress";
 import { LiveWaveform } from "../ui/live-waveform";
 import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
@@ -39,6 +40,8 @@ export interface ThreadMessage {
   reactions?: Reaction[];
   /** The message this one replies to, shown faded above it. */
   replyTo?: Pick<ThreadMessage, "id" | "side" | "text">;
+  /** Set for the agent's contact card attachment. */
+  contact?: { name: string };
 }
 
 interface Props {
@@ -60,6 +63,9 @@ interface Props {
   onSendVoiceNote?: (recording: Recording) => void;
   /** Sets (or with `null` removes) the user's tapback on a message. */
   onReact?: (messageId: string, emoji: string | null) => void;
+  /** A contact name the user has not saved yet; shows the "updated their name" banner. */
+  contactOffer?: string | null;
+  onSaveContact?: () => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -75,6 +81,8 @@ export function MessagesScreen({
   onTyping,
   onSendVoiceNote,
   onReact,
+  contactOffer = null,
+  onSaveContact,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
@@ -132,7 +140,9 @@ export function MessagesScreen({
           <Navbar>
             <NavLeft backLink />
             <NavTitle>
-              <div className="contact-avatar">{contact.slice(0, 1)}</div>
+              <div className="contact-avatar">
+                {/^[a-z]/i.test(contact) ? contact.slice(0, 1).toUpperCase() : <Icon f7="person_fill" />}
+              </div>
               <div className="contact-name">
                 {contact} <Icon f7="chevron_right" />
               </div>
@@ -224,7 +234,9 @@ export function MessagesScreen({
                   last={last}
                   tail={last && !b.link}
                   footer={footer}
-                  className={b.link ? "message-link" : b.voice ? "message-voice" : undefined}
+                  className={
+                    b.link ? "message-link" : b.voice ? "message-voice" : b.contact ? "message-contact" : undefined
+                  }
                 >
                   {b.key === b.messageId && message.replyTo && (
                     <span slot="header" className={`reply-quote reply-quote-${message.replyTo.side}`}>
@@ -235,7 +247,13 @@ export function MessagesScreen({
                     <ReactionBadges slot="content-start" reactions={message.reactions} side={b.side} />
                   )}
                   <PressableText slot="text" onPress={press(message)}>
-                    {b.voice ? (
+                    {b.contact ? (
+                      <ContactCardBubble
+                        name={b.contact.name}
+                        saved={contactOffer !== b.contact.name}
+                        onSave={onSaveContact}
+                      />
+                    ) : b.voice ? (
                       <VoiceNoteBubble note={b.voice} />
                     ) : b.link ? (
                       <LinkPreview url={b.link} />
@@ -257,6 +275,7 @@ export function MessagesScreen({
           </Scaled>
         </div>
       )}
+      {contactOffer && onSaveContact && <ContactBanner name={contactOffer} onUpdate={onSaveContact} />}
       {pressed && rootRef.current && (
         <TapbackMenu
           target={pressed.target}
@@ -382,6 +401,7 @@ interface Bubble {
   /** Set for a link card. */
   link?: string;
   voice?: VoiceNote;
+  contact?: { name: string };
 }
 
 /** As in Messages: a lone link becomes a card; text with a link shows the text, then the card. */
@@ -389,6 +409,7 @@ function bubblesFor(messages: ThreadMessage[]): Bubble[] {
   return messages.flatMap((m): Bubble[] => {
     const base = { messageId: m.id, side: m.side, text: m.text };
     if (m.voice) return [{ ...base, key: m.id, voice: m.voice }];
+    if (m.contact) return [{ ...base, key: m.id, contact: m.contact }];
     const link = firstLink(m.text);
     if (!link) return [{ ...base, key: m.id }];
     if (isOnlyLink(m.text)) return [{ ...base, key: m.id, link }];

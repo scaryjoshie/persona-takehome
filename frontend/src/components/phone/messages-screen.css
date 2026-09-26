@@ -550,3 +550,88 @@
 .messages-screen .message-received.message-link .message-bubble {
   margin-left: 6px;
 }
+
+/* Contact card attachment: a grey card inside the received bubble. */
+.messages-screen .message-contact .message-bubble {
+  padding: 0;
+  overflow: hidden;
+}
+.messages-screen .contact-card {
+  display: flex;
+  width: 230px;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  text-align: left;
+}
+.messages-screen .contact-card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+}
+.messages-screen .contact-card-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(#a5abb8, #858994);
+  color: #fff;
+  font-weight: 500;
+}
+.messages-screen .contact-card-name {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+}
+.messages-screen .contact-card-chevron {
+  font-size: 14px;
+  opacity: 0.45;
+}
+.messages-screen .contact-card-action {
+  padding: 9px 16px 10px;
+  border-top: 0.5px solid rgba(84, 84, 88, 0.65);
+  color: #0a84ff;
+  font-size: 15px;
+  text-align: center;
+}
+.messages-screen .contact-card:disabled .contact-card-action {
+  color: rgba(235, 235, 245, 0.45);
+}
+/* "<name> updated their name · Update", pinned under the header. */
+.messages-screen .contact-banner {
+  position: absolute;
+  top: 136px;
+  right: 12px;
+  left: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 16px;
+  background: rgba(44, 44, 46, 0.94);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  animation: tapback-pop 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.messages-screen .contact-banner-text {
+  flex: 1;
+  font-size: 14px;
+  color: rgba(235, 235, 245, 0.85);
+}
+.messages-screen .contact-banner button {
+  width: auto;
+  flex: none;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #0a84ff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}

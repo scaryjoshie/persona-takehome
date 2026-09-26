@@ -21,8 +21,8 @@ import { play } from "./lib/sounds";
 /** `?mock` runs the UI against an offline stand-in instead of the backend. */
 const MOCK = new URLSearchParams(location.search).has("mock");
 
-// Until the agent names itself in the conversation, the contact is just the product.
-const DEFAULT_CONTACT = "Persona";
+/** What the header shows before the user saves the agent's contact. The agent has no real number. */
+const AGENT_NUMBER = "(415) 555-0100";
 
 /** What Persona suggests a new user send first; it waits in the composer. */
 const FIRST_MESSAGE = "Hey, what's a Persona?";
@@ -91,7 +91,8 @@ interface StageViewProps {
 
 /** The phone and the orb, rendering one conversation. */
 function StageView({ conversation: c, isNew = false, entered = false }: StageViewProps) {
-  const contact = c.agentName ?? DEFAULT_CONTACT;
+  // Like a real phone, the thread shows the agent's number until the user saves its contact.
+  const contact = c.contactName ?? AGENT_NUMBER;
   const [scale, setScale] = useState(fitScale);
   const [expanded, setExpanded] = useState(false);
   const active = c.callPhase === "active";
@@ -154,6 +155,8 @@ function StageView({ conversation: c, isNew = false, entered = false }: StageVie
               onSend={c.send}
               onSendVoiceNote={c.sendVoiceNote}
               onReact={c.react}
+              contactOffer={c.contactOffer}
+              onSaveContact={c.saveContact}
               onTyping={c.setTyping}
               onCall={c.startCall}
               initialDraft={isNew ? FIRST_MESSAGE : ""}

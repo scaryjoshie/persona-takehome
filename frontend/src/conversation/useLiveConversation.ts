@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Snapshot } from "../types";
 import type { Transport } from "../transport/types";
 import { useSession } from "../state/session";
-import { receiptLabel, threadMessages, transcriptLines } from "../state/derive";
+import { contactOffer, receiptLabel, threadMessages, transcriptLines } from "../state/derive";
 import { useCallAudio } from "../audio/useCallAudio";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { Conversation } from "./types";
@@ -31,8 +31,14 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   else if (call.phase === "connecting") callPhase = "calling";
   else if (call.phase === "connected") callPhase = "active";
 
+  // slots.contact_name is announced by the backend but not in the schema yet.
+  const contactName = (state.slots as { contact_name?: string | null }).contact_name ?? null;
+
   return {
     agentName: state.slots.agent_name,
+    contactName,
+    contactOffer: contactOffer(events, contactName),
+    saveContact: () => transport.send({ type: "contact", action: "save" }),
     messages,
     receipt,
     agentTyping: state.agentTyping,

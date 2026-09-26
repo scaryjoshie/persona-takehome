@@ -1,6 +1,6 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import type { ReactionPayload, TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
+import type { ContactCardPayload, ReactionPayload, TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
 import type { Reaction } from "../components/phone/Tapback";
 
 /** The texts in both directions, as the phone shows them, with their tapbacks. */
@@ -34,11 +34,13 @@ function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
 /** Each thread message, with the id of the message it replies to (reply_to is not in the schema yet). */
 function messagesOf(events: WireEvent[]): Array<ThreadMessage & { replyToId?: string }> {
   return events.flatMap((e): Array<ThreadMessage & { replyToId?: string }> => {
-    const p = e.payload as WireEvent["payload"] | VoiceNotePayload;
+    const p = e.payload as WireEvent["payload"] | VoiceNotePayload | ContactCardPayload;
     if (p.kind === "voice_note") {
       const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms, transcript: p.transcript };
       return [{ id: String(e.seq), side: "sent", text: "", ts: e.ts, voice, audioId: p.audio_id }];
     }
+    if (p.kind === "contact_card")
+      return [{ id: String(e.seq), side: "received", text: p.name, ts: e.ts, contact: { name: p.name } }];
     const reply = (p as { reply_to?: number | null }).reply_to;
     const replyToId = reply == null ? undefined : String(reply);
     if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts, replyToId }];
@@ -112,4 +114,11 @@ export function receiptLabel(events: WireEvent[]): string {
 
 export function voiceNoteUrl(audioId: string): string {
   return `/api/voice-note/${encodeURIComponent(audioId)}`;
+}
+
+/** The name on the agent's latest contact card, if the user has not saved that name yet. */
+export function contactOffer(events: WireEvent[], savedName: string | null): string | null {
+  const card = events.findLast((e) => (e.payload as { kind: string }).kind === "contact_card");
+  const name = card && (card.payload as unknown as ContactCardPayload).name;
+  return name && name !== savedName ? name : null;
 }

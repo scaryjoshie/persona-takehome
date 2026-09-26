@@ -28,6 +28,7 @@ interface MockCall {
  */
 export function useMockConversation(): Conversation {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const [contactName, setContactName] = useState<string | null>(null);
   const autoplay = messages.length > 0;
   const [typing, setTyping] = useState(false);
   const [call, setCall] = useState<MockCall | null>(null);
@@ -151,13 +152,24 @@ export function useMockConversation(): Conversation {
       text,
       messages.find((m) => m.id === replyTo),
     );
+    if (!first && !messages.some((m) => m.contact)) {
+      // The second thing a new user sends names the agent here; it replies with its contact card.
+      setTimeout(() => agentSays(`${AGENT_NAME} it is.`), 600);
+      const card = { id: nextId(), side: "received" as const, text: AGENT_NAME, contact: { name: AGENT_NAME } };
+      setTimeout(() => setMessages((m) => [...m, { ...card, ts: new Date().toISOString() }]), 2000);
+      return;
+    }
     if (!first) return void setTimeout(() => agentSays(), 600);
     setTimeout(() => react(id, "❤️", "agent"), 900);
     INTRO.forEach((line, i) => setTimeout(() => agentSays(line), 600 + i * 1600));
   };
 
+  const offered = messages.findLast((m) => m.contact)?.contact?.name ?? null;
   return {
     agentName: AGENT_NAME,
+    contactName,
+    contactOffer: offered && offered !== contactName ? offered : null,
+    saveContact: () => setContactName(offered),
     messages,
     receipt: "Delivered",
     agentTyping: typing,

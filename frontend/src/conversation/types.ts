@@ -7,6 +7,11 @@ import type { Recording } from "../audio/useVoiceRecorder";
 export interface Conversation {
   /** What the user named the agent, once they have. */
   agentName: string | null;
+  /** The name the user saved the agent's contact under; until then the header shows its number. */
+  contactName: string | null;
+  /** A contact card name the user has not saved yet: drives the "updated their name" banner. */
+  contactOffer: string | null;
+  saveContact: () => void;
   messages: ThreadMessage[];
   /** Under the user's latest text while it is the last in the thread: "Delivered" or "Read 9:41 AM". */
   receipt: string;
@@ -37,6 +42,9 @@ const noop = () => {};
 /** The stage behind the phone-number screen: an empty phone, nothing happening. */
 export const IDLE_CONVERSATION: Conversation = {
   agentName: null,
+  contactName: null,
+  contactOffer: null,
+  saveContact: noop,
   messages: [],
   receipt: "Delivered",
   agentTyping: false,

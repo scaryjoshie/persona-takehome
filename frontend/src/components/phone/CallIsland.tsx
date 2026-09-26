@@ -1,4 +1,4 @@
-import { Phone, PhoneOff, Volume2 } from "lucide-react";
+import { Phone, PhoneOff, User, Volume2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { DynamicIsland, DynamicIslandView } from "@/components/ui/dynamic-island";
 
@@ -30,7 +30,7 @@ function Avatar({ name, size = 28 }: { name: string; size?: number }) {
       className="inline-flex items-center justify-center rounded-full bg-gradient-to-b from-[#a5abb8] to-[#858994] font-medium text-white"
       style={{ width: size, height: size, fontSize: size * 0.5 }}
     >
-      {name.slice(0, 1)}
+      {/^[a-z]/i.test(name) ? name.slice(0, 1).toUpperCase() : <User className="h-1/2 w-1/2" fill="currentColor" />}
     </span>
   );
 }

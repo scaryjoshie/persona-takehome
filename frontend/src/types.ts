@@ -39,3 +39,21 @@ export interface ReplyMessage {
   text: string;
   reply_to: number;
 }
+
+/** The agent's contact card, sent when its name is set or changed. Not in the schema yet. */
+export interface ContactCardPayload {
+  kind: "contact_card";
+  name: string;
+}
+
+/** The user saved the agent's contact under `name`. Not in the schema yet. */
+export interface ContactSavedPayload {
+  kind: "contact_saved";
+  name: string;
+}
+
+/** The user tapped Update on the contact banner or card. Not in the schema yet. */
+export interface ContactMessage {
+  type: "contact";
+  action: "save";
+}
