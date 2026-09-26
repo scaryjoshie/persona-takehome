@@ -132,6 +132,7 @@ export function useMockConversation(): Conversation {
   return {
     agentName: AGENT_NAME,
     messages,
+    receipt: "Delivered",
     agentTyping: typing,
     callPhase: call?.phase ?? null,
     callStartedAt: call?.startedAt ?? null,

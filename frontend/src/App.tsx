@@ -149,6 +149,7 @@ function StageView({ conversation: c, isNew = false, entered = false }: StageVie
             <MessagesScreen
               contact={contact}
               messages={c.messages}
+              receipt={c.receipt}
               typing={c.agentTyping}
               onSend={c.send}
               onTyping={c.setTyping}

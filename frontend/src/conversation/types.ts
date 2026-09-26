@@ -7,6 +7,8 @@ export interface Conversation {
   /** What the user named the agent, once they have. */
   agentName: string | null;
   messages: ThreadMessage[];
+  /** Under the user's latest text while it is the last in the thread: "Delivered" or "Read 9:41 AM". */
+  receipt: string;
   agentTyping: boolean;
   /** `null` when there is no call. */
   callPhase: CallPhase | null;
@@ -31,6 +33,7 @@ const noop = () => {};
 export const IDLE_CONVERSATION: Conversation = {
   agentName: null,
   messages: [],
+  receipt: "Delivered",
   agentTyping: false,
   callPhase: null,
   callStartedAt: null,

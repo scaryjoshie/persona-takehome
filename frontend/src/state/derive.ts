@@ -59,3 +59,18 @@ export function transcriptLines(
 export function isNewUser(events: WireEvent[]): boolean {
   return !events.some((e) => e.payload.kind === "user_message");
 }
+
+/**
+ * The label under the user's latest text: "Read 9:41 AM" once the agent has started a reply that
+ * covers it (a reply_started event through that message), otherwise "Delivered".
+ */
+export function receiptLabel(events: WireEvent[]): string {
+  const lastSent = events.findLast((e) => e.payload.kind === "user_message");
+  if (!lastSent) return "Delivered";
+  const read = events.find(
+    (e) => e.seq > lastSent.seq && e.payload.kind === "reply_started" && e.payload.through_seq >= lastSent.seq,
+  );
+  if (!read) return "Delivered";
+  const time = new Date(read.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return `Read ${time}`;
+}

@@ -29,6 +29,8 @@ export interface ThreadMessage {
 interface Props {
   contact: string;
   messages: ThreadMessage[];
+  /** Shown under the user's latest text while it ends the thread. */
+  receipt?: string;
   typing?: boolean;
   keyboard?: boolean;
   onSend?: (text: string) => void;
@@ -44,6 +46,7 @@ interface Props {
 export function MessagesScreen({
   contact,
   messages,
+  receipt = "Delivered",
   typing = false,
   keyboard = false,
   onSend,
@@ -110,7 +113,7 @@ export function MessagesScreen({
             {bubblesFor(messages).map((b, i, all) => {
               const first = all[i - 1]?.side !== b.side;
               const last = all[i + 1]?.side !== b.side;
-              const footer = endsSent && b.messageId === lastSentId && last ? "Delivered" : undefined;
+              const footer = endsSent && b.messageId === lastSentId && last ? receipt : undefined;
               return (
                 <Message
                   key={b.key}

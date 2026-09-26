@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Snapshot } from "../types";
 import type { Transport } from "../transport/types";
 import { useSession } from "../state/session";
-import { threadMessages, transcriptLines } from "../state/derive";
+import { receiptLabel, threadMessages, transcriptLines } from "../state/derive";
 import { useCallAudio } from "../audio/useCallAudio";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { Conversation } from "./types";
@@ -14,6 +14,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   const { call, events, partials } = state;
 
   const messages = useMemo(() => threadMessages(events), [events]);
+  const receipt = useMemo(() => receiptLabel(events), [events]);
   const transcript = useMemo(() => transcriptLines(events, partials), [events, partials]);
 
   // The island's phases: the agent ringing us, us dialing (or audio coming up), and connected.
@@ -25,6 +26,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   return {
     agentName: state.slots.agent_name,
     messages,
+    receipt,
     agentTyping: state.agentTyping,
     callPhase,
     callStartedAt: call.started_at ? Date.parse(call.started_at) : null,
