@@ -24,8 +24,8 @@ backend/app/
   text/     events.py (UserMessage, AgentMessage, Typing)  responder.py (waits for the user to finish, runs one reply, can cancel)
             reply.py (one agent run + bubble delivery)  messenger.py (outbound port)
   voice/    events.py (VoiceUtterance)  responder.py (forwards events into the call as notes)   [+ session.py in slice 3]
-  routing/  __init__.py (glossary: floor, responder, run, verb, filter, decision)  types.py  responder.py (abstract base)
-            filter.py (fixed verb or decider)  router.py (pure)
+  routing/  __init__.py (glossary)  types.py  responder.py (abstract base)  deciders/ (Jev client, defaults table)
+            route.py (one function: pick the responder, start or decide a verb, apply it)
   agent/    agent.py (the shared pydantic-ai agent + tools)  deps.py  prompts.py + prompts/*.md
             context.py (renders the log for a model)  call_notes.py (how a text event is worded on a call)
             slots.py (Slots)  events.py (SlotChanged, ToolCall, Graduated)  model.py (the agent's model from settings)

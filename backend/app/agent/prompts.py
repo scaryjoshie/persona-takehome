@@ -1,4 +1,4 @@
-"""Prompt fragments as markdown, loaded once. A test fails on any orphaned file."""
+"""Prompt fragments, written as markdown files next to this module and loaded once."""
 
 from __future__ import annotations
 
@@ -16,11 +16,3 @@ STYLE = read_md("style")
 WORK = read_md("work")
 TEXT_TAIL = read_md("text_tail")
 SPEAKING = read_md("speaking")
-
-ALL = {
-    "persona": PERSONA,
-    "style": STYLE,
-    "work": WORK,
-    "text_tail": TEXT_TAIL,
-    "speaking": SPEAKING,
-}

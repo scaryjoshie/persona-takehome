@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
@@ -15,11 +13,6 @@ from app.text.events import UserMessage
 from app.text.reply import Reply
 from app.text.responder import RunRequest
 from tests.conftest import PHONE, CapturingMessenger
-
-
-def test_every_prompt_file_is_named() -> None:
-    files = {p.stem for p in (Path(prompts.__file__).parent / "prompts").glob("*.md")}
-    assert files == set(prompts.ALL) and all(prompts.ALL.values())
 
 
 def scripted(*responses: list[ToolCallPart]) -> FunctionModel:

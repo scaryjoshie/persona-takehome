@@ -17,7 +17,7 @@ from app.database import SessionFactory
 from app.events import service as events
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.routing.router import Router
+from app.routing.route import route as route_event
 from app.users import service as users
 from app.users.live import LiveUsers
 from app.users.user import User
@@ -32,14 +32,12 @@ class Actions:
         self,
         db: SessionFactory,
         live_users: LiveUsers,
-        router: Router,
         *,
         payloads: TypeAdapter[Payload],
         clock: Callable[[], datetime],
     ) -> None:
         self._db = db
         self._live_users = live_users
-        self._router = router
         self._payloads = payloads
         self._clock = clock
 
@@ -90,7 +88,7 @@ class Actions:
             if payload.persists:
                 await rt.publish(event)
             if route if route is not None else payload.should_route():
-                decision = await self._router.route(rt.responders, user, event, recent)
+                decision = await route_event(event, user, rt.responders, recent, self._clock)
                 async with self._db() as s, s.begin():
                     logged = await events.append(
                         s, phone, Origin.SYSTEM, Channel.SYSTEM, decision, ts=self._clock()

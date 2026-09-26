@@ -21,7 +21,6 @@ from app.database import SessionFactory, utc_now
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
 from app.routing.responder import Responder
-from app.routing.router import Router
 from app.routing.types import Decision, Medium
 from app.text.decider import text_decider
 from app.text.events import AgentMessage, Typing, UserMessage
@@ -78,7 +77,6 @@ def build_app(
     timers: Timers | None = None,
     clock: Callable[[], datetime] = utc_now,
 ) -> App:
-    router = Router(clock=clock)
     holder: list[Actions] = []
 
     def make_live_user(phone: str) -> LiveUser:
@@ -108,6 +106,6 @@ def build_app(
         return live
 
     live_users = LiveUsers(make_live_user)
-    actions = Actions(db, live_users, router, payloads=PAYLOADS, clock=clock)
+    actions = Actions(db, live_users, payloads=PAYLOADS, clock=clock)
     holder.append(actions)
     return App(actions=actions, live_users=live_users)
