@@ -9,6 +9,7 @@ words in prompts/objectives/<name>.md:
     ## by text        shown only by text
     ## on a call      shown only on a call
     ## script         lines to say; code picks one per user
+    ## <scenario>     shown when that scenario applies
     ## script: <scenario>   lines for a named scenario, used instead of `script`
     ## angle         directions (not lines) for steps that depend on them; one per user
 
@@ -29,12 +30,13 @@ from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
 from app.events.event import Event
-from app.google.events import GmailEvent
+from app.google.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
 
+DECIDED = (GmailPhase.CONNECTED, GmailPhase.SKIPPED, GmailPhase.DISCONNECTED)
 PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
 
 
@@ -93,8 +95,15 @@ OBJECTIVES: tuple[Objective, ...] = (
     ),
     Objective("user_name", done=lambda s: s.slots.user_name is not None),
     # Asks count from the last saved step, so these count only their own turns.
-    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=3),
-    Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
+    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=2),
+    # Gmail is a goal, not an extra: done only once it's connected or they've said no. A
+    # link that went out but never connected gets a light check-in, then it parks.
+    Objective(
+        "gmail",
+        done=lambda s: s.slots.gmail in DECIDED,
+        max_asks=4,
+        scenarios=(("link sent", lambda s: s.slots.gmail is GmailPhase.LINK_SENT),),
+    ),
     Objective("wrap_up", done=lambda s: s.slots.graduated),
 )
 
@@ -172,6 +181,8 @@ def _block(
         angle = pick_from(variants(sections["angle"]), f"{phone}:{objective.name}:angle")
         parts.append(f"Your angle for this, in your own words: {angle}")
     scenario = objective.scenario(s)
+    if scenario and scenario in sections:  # what to do differently in this situation
+        parts.append(sections[scenario])
     script = sections.get(f"script: {scenario}") if scenario else None
     script = script or sections.get("script")
     if s.they_asked:

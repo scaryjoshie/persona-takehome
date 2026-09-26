@@ -72,7 +72,7 @@ def test_the_name_goes_into_the_script() -> None:
 
 
 def test_a_step_that_keeps_stalling_is_parked() -> None:
-    stuck = situation(agent_name="M", user_name="S", asks=3)
+    stuck = situation(agent_name="M", user_name="S", asks=2)
     assert open_name(stuck) == "gmail"
     assert "move on" in render(stuck, "1", OBJECTIVE_TEXTS)
     assert open_name(situation(agent_name="M", user_name="S", asks=6)) == "wrap_up"
@@ -143,3 +143,11 @@ def test_later_call_notes_carry_no_lines_to_repeat() -> None:
     first = render(situation(Medium.VOICE), "1", OBJECTIVE_TEXTS)
     later = render(Situation(Slots(), Medium.VOICE, scripts=False), "1", OBJECTIVE_TEXTS)
     assert "use this line" in first and "use this line" not in later
+
+
+def test_gmail_stays_open_until_connected_or_declined() -> None:
+    sent = situation(agent_name="M", user_name="S", help_need="bills", gmail="link_sent")
+    assert open_name(sent) == "gmail"
+    assert "already texted the link" in render(sent, "1", OBJECTIVE_TEXTS)
+    no = situation(agent_name="M", user_name="S", help_need="bills", gmail="skipped")
+    assert open_name(no) == "wrap_up"

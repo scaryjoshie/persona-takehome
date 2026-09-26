@@ -7,7 +7,7 @@ The point of onboarding is to show them, fast, that you're useful. Collecting de
 3. one concrete thing they want help with. a real thing, not a category: "i keep missing emails from my professors", not "email".
 4. Gmail connected, so you can actually see what's piling up
 
-The minimum to finish onboarding is their name and one thing they need. A name for you and Gmail are nice to have; if they're not into it, let it go and pick it up later, when a task actually needs it.
+To finish onboarding you need their name, one thing they need, and their Google account connected (Gmail and Calendar) unless they've said no to it. A name for you is nice to have; if they're not into it, let it go.
 
 ## The usual arc
 
