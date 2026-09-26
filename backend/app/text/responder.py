@@ -18,7 +18,7 @@ from app.jev import Jev
 from app.pipeline import Context
 from app.text.events import ReplyDue, ReplyStarted, UserMessage
 from app.text.reply import Replier
-from app.text.timing import Timing, delay, waiting
+from app.text.timing import delay, waiting
 from app.users.user import User
 
 FINISHED_QUESTION = (
@@ -29,13 +29,14 @@ FINISHED_QUESTION = (
 # 0.35–0.50; complete asks ("call me Sam", "what can you do?") 0.80–0.91.
 MID_THOUGHT_BELOW = 0.25
 FINISHED_ABOVE = 0.8  # clearly complete: answer without waiting out the quiet window
+EARLY_LOOK = 0.4  # with Jev: first check this soon, to answer finished texts early
+UNFINISHED_EXTEND = 4.0  # Jev may hold off this long past the last message
 
 
 class TextResponder:
-    def __init__(self, replier: Replier, *, jev: Jev | None = None, timing: Timing | None = None):
+    def __init__(self, replier: Replier, *, jev: Jev | None = None):
         self._replier = replier
         self._jev = jev
-        self._timing = timing or Timing()
 
     async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
         if not isinstance(event.payload, ReplyDue):
@@ -46,9 +47,9 @@ class TextResponder:
         pending = waiting(ctx.recent)
         if not pending:
             return Decision(trigger_kind=event.kind, verb="ignore", note="nothing waiting")
-        seconds = delay(pending, user.typing_since, ctx.pipeline.now(), self._timing)
+        seconds = delay(pending, user.typing_since, ctx.pipeline.now())
         if self._may_answer_early(pending, user):
-            seconds = min(seconds, self._timing.early_look)
+            seconds = min(seconds, EARLY_LOOK)
         ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
         return Decision(trigger_kind=event.kind, verb="schedule", note=f"check in {seconds:.1f}s")
 
@@ -57,7 +58,7 @@ class TextResponder:
         if not pending:
             return None  # an earlier check already started the reply
         now = ctx.pipeline.now()
-        seconds = delay(pending, user.typing_since, now, self._timing)
+        seconds = delay(pending, user.typing_since, now)
         last = pending[-1]
         since_last = (now - last.ts).total_seconds()
         if seconds > 0.05 and self._jev is not None and self._may_answer_early(pending, user):
@@ -75,7 +76,7 @@ class TextResponder:
         if (
             self._jev is not None
             and isinstance(last.payload, UserMessage)
-            and since_last < self._timing.unfinished_extend
+            and since_last < UNFINISHED_EXTEND
         ):
             finished = await self._jev.yes_probability(FINISHED_QUESTION, _state(ctx))
             if finished is not None and finished < MID_THOUGHT_BELOW:
