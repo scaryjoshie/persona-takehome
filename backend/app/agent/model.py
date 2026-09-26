@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIResponsesModel
+from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.realtime.openai_live import OpenAILiveModel, OpenAILiveModelSettings
 
@@ -18,7 +18,11 @@ def _provider(settings: Settings) -> OpenAIProvider:
 
 def text_model(settings: Settings) -> Model:
     return OpenAIResponsesModel(
-        settings.agent_model.removeprefix("openai:"), provider=_provider(settings)
+        settings.agent_model.removeprefix("openai:"),
+        provider=_provider(settings),
+        settings=OpenAIResponsesModelSettings(
+            openai_reasoning_effort=settings.agent_reasoning_effort  # pyright: ignore[reportArgumentType]
+        ),
     )
 
 
