@@ -2,12 +2,17 @@ import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
 import type { TranscriptPartial, WireEvent } from "../types";
 import type { Reaction } from "../components/phone/Tapback";
-import type { Draft } from "../components/phone/EmailDraftCard";
 
-/** The texts in both directions, as the phone shows them, with their tapbacks and quoted replies. */
-export function threadMessages(events: WireEvent[]): ThreadMessage[] {
+/**
+ * The texts in both directions, as the phone shows them, with their tapbacks and quoted replies.
+ * `draftImage` gives the picture of an email draft version, since a phone receives drafts as images.
+ */
+export function threadMessages(
+  events: WireEvent[],
+  draftImage: (ref: string, version: number) => string,
+): ThreadMessage[] {
   const reactions = reactionsBySeq(events);
-  const messages = messagesOf(events);
+  const messages = messagesOf(events, draftImage);
   const byId = new Map(messages.map((m) => [m.id, m]));
   return messages.map(({ replyToId, replyToText, ...m }) => {
     const original = replyToId ? byId.get(replyToId) : undefined;
@@ -36,12 +41,7 @@ function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
 type Unresolved = ThreadMessage & { replyToId?: string; replyToText?: string | null };
 
 /** Each thread message, with the id (and text) of the message it replies to, resolved afterwards. */
-function messagesOf(events: WireEvent[]): Unresolved[] {
-  // An email draft is re-posted on every edit under the same ref: show one card per ref, where the
-  // first version appeared, with the latest version's contents.
-  const latestDraft = new Map<string, Draft>();
-  for (const e of events) if (e.payload.kind === "email_draft") latestDraft.set(e.payload.ref, e.payload);
-  const placed = new Set<string>();
+function messagesOf(events: WireEvent[], draftImage: (ref: string, version: number) => string): Unresolved[] {
   return events.flatMap((e): Unresolved[] => {
     const p = e.payload;
     const base = { id: String(e.seq), ts: e.ts };
@@ -54,12 +54,18 @@ function messagesOf(events: WireEvent[]): Unresolved[] {
         const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms ?? 0, transcript: p.transcript };
         return [{ ...base, side: "sent", text: "", voice, audioId: p.audio_id }];
       }
-      case "email_draft": {
-        if (placed.has(p.ref)) return [];
-        placed.add(p.ref);
-        const draft = latestDraft.get(p.ref)!;
-        return [{ ...base, side: "received", text: draft.subject || "Email draft", draft }];
-      }
+      case "email_draft":
+        // Every version arrives as its own picture, like an updated screenshot; texts can't be
+        // edited. The agent confirms a sent email by text, so sent versions show nothing.
+        if (p.status !== "draft") return [];
+        return [
+          {
+            ...base,
+            side: "received",
+            text: "Email draft",
+            image: { src: draftImage(p.ref, e.seq), alt: `Email draft: ${p.subject || "no subject"}` },
+          },
+        ];
       case "contact_card":
         return [{ ...base, side: "received", text: p.name, contact: { name: p.name } }];
       default:

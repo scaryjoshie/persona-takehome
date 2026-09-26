@@ -22,6 +22,8 @@ export interface Transport {
   openAudio(): AudioLink;
   /** Uploads a recorded audio message; resolves with its id. Transcription follows as an event. */
   uploadVoiceNote(audio: Blob, durationMs: number): Promise<string>;
+  /** The picture of one version of an email draft, as the phone receives it. */
+  draftImageUrl(ref: string, version: number): string;
   close(): void;
 }
 

@@ -15,7 +15,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   const audio = useCallAudio(transport, state.call, actions);
   const { call, events, partials } = state;
 
-  const thread = useMemo(() => threadMessages(events), [events]);
+  const thread = useMemo(() => threadMessages(events, transport.draftImageUrl.bind(transport)), [events, transport]);
   const voiceNotes = usePendingVoiceNotes(transport);
   // An uploaded note shows at once, then gives way to the server's copy (with its transcript).
   const messages = useMemo(() => {
@@ -38,7 +38,6 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
     contactName,
     contactOffer: contactOffer(events, contactName),
     saveContact: () => transport.send({ type: "contact", action: "save" }),
-    sendDraft: (ref) => transport.send({ type: "draft", action: "send", ref }),
     messages,
     receipt,
     agentTyping: state.agentTyping,

@@ -655,109 +655,24 @@
   font-weight: 600;
 }
 
-/* Email draft card: an email preview on the received side. */
-.messages-screen .message-draft .message-bubble {
+/* Picture messages: no bubble, just the rounded image, as Messages shows a photo. */
+.messages-screen .message-photo .message-bubble {
   padding: 0;
-  overflow: hidden;
-}
-.messages-screen .draft-card {
-  display: flex;
-  width: 264px;
-  flex-direction: column;
-  color: #fff;
-  text-align: left;
-}
-.messages-screen .draft-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(235, 235, 245, 0.6);
-}
-.messages-screen .draft-header .icon {
-  font-size: 15px;
-}
-.messages-screen .draft-field {
-  display: flex;
-  gap: 8px;
-  padding: 6px 14px;
-  border-top: 0.5px solid rgba(84, 84, 88, 0.65);
-  font-size: 15px;
-}
-.messages-screen .draft-label {
-  flex: none;
-  width: 58px;
-  color: rgba(235, 235, 245, 0.6);
-}
-.messages-screen .draft-value {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.messages-screen .draft-missing {
-  font-style: italic;
-  color: rgba(235, 235, 245, 0.35);
-}
-.messages-screen .draft-body {
-  padding: 8px 14px 10px;
-  border-top: 0.5px solid rgba(84, 84, 88, 0.65);
-  font-size: 15px;
-  line-height: 1.35;
-}
-.messages-screen .draft-body p {
-  margin: 0;
-  white-space: pre-wrap;
-}
-.messages-screen .draft-body p.is-clamped {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 8;
-  -webkit-box-orient: vertical;
-}
-/* Framework7 sets every button to width: 100%; these size to their text. */
-.messages-screen .draft-more {
-  width: auto;
-  margin-top: 4px;
-  padding: 0;
-  border: 0;
   background: none;
-  color: #0a84ff;
-  font-size: 14px;
+  -webkit-mask-box-image: none;
 }
-.messages-screen .draft-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px 10px 14px;
-  border-top: 0.5px solid rgba(84, 84, 88, 0.65);
+.messages-screen .message-photo-link {
+  display: block;
+  overflow: hidden;
+  border: 0.5px solid rgba(84, 84, 88, 0.65);
+  border-radius: 18px;
 }
-.messages-screen .draft-hint {
-  font-size: 13px;
-  color: rgba(235, 235, 245, 0.6);
+.messages-screen .message-photo-link:active {
+  filter: brightness(0.8);
 }
-.messages-screen .draft-send {
-  width: auto;
-  flex: none;
-  padding: 6px 18px;
-  border: 0;
-  border-radius: 999px;
-  background: #0a84ff;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-}
-.messages-screen .draft-send:disabled {
-  background: rgba(118, 118, 128, 0.3);
-  color: rgba(235, 235, 245, 0.35);
-}
-.messages-screen .draft-sent {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  font-size: 15px;
-  font-weight: 600;
-  color: #30d158;
+.messages-screen .message-photo-link img {
+  display: block;
+  width: 240px;
+  height: auto;
+  background: #1c1c1e;
 }

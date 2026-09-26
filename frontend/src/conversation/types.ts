@@ -12,8 +12,6 @@ export interface Conversation {
   /** A contact card name the user has not saved yet: drives the "updated their name" banner. */
   contactOffer: string | null;
   saveContact: () => void;
-  /** Sends the agent's email draft with this ref. */
-  sendDraft: (ref: string) => void;
   messages: ThreadMessage[];
   /** Under the user's latest text while it is the last in the thread: "Delivered" or "Read 9:41 AM". */
   receipt: string;
@@ -47,7 +45,6 @@ export const IDLE_CONVERSATION: Conversation = {
   contactName: null,
   contactOffer: null,
   saveContact: noop,
-  sendDraft: noop,
   messages: [],
   receipt: "Delivered",
   agentTyping: false,

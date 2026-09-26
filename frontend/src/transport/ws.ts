@@ -77,6 +77,10 @@ export class WsTransport implements Transport {
     return ((await res.json()) as { audio_id: string }).audio_id;
   }
 
+  draftImageUrl(ref: string, version: number): string {
+    return `/api/drafts/${encodeURIComponent(this.phone)}/${encodeURIComponent(ref)}.svg?v=${version}`;
+  }
+
   close(): void {
     this.closed = true;
     this.ws?.close();

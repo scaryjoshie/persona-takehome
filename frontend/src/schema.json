@@ -114,34 +114,6 @@
         "title": "SaveContact",
         "type": "object"
       },
-      "SendDraft": {
-        "description": "The Send button on an email draft card.",
-        "properties": {
-          "type": {
-            "const": "draft",
-            "default": "draft",
-            "title": "Type",
-            "type": "string"
-          },
-          "action": {
-            "const": "send",
-            "default": "send",
-            "title": "Action",
-            "type": "string"
-          },
-          "ref": {
-            "title": "Ref",
-            "type": "string"
-          }
-        },
-        "required": [
-          "type",
-          "action",
-          "ref"
-        ],
-        "title": "SendDraft",
-        "type": "object"
-      },
       "SendMessage": {
         "properties": {
           "type": {
@@ -200,7 +172,6 @@
       "mapping": {
         "call": "#/$defs/CallCommand",
         "contact": "#/$defs/SaveContact",
-        "draft": "#/$defs/SendDraft",
         "message": "#/$defs/SendMessage",
         "react": "#/$defs/ReactCommand",
         "reset": "#/$defs/Reset",
@@ -223,9 +194,6 @@
       },
       {
         "$ref": "#/$defs/SaveContact"
-      },
-      {
-        "$ref": "#/$defs/SendDraft"
       },
       {
         "$ref": "#/$defs/Reset"

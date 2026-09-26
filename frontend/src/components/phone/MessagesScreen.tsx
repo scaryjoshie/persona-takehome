@@ -20,7 +20,6 @@ import { LinkPreview } from "./LinkPreview";
 import { VoiceNoteBubble, type VoiceNote } from "./VoiceNoteBubble";
 import { ReactionBadges, TapbackMenu, type Reaction } from "./Tapback";
 import { ContactBanner, ContactCardBubble } from "./ContactCard";
-import { EmailDraftCard, type Draft } from "./EmailDraftCard";
 import { useLongPress } from "../../lib/useLongPress";
 import { LiveWaveform } from "../ui/live-waveform";
 import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
@@ -43,8 +42,8 @@ export interface ThreadMessage {
   replyTo?: Pick<ThreadMessage, "id" | "side" | "text">;
   /** Set for the agent's contact card attachment. */
   contact?: { name: string };
-  /** Set for an email the agent drafted; always the latest version of it. */
-  draft?: Draft;
+  /** Set for a picture message (an MMS photo), e.g. an email draft as the agent sends it. */
+  image?: { src: string; alt: string };
 }
 
 interface Props {
@@ -69,8 +68,6 @@ interface Props {
   /** A contact name the user has not saved yet; shows the "updated their name" banner. */
   contactOffer?: string | null;
   onSaveContact?: () => void;
-  /** Sends the agent's email draft with this ref. */
-  onSendDraft?: (ref: string) => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -88,7 +85,6 @@ export function MessagesScreen({
   onReact,
   contactOffer = null,
   onSaveContact,
-  onSendDraft,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
@@ -240,17 +236,7 @@ export function MessagesScreen({
                   last={last}
                   tail={last && !b.link}
                   footer={footer}
-                  className={
-                    b.link
-                      ? "message-link"
-                      : b.voice
-                        ? "message-voice"
-                        : b.contact
-                          ? "message-contact"
-                          : b.draft
-                            ? "message-draft"
-                            : undefined
-                  }
+                  className={bubbleClass(b)}
                 >
                   {b.key === b.messageId && message.replyTo && (
                     <span slot="header" className={`reply-quote reply-quote-${message.replyTo.side}`}>
@@ -261,8 +247,8 @@ export function MessagesScreen({
                     <ReactionBadges slot="content-start" reactions={message.reactions} side={b.side} />
                   )}
                   <PressableText slot="text" onPress={press(message)}>
-                    {b.draft ? (
-                      <EmailDraftCard draft={b.draft} onSend={onSendDraft} />
+                    {b.image ? (
+                      <PhotoMessage {...b.image} />
                     ) : b.contact ? (
                       <ContactCardBubble
                         name={b.contact.name}
@@ -418,7 +404,7 @@ interface Bubble {
   link?: string;
   voice?: VoiceNote;
   contact?: { name: string };
-  draft?: Draft;
+  image?: { src: string; alt: string };
 }
 
 /** As in Messages: a lone link becomes a card; text with a link shows the text, then the card. */
@@ -427,7 +413,7 @@ function bubblesFor(messages: ThreadMessage[]): Bubble[] {
     const base = { messageId: m.id, side: m.side, text: m.text };
     if (m.voice) return [{ ...base, key: m.id, voice: m.voice }];
     if (m.contact) return [{ ...base, key: m.id, contact: m.contact }];
-    if (m.draft) return [{ ...base, key: m.id, draft: m.draft }];
+    if (m.image) return [{ ...base, key: m.id, image: m.image }];
     const link = firstLink(m.text);
     if (!link) return [{ ...base, key: m.id }];
     if (isOnlyLink(m.text)) return [{ ...base, key: m.id, link }];
@@ -502,4 +488,22 @@ function RecordingClock({ since }: { since: number | null }) {
 /** A message as quoted in a reply: its text, or what kind of message it was. */
 function quoteOf(m: Pick<ThreadMessage, "text"> & { voice?: unknown }): string {
   return m.voice ? "Audio Message" : m.text;
+}
+
+/** The Framework7 message class for a bubble's special content, if any. */
+function bubbleClass(b: Bubble): string | undefined {
+  if (b.link) return "message-link";
+  if (b.voice) return "message-voice";
+  if (b.contact) return "message-contact";
+  if (b.image) return "message-photo";
+  return undefined;
+}
+
+/** A picture message, as Messages shows a photo: no bubble, rounded corners; tap opens it full size. */
+function PhotoMessage({ src, alt }: { src: string; alt: string }) {
+  return (
+    <a className="message-photo-link external" href={src} target="_blank" rel="noreferrer" draggable={false}>
+      <img src={src} alt={alt} loading="lazy" draggable={false} />
+    </a>
+  );
 }

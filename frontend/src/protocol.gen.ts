@@ -1,6 +1,6 @@
 // Generated from src/schema.json by scripts/gen-types.mjs. Do not edit.
 
-export type ClientMessage = SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | SendDraft | Reset;
+export type ClientMessage = SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
 export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
@@ -63,14 +63,6 @@ export interface ReactCommand {
 export interface SaveContact {
   type: "contact";
   action: "save";
-}
-/**
- * The Send button on an email draft card.
- */
-export interface SendDraft {
-  type: "draft";
-  action: "send";
-  ref: string;
 }
 export interface Reset {
   type: "reset";
