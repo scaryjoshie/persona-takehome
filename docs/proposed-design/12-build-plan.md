@@ -5,7 +5,7 @@
 - **Python 3.12**, FastAPI, pydantic-ai 2.x (`pydantic-ai-slim[openai,openrouter,openai-realtime]`: OpenRouter for text, OpenAI Realtime for voice), SQLModel over SQLite, `cryptography` for Fernet, pydantic-settings. Tooling: uv, ruff, pyright strict, pytest with asyncio auto mode. Installed 2026-09-25: pydantic-ai-slim 2.51, fastapi 0.141, sqlmodel 0.0.47, openai 3.19.
 - **Browser:** a small Vite plus React app served as static files by FastAPI. Only the WebRTC handshake, audio element, phone UI, and a WebSocket back to the server. Everything with logic is Python.
 - **One long-running process** (see [11-hosting.md](11-hosting.md)), deployed on Fly.io or similar with a persistent volume for SQLite.
-- **Models:** GPT-Live (`gpt-live-1`) for the spoken call, delegating to an OpenAI Responses backend (`gpt-6-sol` class, pinned via `openai_live_delegation`). OpenRouter for the text agent, decider fallback, and one-shot tasks. `gpt-realtime-2.1` kept as the voice fallback behind the same interface. Model ids live in tier constants and settings, not scattered.
+- **Models:** one OpenAI model for the shared agent (`gpt-6-sol` class; exact id to confirm), used directly for text and as the Live delegation backend, so voice is an extension of the text agent (see 15). GPT-Live (`gpt-live-1`) speaks. OpenRouter only for auxiliary work: one-shot tasks, the harness personas. `gpt-realtime-2.1` kept as the voice fallback behind the same interface. Model ids live in tier constants and settings, not scattered.
 
 ## Layout
 

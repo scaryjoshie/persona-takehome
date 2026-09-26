@@ -13,15 +13,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # OpenAI: the voice call only. GPT-Live speaks and delegates reasoning to an OpenAI
-    # Responses backend that runs our tools locally (docs 07b). Realtime is the fallback (07).
+    # OpenAI: the shared agent's model (text channel AND the GPT-Live delegation backend,
+    # so voice is an extension of the text agent; docs 15) plus the Live voice model.
     openai_api_key: SecretStr | None = None
+    agent_model: str = "openai:gpt-6-sol"  # placeholder id; confirm current best fast model
     voice_layer: Literal["live", "realtime"] = "live"
     openai_live_model: str = "gpt-live-1"
-    openai_live_backend_model: str = "gpt-6-sol"   # pinned; 'auto' would float
-    openai_realtime_model: str = "gpt-realtime-2.1"
+    openai_live_backend_model: str | None = None  # None = the agent's own model (recommended)
+    openai_realtime_model: str = "gpt-realtime-2.1"  # fallback voice layer
 
-    # OpenRouter: everything else (text agent, decider fallback model, one-shot tasks).
+    # OpenRouter: auxiliary only (one-shot tasks, harness personas).
     openrouter_api_key: SecretStr | None = None
 
     # Storage

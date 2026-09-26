@@ -25,6 +25,7 @@ Design notes for the Persona take-home: a web simulation of Persona's onboarding
 | [12-build-plan.md](12-build-plan.md) | Stack, repo layout, build slices, conventions borrowed from cado |
 | [13-open-questions.md](13-open-questions.md) | Decisions still to make |
 | [14-frontend-contract.md](14-frontend-contract.md) | Wiring, endpoints, and type generation for the frontend |
+| [15-live-operating-model.md](15-live-operating-model.md) | How GPT-Live runs our agent: delegation mechanics, anti-stall principles, routing pass and prefires, spike metrics |
 | [research/arch-validation.md](research/arch-validation.md) | Research report: is this architecture standard, Realtime API facts, OAuth facts |
 | [research/turn-taking.md](research/turn-taking.md) | Research report: how texting agents handle bursts and turn-taking |
 

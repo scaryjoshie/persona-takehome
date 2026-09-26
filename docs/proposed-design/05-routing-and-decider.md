@@ -98,12 +98,13 @@ class Decider(Protocol):
     async def decide(self, ctx: RoutingContext) -> Decision: ...
 ```
 
-Two implementations behind the same interface:
+Decision 2026-09-25: **Jev only, for routing; no rule-based decider** until the spike shows what is actually needed. Until Jev access arrives, `ask` cases fall back to the fixed verb for the delta kind (typing → absorb, gmail → defer) and are logged as `by: "default"`. Implementations behind the same interface:
 
-- **Rule-based** (ships first). Handles the typing case with "typing for more than two seconds while the last agent turn was a question."
 - **Jev** (TypeSafe AI's "System One" decision model; early access, waitlist). Non-autoregressive; takes state plus several typed questions in parallel (choice / score / yes-no) and returns calibrated probabilities. Reported 70 to 500 ms end to end, about $0.04 per million input tokens, output free. No public material mentions turn-taking, but it is exactly the "classifier in between" the turn-taking research says nobody has built for text.
 
-The Jev wrapper owns context budgeting: it renders the routing context into a compact view under a token limit. The router does not know Jev exists. Pattern from cado: small-model task under a hard timeout with a deterministic fallback to the rule.
+The Jev wrapper owns context budgeting: it renders the routing context into a compact view under a token limit. The router does not know Jev exists. Pattern from cado: small-model task under a hard timeout with a deterministic fallback (here: the fixed default verb).
+
+Also see [15-live-operating-model.md](15-live-operating-model.md) for the routing pass over voice transcripts and prefires.
 
 Where Jev would add the most value, in order:
 

@@ -14,5 +14,7 @@ Decisions still to make, with the current default where one exists.
 | Deadline and hours budget | unknown | Shapes how much of slice 5 happens. |
 | The user's own "Decisions: Everything will be..." note was cut off | unknown | Worth finishing. |
 | Session refresh mid-call: end the call on WebSocket close immediately, or after a short grace? | immediate | The peer connection died with the tab anyway. |
-| Voice layer: `gpt-realtime-2.1` (07) or `gpt-live-1` client delegation (07b)? | spike at slice 3, lean gpt-live | GPT-Live matches the store-first design exactly but is two weeks old. |
+| Voice layer: `gpt-live-1` (07b, 15) or `gpt-realtime-2.1` (07)? | gpt-live primary, spike at slice 3 | pydantic-ai adapter landed 2026-09-25 (v2.51.0). |
+| Agent model: one OpenAI model for text and Live backend, or OpenRouter for text? | one OpenAI model | Makes voice an extension of the text agent (15). OpenRouter stays for auxiliary. |
+| Exact OpenAI agent model id | `gpt-6-sol` placeholder | Confirm current best fast model; `AUTO_BACKEND_MODEL` in pydantic-ai names it. |
 | Mid-call agent rename: context message vs raw session.update through the provider session? | context message | Simpler; upgrade if it reads badly. |
