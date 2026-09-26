@@ -67,9 +67,22 @@ Every speculation is a `decision` event, so the debug panel shows "predicted inb
 
 **Routing rule exception.** The routing pass consumes transcript rows (normally record-only) and emits deltas with origin `system`, so the router's loop guard does not drop them. This is the one explicit exception to "transcripts are never routed."
 
+## Implications from field research (2026-09-25)
+
+Full report: [research/gpt-live-behavior.md](research/gpt-live-behavior.md). What changes:
+
+- **Under-delegation is the dominant real-world failure**, not stalling. Live says "got it" and never hands off, up to ~50% of the time on bad days per one report; LiveKit measured 12 of 15 failures on confirmations. **We must not depend on Live delegating for bookkeeping.** This promotes the "routing pass + inject" path from stretch item to the primary bookkeeping mechanism, and adds a watchdog: if a user turn carried a required intent and no delegation appeared within ~6–8 s, push the work ourselves. Proposed shape, to decide: treat each inferred user voice turn as a delta to the **same agent run loop the text head uses** (same agent, same tools), with its output injected into Live as a note instead of sent as bubbles. Live's own delegation becomes a backup. Slot writes are idempotent, so double handling is harmless. This makes voice an extension of the text *handler*, not just the text agent's model.
+- **Speaking instructions need a trigger-phrase delegation policy**, per OpenAI staff: enumerate the onboarding steps and the spoken cues for each, and add "do not confirm anything before the back office returns."
+- **Delegation timeout.** Time each delegation; after ~5 s inject a speakable "still on it"; after ~15 s fail the step gracefully. Live will not do this itself. (Contradicts the earlier assumption that Live covers dead air; OpenAI's own eval treats silence-during-delegation as a metric.)
+- **Verify the silent-note path** (`respond=False` must produce `thinking.append`), and put nothing secret in any note.
+- **Interruption hygiene is ours.** Flush the browser playback buffer on user speech; gate late backend results with a generation counter so a retracted request's result is not narrated; browser echo cancellation is required. Expect ~0.5 s slower stop than Realtime.
+- **Session death.** Five close reasons, no auto-reconnect, unknown max duration; keep the store-derived seed ready (≤8,192 tokens) and reseed on drop. Watch `context_window_used`.
+- **Backend model.** OpenAI recommends starting on `gpt-6-luna` ($0.10/$0.50 per M) at low effort; `gpt-6-sol` is 20× the price. This reopens the one-model question: if the text channel wants `sol` quality and the voice backend wants `luna` latency, "one agent, two models" may be the right trade after all. Decide after the spike.
+- **Known bug to code around:** an unanswered function call blocks all later backend turns; pydantic-ai batches results, but our tools must never raise without returning an output.
+
 ## What the slice-3 spike must measure
 
-1. **Delegation frequency** on a scripted onboarding: how often Live hands off, and whether it under- or over-delegates.
+1. **Delegation frequency** on a scripted onboarding: how often Live hands off, and specifically how often it *fails to* on name / need / Gmail turns.
 2. **Delegation latency** end to end (user turn → spoken result) with a fast backend at low effort.
 3. **Turn-boundary quality**: whether the inferred `RealtimeTurnCompleteEvent` is good enough to drive the voice `Run` and the typing case, or whether voice should always lean absorb over interrupt.
 4. **Note behavior**: whether silent notes get spoken, and how fast injected text is picked up.

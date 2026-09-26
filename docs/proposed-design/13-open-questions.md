@@ -15,6 +15,7 @@ Decisions still to make, with the current default where one exists.
 | The user's own "Decisions: Everything will be..." note was cut off | unknown | Worth finishing. |
 | Session refresh mid-call: end the call on WebSocket close immediately, or after a short grace? | immediate | The peer connection died with the tab anyway. |
 | Voice layer: `gpt-live-1` (07b, 15) or `gpt-realtime-2.1` (07)? | gpt-live primary, spike at slice 3 | pydantic-ai adapter landed 2026-09-25 (v2.51.0). |
-| Agent model: one OpenAI model for text and Live backend, or OpenRouter for text? | one OpenAI model | Makes voice an extension of the text agent (15). OpenRouter stays for auxiliary. |
+| Agent model: one OpenAI model for text and Live backend, or two? | one, decide after spike | Field research: OpenAI recommends `gpt-6-luna` as backend (cheap, fast); text may want `gpt-6-sol`. See 15. |
+| Run our own agent on every inferred voice turn (text head loop, output injected as notes), with Live delegation as backup? | yes, proposed | Answers under-delegation, the dominant reported Live failure. See 15. |
 | Exact OpenAI agent model id | `gpt-6-sol` placeholder | Confirm current best fast model; `AUTO_BACKEND_MODEL` in pydantic-ai names it. |
 | Mid-call agent rename: context message vs raw session.update through the provider session? | context message | Simpler; upgrade if it reads badly. |
