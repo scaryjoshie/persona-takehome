@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.events.envelope import Event
-from app.events.store import Clock
+from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
 from app.text.types import Typing, UserMessage
 from app.timers import TimerHandle, Timers

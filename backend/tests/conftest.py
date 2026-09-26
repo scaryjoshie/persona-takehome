@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
+from pydantic_ai.models.test import TestModel
 
-from app.events.base import Channel, Origin
+from app.database import SessionFactory, create_schema, make_engine, make_sessions
+from app.events.base import Channel, Origin, Payload
 from app.events.envelope import Event
-from app.events.store import Store
+from app.main import App, build_app
+from app.routing.router import Driver
 from app.routing.types import Medium, Run
 from app.text.driver import RunRequest, RunResult
 from app.text.types import Typing, UserMessage
-from app.user import User
+
+PHONE = "+15550001111"
 
 
 class FakeClock:
@@ -113,12 +118,36 @@ class FakeDriver:
         self.log.append((str(verb), event.kind))
 
 
-def user_text(store: Store, text: str) -> Event:
-    return store.transient(Origin.USER, Channel.TEXT, UserMessage(text=text))
+class CapturingMessenger:
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+        self.typing: list[bool] = []
+
+    async def send(self, phone: str, text: str) -> None:
+        self.sent.append(text)
+
+    async def set_typing(self, phone: str, active: bool) -> None:
+        self.typing.append(active)
 
 
-def typing(store: Store, active: bool, seconds: float = 0) -> Event:
-    return store.transient(Origin.USER, Channel.TEXT, Typing(active=active, seconds=seconds))
+def ev(
+    payload: Payload, origin: Origin = Origin.USER, channel: Channel = Channel.TEXT, seq: int = 0
+) -> Event:
+    return Event(
+        seq=seq,
+        ts=datetime(2026, 9, 25, 12, 0, tzinfo=UTC),
+        origin=origin,
+        channel=channel,
+        payload=payload,
+    )
+
+
+def user_text(text: str) -> Event:
+    return ev(UserMessage(text=text))
+
+
+def typing(active: bool, seconds: float = 0) -> Event:
+    return ev(Typing(active=active, seconds=seconds))
 
 
 @pytest.fixture
@@ -127,10 +156,37 @@ def clock() -> FakeClock:
 
 
 @pytest.fixture
-def store(clock: FakeClock) -> Store:
-    return Store("+15550001111", clock=clock)
+def timers(clock: FakeClock) -> FakeTimers:
+    return FakeTimers(clock)
 
 
 @pytest.fixture
-def user(store: Store) -> User:
-    return User(store)
+async def db(tmp_path: Path) -> AsyncIterator[SessionFactory]:
+    engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
+    await create_schema(engine)
+    yield make_sessions(engine)
+    await engine.dispose()
+
+
+@pytest.fixture
+def messenger() -> CapturingMessenger:
+    return CapturingMessenger()
+
+
+@pytest.fixture
+def app(
+    db: SessionFactory, messenger: CapturingMessenger, clock: FakeClock, timers: FakeTimers
+) -> App:
+    return build_app(
+        db=db,
+        messenger=messenger,
+        model=TestModel(),
+        app_base_url="http://x",
+        timers=timers,
+        clock=clock,
+    )
+
+
+def fake_drivers(clock: FakeClock) -> tuple[FakeDriver, FakeDriver, dict[Medium, Driver]]:
+    text, voice = FakeDriver(Medium.TEXT, clock), FakeDriver(Medium.VOICE, clock)
+    return text, voice, {Medium.TEXT: text, Medium.VOICE: voice}

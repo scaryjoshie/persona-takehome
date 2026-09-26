@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.events.envelope import Event
-from app.events.store import Clock
+from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
 
 

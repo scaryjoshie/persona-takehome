@@ -1,5 +1,6 @@
-"""The text handler: the runner the text driver calls. One agent run, then bubbles
-delivered with typing delays. Interruption is task cancellation, handled by the driver."""
+"""The text handler: the runner the text driver calls. Loads the user and history,
+runs the agent once, delivers bubbles with typing delays. Interruption is task
+cancellation, handled by the driver."""
 
 from __future__ import annotations
 
@@ -9,10 +10,13 @@ from collections.abc import Awaitable, Callable
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
+from app.actions import Actions
 from app.agent.agent import Reply, say
 from app.agent.deps import Deps
 from app.agent.views import to_model_messages
+from app.routing.types import Medium
 from app.text.driver import RunRequest, RunResult
+from app.text.messenger import Messenger
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -25,23 +29,41 @@ class TextHandler:
     GAP = 0.4
 
     def __init__(
-        self, agent: Agent[Deps, str], deps: Deps, *, model: Model, sleep: Sleep = asyncio.sleep
+        self,
+        agent: Agent[Deps, str],
+        *,
+        phone: str,
+        actions: Actions,
+        messenger: Messenger,
+        model: Model,
+        app_base_url: str,
+        sleep: Sleep = asyncio.sleep,
     ) -> None:
         self._agent = agent
-        self._deps = deps
+        self._phone = phone
+        self._actions = actions
+        self._messenger = messenger
         self._model = model
+        self._app_base_url = app_base_url
         self._sleep = sleep
 
     async def __call__(self, request: RunRequest) -> RunResult:
-        history = to_model_messages(self._deps.user.store.events)
+        user = await self._actions.user(self._phone)
+        history = to_model_messages(await self._actions.history(self._phone))
+        deps = Deps(
+            user=user,
+            actions=self._actions,
+            messenger=self._messenger,
+            medium=Medium.TEXT,
+            app_base_url=self._app_base_url,
+        )
         result = await self._agent.run(
-            None, message_history=history, deps=self._deps, output_type=Reply, model=self._model
+            None, message_history=history, deps=deps, output_type=Reply, model=self._model
         )
         bubbles = [b.strip() for b in result.output.bubbles if b.strip()]
-        channel, phone = self._deps.channel, self._deps.user.phone
         for i, text in enumerate(bubbles):
-            await channel.set_typing(phone, True)
+            await self._messenger.set_typing(self._phone, True)
             await self._sleep(bubble_delay(text) + (self.GAP if i else 0.0))
-            await say(self._deps, text)
-        await channel.set_typing(phone, False)
+            await say(deps, text)
+        await self._messenger.set_typing(self._phone, False)
         return RunResult(asked_question=bool(bubbles) and bubbles[-1].endswith("?"))

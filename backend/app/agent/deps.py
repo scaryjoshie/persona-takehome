@@ -1,31 +1,32 @@
-"""What the agent's tools can reach. One object per run."""
+"""What the agent's tools can reach during one run."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.channels.base import Channel
-from app.events.base import Channel as EventChannel
-from app.events.base import Origin, Payload
+from app.actions import Actions
+from app.events.base import Channel, Origin
 from app.routing.types import Medium
-from app.user import User
-
-Submit = Callable[[Origin, EventChannel, Payload], None]
+from app.text.messenger import Messenger
+from app.users.types import User
 
 
 @dataclass
 class Deps:
-    user: User
-    submit: Submit
-    channel: Channel
+    user: User  # a snapshot taken when the run started
+    actions: Actions
+    messenger: Messenger
     medium: Medium
     app_base_url: str
+
+    @property
+    def phone(self) -> str:
+        return self.user.phone
 
     @property
     def origin(self) -> Origin:
         return Origin.VOICE_AGENT if self.medium is Medium.VOICE else Origin.TEXT_AGENT
 
     @property
-    def event_channel(self) -> EventChannel:
-        return EventChannel.VOICE if self.medium is Medium.VOICE else EventChannel.TEXT
+    def channel(self) -> Channel:
+        return Channel.VOICE if self.medium is Medium.VOICE else Channel.TEXT

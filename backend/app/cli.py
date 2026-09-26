@@ -5,48 +5,33 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.actor import Actor
-from app.agent.agent import agent
-from app.agent.deps import Deps
 from app.ai.models import agent_model
-from app.channels.console import ConsoleChannel
-from app.compose import build_actor, load
+from app.database import create_schema, make_engine, make_sessions
 from app.events.base import Channel, Origin
-from app.events.sql import make_engine
-from app.routing.types import Medium
+from app.main import build_app
 from app.settings import get_settings
-from app.text.handler import TextHandler
 from app.text.types import UserMessage
 
 
-class NoVoice:
-    async def send(self, text: str, *, speak: bool) -> None:
-        print(f"\r[voice note{' (speak)' if speak else ''}]: {text}")
+class ConsoleMessenger:
+    async def send(self, phone: str, text: str) -> None:
+        print(f"\ragent: {text}")
 
-
-def make(phone: str) -> Actor:
-    settings = get_settings()
-    user = load(make_engine(settings.database_url), phone)
-    holder: list[Actor] = []
-    deps = Deps(
-        user=user,
-        submit=lambda o, c, p: holder[0].submit(o, c, p),
-        channel=ConsoleChannel(user.slots.agent_name or "agent"),
-        medium=Medium.TEXT,
-        app_base_url=settings.app_base_url,
-    )
-    actor = build_actor(
-        user,
-        text_runner=TextHandler(agent, deps, model=agent_model(settings)),
-        voice_sink=NoVoice(),
-    )
-    holder.append(actor)
-    return actor
+    async def set_typing(self, phone: str, active: bool) -> None:
+        if active:
+            print("\r…", end="", flush=True)
 
 
 async def main(phone: str) -> None:
-    actor = make(phone)
-    actor.start()
+    settings = get_settings()
+    engine = make_engine(settings.database_url)
+    await create_schema(engine)
+    app = build_app(
+        db=make_sessions(engine),
+        messenger=ConsoleMessenger(),
+        model=agent_model(settings),
+        app_base_url=settings.app_base_url,
+    )
     print(f"chatting as {phone}; ctrl-d to quit")
     loop = asyncio.get_running_loop()
     while True:
@@ -54,8 +39,9 @@ async def main(phone: str) -> None:
         if not line:
             break
         if line.strip():
-            actor.submit(Origin.USER, Channel.TEXT, UserMessage(text=line.strip()))
-    await actor.stop()
+            await app.actions.submit(
+                phone, Origin.USER, Channel.TEXT, UserMessage(text=line.strip())
+            )
 
 
 if __name__ == "__main__":

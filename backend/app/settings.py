@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None
 
     # Storage
-    database_url: str = "sqlite:///./onboarding.db"
+    database_url: str = "sqlite+aiosqlite:///./onboarding.db"
     credentials_key: SecretStr | None = None  # Fernet key for Integration.credentials
 
     # Google OAuth (openid/email/profile only; see docs 10)

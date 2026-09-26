@@ -1,5 +1,5 @@
 """The shared agent: one definition for text and voice. Instructions are markdown
-fragments plus a dynamic state block; tools write facts through the user object."""
+fragments plus a dynamic state block; tools write facts through actions."""
 
 from __future__ import annotations
 
@@ -42,33 +42,33 @@ def dynamic_instructions(ctx: RunContext[Deps]) -> str:
 # ---- helpers ----------------------------------------------------------------
 
 
-def _record(ctx: RunContext[Deps], name: str, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _record(
+    ctx: RunContext[Deps], name: str, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     d = ctx.deps
-    d.submit(d.origin, d.event_channel, ToolCall(name=name, args=args, result=result))
+    await d.actions.submit(
+        d.phone, d.origin, d.channel, ToolCall(name=name, args=args, result=result)
+    )
+
+
+async def _set(ctx: RunContext[Deps], slot: str, value: Any) -> bool:
+    d = ctx.deps
+    return await d.actions.set_slot(d.phone, slot, value, origin=d.origin, channel=d.channel)
 
 
 async def say(deps: Deps, text: str) -> None:
-    """Send a bubble: record it, then push it through the channel."""
-    deps.submit(
-        deps.origin,
-        deps.event_channel,
-        AgentMessage(text=text, from_call=deps.medium is Medium.VOICE),
-    )
-    await deps.channel.send(deps.user.phone, text)
-
-
-async def _only(
-    medium: Medium, ctx: RunContext[Deps], tool: ToolDefinition
-) -> ToolDefinition | None:
-    return tool if ctx.deps.medium is medium else None
+    """Send a bubble: record it, then push it through the messenger."""
+    bubble = AgentMessage(text=text, from_call=deps.medium is Medium.VOICE)
+    await deps.actions.submit(deps.phone, deps.origin, deps.channel, bubble)
+    await deps.messenger.send(deps.phone, text)
 
 
 async def only_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    return await _only(Medium.TEXT, ctx, tool)
+    return tool if ctx.deps.medium is Medium.TEXT else None
 
 
 async def only_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    return await _only(Medium.VOICE, ctx, tool)
+    return tool if ctx.deps.medium is Medium.VOICE else None
 
 
 # ---- tools --------------------------------------------------------------------
@@ -77,33 +77,24 @@ async def only_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinit
 @agent.tool
 async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the name the user chose for you. Call this the moment they pick one."""
-    d = ctx.deps
-    changed = await d.user.set_slot(
-        "agent_name", name.strip(), origin=d.origin, channel=d.event_channel
-    )
-    _record(ctx, "set_agent_name", {"name": name}, {"changed": changed})
+    changed = await _set(ctx, "agent_name", name.strip())
+    await _record(ctx, "set_agent_name", {"name": name}, {"changed": changed})
     return f"recorded: your name is {name.strip()}"
 
 
 @agent.tool
 async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
-    d = ctx.deps
-    changed = await d.user.set_slot(
-        "user_name", name.strip(), origin=d.origin, channel=d.event_channel
-    )
-    _record(ctx, "set_user_name", {"name": name}, {"changed": changed})
+    changed = await _set(ctx, "user_name", name.strip())
+    await _record(ctx, "set_user_name", {"name": name}, {"changed": changed})
     return f"recorded: user is called {name.strip()}"
 
 
 @agent.tool
 async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     """Record one concrete thing the user wants help with, in their words."""
-    d = ctx.deps
-    changed = await d.user.set_slot(
-        "help_need", need.strip(), origin=d.origin, channel=d.event_channel
-    )
-    _record(ctx, "record_help_need", {"need": need}, {"changed": changed})
+    changed = await _set(ctx, "help_need", need.strip())
+    await _record(ctx, "record_help_need", {"need": need}, {"changed": changed})
     return "recorded"
 
 
@@ -111,11 +102,11 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
 async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     """Text the user a link to connect their Gmail. Say in your own words that you sent it."""
     d = ctx.deps
-    link = f"{d.app_base_url}/api/auth/google/start?phone={d.user.phone}"
+    link = f"{d.app_base_url}/api/auth/google/start?phone={d.phone}"
     await say(d, link)
-    await d.user.set_slot("gmail", GmailPhase.LINK_SENT, origin=d.origin, channel=d.event_channel)
-    d.submit(d.origin, d.event_channel, GmailEvent(phase=GmailPhase.LINK_SENT))
-    _record(ctx, "send_gmail_link", {}, {"link": link})
+    await _set(ctx, "gmail", GmailPhase.LINK_SENT)
+    await d.actions.submit(d.phone, d.origin, d.channel, GmailEvent(phase=GmailPhase.LINK_SENT))
+    await _record(ctx, "send_gmail_link", {}, {"link": link})
     return "link sent by text; the user will tap it when ready"
 
 
@@ -123,9 +114,9 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
 async def skip_gmail(ctx: RunContext[Deps]) -> str:
     """The user declined to connect Gmail. Do not ask again."""
     d = ctx.deps
-    await d.user.set_slot("gmail", GmailPhase.SKIPPED, origin=d.origin, channel=d.event_channel)
-    d.submit(d.origin, d.event_channel, GmailEvent(phase=GmailPhase.SKIPPED))
-    _record(ctx, "skip_gmail", {}, {})
+    await _set(ctx, "gmail", GmailPhase.SKIPPED)
+    await d.actions.submit(d.phone, d.origin, d.channel, GmailEvent(phase=GmailPhase.SKIPPED))
+    await _record(ctx, "skip_gmail", {}, {})
     return "recorded: gmail skipped"
 
 
@@ -133,12 +124,11 @@ async def skip_gmail(ctx: RunContext[Deps]) -> str:
 async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     """Call the user now. Give the reason for the call in one line; you will have it on the call."""
     d = ctx.deps
-    d.submit(
-        d.origin,
-        d.event_channel,
-        CallEvent(transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT),
+    ringing = CallEvent(
+        transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT
     )
-    _record(ctx, "start_call", {"reason": reason}, {})
+    await d.actions.submit(d.phone, d.origin, d.channel, ringing)
+    await _record(ctx, "start_call", {"reason": reason}, {})
     return "calling now; the user's phone is ringing"
 
 
@@ -146,10 +136,9 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
 async def end_call(ctx: RunContext[Deps]) -> str:
     """Hang up the call after saying goodbye."""
     d = ctx.deps
-    d.submit(
-        d.origin, d.event_channel, CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
-    )
-    _record(ctx, "end_call", {}, {})
+    ended = CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
+    await d.actions.submit(d.phone, d.origin, d.channel, ended)
+    await _record(ctx, "end_call", {}, {})
     return "call ending"
 
 
@@ -157,7 +146,7 @@ async def end_call(ctx: RunContext[Deps]) -> str:
 async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     """Move the user into the main experience. Say what you will do first, in one line."""
     d = ctx.deps
-    await d.user.set_slot("graduated", True, origin=d.origin, channel=d.event_channel)
-    d.submit(d.origin, d.event_channel, Graduated())
-    _record(ctx, "graduate", {"first_action": first_action}, {})
+    await _set(ctx, "graduated", True)
+    await d.actions.submit(d.phone, d.origin, d.channel, Graduated())
+    await _record(ctx, "graduate", {"first_action": first_action}, {})
     return "graduated"

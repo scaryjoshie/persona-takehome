@@ -1,16 +1,18 @@
-"""Hand a routable event to the floor holder's driver, via the filter."""
+"""Hand a routable event to the floor holder's driver, via the filter. No I/O:
+the caller supplies the user and recent events and persists the decision."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
-from app.events.base import Channel, Origin
 from app.events.envelope import Event
 from app.routing.filter import Filter
 from app.routing.types import DecidedBy, Decision, Medium, RoutingContext, Run, Verb
-from app.user import User
+from app.users.types import User
 
-RECENT_FOR_DECIDER = 12
+Clock = Callable[[], datetime]
 
 
 class Driver(Protocol):
@@ -25,18 +27,23 @@ class Driver(Protocol):
 
 
 class Router:
-    def __init__(self, user: User, drivers: dict[Medium, Driver], filter_: Filter) -> None:
-        self._user = user
-        self._drivers = drivers
+    def __init__(self, filter_: Filter, *, clock: Clock) -> None:
         self._filter = filter_
+        self._clock = clock
 
-    async def route(self, event: Event) -> Decision:
-        user, store = self._user, self._user.store
-        driver = self._drivers[user.floor]
-        t0 = store.now()
+    async def route(
+        self, drivers: dict[Medium, Driver], user: User, event: Event, recent: list[Event]
+    ) -> Decision:
+        driver = drivers[user.floor]
+        t0 = self._clock()
         if driver.run is None:
             await driver.start(event)
-            verb, by, confidence, note = Verb.START, DecidedBy.FIXED, 1.0, f"idle {user.floor}"
+            verb, by, confidence, note = (
+                Verb.START,
+                DecidedBy.FIXED,
+                1.0,
+                f"idle {user.floor.value}",
+            )
         else:
             ctx = RoutingContext(
                 trigger=event,
@@ -44,19 +51,17 @@ class Router:
                 floor=user.floor,
                 call=user.call,
                 still_missing=user.slots.missing(),
-                recent=store.recent(RECENT_FOR_DECIDER),
+                recent=tuple(recent),
                 now=t0,
             )
             v = await self._filter.verdict(ctx)
             await driver.apply(v.verb, event)
             verb, by, confidence, note = v.verb, v.by, v.confidence, v.note
-        decision = Decision(
+        return Decision(
             trigger_kind=event.kind,
             verb=verb,
             by=by,
             confidence=confidence,
-            ms=int((store.now() - t0).total_seconds() * 1000),
+            ms=int((self._clock() - t0).total_seconds() * 1000),
             note=note,
         )
-        await store.append(Origin.SYSTEM, Channel.SYSTEM, decision)
-        return decision
