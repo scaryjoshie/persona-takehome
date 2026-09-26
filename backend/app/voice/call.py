@@ -113,17 +113,20 @@ async def run_call(
                 Channel.SYSTEM,
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
+            # Say hi, then pick up the setup where it stands. The reason for the call is
+            # background, not a script: reading it out made the voice lead with the ask.
+            next_step = (
+                "ask what they want to call you"
+                if user.slots.agent_name is None
+                else "ask their name"
+                if user.slots.user_name is None
+                else "carry on from where you left off"
+            )
             if user.call.initiated_by is Initiator.USER:
-                opener = (
-                    "Internal note: they just called you. Answer like you'd pick up a friend's "
-                    "call: a quick hey, then let them talk."
-                )
+                opener = "Internal note: they just called you. Pick up like a friend would"
             else:
-                opener = (
-                    "Internal note: they just picked up your call. Say hi like a friend would "
-                    "and get into why you called"
-                    + (f" ({user.call.reason})." if user.call.reason else ".")
-                )
+                opener = "Internal note: they just picked up your call. Say hi like a friend would"
+            opener += f", then {next_step}."
             await session.send(opener + " Your name is already on their screen; don't say it.")
             listener = Listener(env, session, phone)
             open_turns: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)

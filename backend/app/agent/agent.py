@@ -137,7 +137,7 @@ async def no_call(ctx: RunContext[Deps]) -> str:
 
 @agent.tool(prepare=only_text)
 async def start_call(ctx: RunContext[Deps], reason: str) -> str:
-    """Call the user now. Give the reason for the call in one line; you will have it on the call."""
+    """Call the user now. `reason`: a few words of background for the call, not a script."""
     ringing = CallEvent(
         transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT
     )
