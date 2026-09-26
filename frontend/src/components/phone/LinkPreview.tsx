@@ -43,8 +43,12 @@ export function LinkPreview({ url }: { url: string }) {
   const domain = domainOf(preview?.url ?? url);
 
   return (
-    <a className="link-preview" href={url} target="_blank" rel="noreferrer">
-      {preview?.image && <img className="link-preview-image" src={preview.image} alt="" loading="lazy" />}
+    // `external` tells Framework7 to leave the click to the browser; it swallows every other link
+    // (preventDefault) to route it inside the app.
+    <a className="link-preview external" href={url} target="_blank" rel="noreferrer" draggable={false}>
+      {preview?.image && (
+        <img className="link-preview-image" src={preview.image} alt="" loading="lazy" draggable={false} />
+      )}
       <span className="link-preview-footer">
         {!preview?.image && <img className="link-preview-icon" src={preview?.icon ?? faviconFor(url)} alt="" />}
         <span className="link-preview-text">

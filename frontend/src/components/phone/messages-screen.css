@@ -153,6 +153,15 @@
   background: #3a3a3c;
   color: #fff;
   text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease;
+}
+/* Pressed: the card sinks a little and dims, so it reads as tappable. */
+.messages-screen .link-preview:active {
+  transform: scale(0.97);
+  filter: brightness(0.8);
 }
 .messages-screen .link-preview-image {
   display: block;

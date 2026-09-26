@@ -426,7 +426,7 @@ function LinkedText({ text }: { text: string }) {
     <>
       {splitLinks(text).map((part, i) =>
         part.href ? (
-          <a key={i} className="message-inline-link" href={part.href} target="_blank" rel="noreferrer">
+          <a key={i} className="message-inline-link external" href={part.href} target="_blank" rel="noreferrer">
             {part.text}
           </a>
         ) : (
