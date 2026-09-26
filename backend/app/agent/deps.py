@@ -54,10 +54,6 @@ class Deps:
         return self.env.pipeline
 
     @property
-    def messenger(self) -> Messenger:
-        return self.env.messenger
-
-    @property
     def phone(self) -> str:
         return self.user.phone
 

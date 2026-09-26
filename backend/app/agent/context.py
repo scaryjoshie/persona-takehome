@@ -56,10 +56,6 @@ def bracket(lines: str) -> str:
     return "\n".join(f"[note: {line}]" for line in lines.split("\n"))
 
 
-def estimate_tokens(text: str) -> int:
-    return max(1, len(text) // 4)
-
-
 def trim_history(
     messages: list[ModelMessage], *, max_messages: int, max_tokens: int
 ) -> list[ModelMessage]:
@@ -67,7 +63,7 @@ def trim_history(
     kept: list[ModelMessage] = []
     budget = max_tokens
     for m in reversed(messages):
-        cost = estimate_tokens(_text_of(m))
+        cost = max(1, len(_text_of(m)) // 4)  # about four characters a token
         if len(kept) >= max_messages or cost > budget:
             break
         kept.append(m)

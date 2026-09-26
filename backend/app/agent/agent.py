@@ -75,7 +75,7 @@ async def say(deps: Deps, text: str) -> None:
     """Send a bubble: record it, then push it through the messenger."""
     bubble = AgentMessage(text=text, from_call=deps.medium is Medium.VOICE)
     await deps.pipeline.submit(deps.phone, deps.origin, deps.channel, bubble)
-    await deps.messenger.send(deps.phone, text)
+    await deps.env.messenger.send(deps.phone, text)
 
 
 # Who may use which tool. By text the agent does everything itself. On a call the voice only
