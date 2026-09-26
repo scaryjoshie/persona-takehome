@@ -21,6 +21,7 @@ from app.agent.call_notes import call_note
 from app.agent.deps import AgentEnv
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
+from app.gmail import routes as gmail_routes
 from app.jev import Jev
 from app.payloads import PAYLOADS
 from app.pipeline import Pipeline
@@ -127,9 +128,12 @@ def create_app() -> FastAPI:
         ),
         voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
+        google=(settings.google_client_id, settings.google_client_secret.get_secret_value())
+        if settings.google_client_id and settings.google_client_secret
+        else None,
     )
     routers = (web_routes.router, voice_routes.router, voice_note_routes.router)
-    for router in (*routers, preview_routes.router):
+    for router in (*routers, preview_routes.router, gmail_routes.router):
         web.include_router(router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():

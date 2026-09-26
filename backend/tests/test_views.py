@@ -64,7 +64,7 @@ def test_events_render_themselves_and_merge() -> None:
         "on call, you said: hi, it's Jarvis",
         "on call, user said: it's Siobhan\non call, user said: S-I-O-B-H-A-N",
         "you called set_user_name(name='Siobhan') → {'ok': True}",
-        "Gmail connected as s@x.com",
+        "Gmail connected: s@x.com.",
         "call ended 12:00, reason: user_hangup",
     ):
         assert expected in note

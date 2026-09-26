@@ -31,6 +31,7 @@ class Services:
     transcribe: Transcribe  # voice messages
     voice_notes_dir: Path
     app_base_url: str
+    google: tuple[str, str] | None = None  # OAuth client id and secret, for real Gmail
 
 
 def _services(connection: HTTPConnection) -> Services:

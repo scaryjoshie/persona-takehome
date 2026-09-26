@@ -3,12 +3,15 @@ with a scripted model instead of OpenAI."""
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
+import httpx
 import pytest
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
@@ -18,6 +21,8 @@ from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
 from app.database import create_schema, make_engine, make_sessions
+from app.gmail import google
+from app.gmail import routes as gmail_routes
 from app.main import assemble
 from app.services import Services
 from app.text import voice_notes as voice_note_routes
@@ -72,7 +77,9 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         transcribe=fake_transcribe,
         voice_notes_dir=tmp_path,
         app_base_url="http://x",
+        google=("client-id", "client-secret"),
     )
+    web.include_router(gmail_routes.router)
     web.include_router(web_routes.router)
     web.include_router(voice_routes.router)
     web.include_router(voice_note_routes.router)
@@ -239,3 +246,47 @@ def test_voice_message_upload_transcribes_and_plays_back(client: TestClient) -> 
         f"/api/voice-note?phone={phone}", files={"audio": ("x.txt", b"hi", "text/plain")}
     )
     assert bad.status_code == 415
+
+
+def test_the_gmail_link_offers_a_demo_inbox_and_real_gmail(client: TestClient) -> None:
+    page = client.get("/api/auth/google/start?phone=15550009999").text
+    assert "Use a demo inbox" in page and "/api/auth/google/real?phone=15550009999" in page
+
+
+def test_connecting_the_demo_inbox(client: TestClient) -> None:
+    phone = "15550009998"
+    assert "Connected" in client.post(f"/api/auth/google/demo?phone={phone}").text
+    connected = [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]
+    assert connected["phase"] == "connected" and connected["demo"] and connected["inbox"]
+
+
+def test_real_gmail_reads_the_inbox_once_and_connects(client: TestClient) -> None:
+    phone = "15550009997"
+    to_google = client.get(f"/api/auth/google/real?phone={phone}", follow_redirects=False)
+    assert to_google.headers["location"].startswith(google.AUTH_URL)
+    state = parse_qs(urlparse(to_google.headers["location"]).query)["state"][0]
+    claims = base64.urlsafe_b64encode(json.dumps({"email": "kate@gmail.com"}).encode()).decode()
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/token":
+            return httpx.Response(200, json={"access_token": "t", "id_token": f"h.{claims}.s"})
+        if request.url.path.endswith("/messages"):
+            return httpx.Response(200, json={"messages": [{"id": "m1"}]})
+        headers = [{"name": "From", "value": "ConEd"}, {"name": "Subject", "value": "Bill"}]
+        return httpx.Response(200, json={"snippet": "due soon", "payload": {"headers": headers}})
+
+    gmail_routes._client = httpx.AsyncClient(transport=httpx.MockTransport(handle))  # pyright: ignore[reportPrivateUsage]
+    done = client.get(f"/api/auth/google/callback?state={state}&code=c")
+    assert "kate@gmail.com" in done.text
+    connected = [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]
+    assert connected["email"] == "kate@gmail.com" and connected["inbox"][0]["sender"] == "ConEd"
+    again = client.get(f"/api/auth/google/callback?state={state}&code=c")
+    assert "expired" in again.text  # a state works once
+
+
+def test_declining_on_googles_screen_is_a_failed_connection(client: TestClient) -> None:
+    phone = "15550009996"
+    to_google = client.get(f"/api/auth/google/real?phone={phone}", follow_redirects=False)
+    state = parse_qs(urlparse(to_google.headers["location"]).query)["state"][0]
+    client.get(f"/api/auth/google/callback?state={state}&error=access_denied")
+    assert [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]["phase"] == "failed"

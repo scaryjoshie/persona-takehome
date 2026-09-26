@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./onboarding.db"
     data_dir: str = "./data"  # uploaded voice messages
     app_base_url: str = "http://localhost:8000"  # public URL, for links the agent texts
+    google_client_id: str | None = None  # real Gmail; without these only the demo inbox
+    google_client_secret: SecretStr | None = None
 
     @field_validator("openai_live_backend_model", mode="before")
     @classmethod
