@@ -60,6 +60,14 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           maxLength={DIGITS}
           value={value}
           onChange={setValue}
+          // input-otp selects the last digit when the field fills; collapse that to a plain caret so
+          // nothing (browser or extension) decorates a selection inside the invisible input.
+          onComplete={() =>
+            requestAnimationFrame(() => {
+              const input = document.activeElement;
+              if (input instanceof HTMLInputElement) input.setSelectionRange(DIGITS, DIGITS);
+            })
+          }
           pattern={REGEXP_ONLY_DIGITS}
           inputMode="tel"
           // Keep autofill and password-manager badges off the field; they draw icons over the blanks.
@@ -69,6 +77,9 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           data-lpignore="true"
           data-bwignore
           data-form-type="other"
+          spellCheck={false}
+          data-gramm="false"
+          data-enable-grammarly="false"
           aria-label="Phone number"
           pasteTransformer={(pasted) => pasted.replace(/\D/g, "").slice(-DIGITS)}
           containerClassName="flex items-end gap-1"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IPhone17Pro } from "./components/phone/IPhone17Pro";
 import { MessagesScreen } from "./components/phone/MessagesScreen";
@@ -11,6 +11,7 @@ import { Stage } from "./components/stage/Stage";
 import { useMockPhone } from "./mock/useMockPhone";
 import { AGENT_NAME, FIRST_MESSAGE, speechLevel } from "./mock/data";
 import { enter, lastNumber } from "./mock/identity";
+import { play } from "./lib/sounds";
 
 // The island sits 14pt below the top of the screen, centered; measured from Apple's bezel PNG.
 const ISLAND_TOP = 14;
@@ -67,6 +68,13 @@ function Demo({ session }: { session: Session | null }) {
 
   const { call } = mock;
   const active = call?.phase === "active";
+
+  // A pluck up when the call connects, a pluck down when it ends.
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (active !== wasActive.current) play(active ? "callJoin" : "callLeave");
+    wasActive.current = active;
+  }, [active]);
   const orbMode = !active ? "off" : mock.speaking ? "speaking" : "on";
 
   return (
