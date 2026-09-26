@@ -24,6 +24,7 @@ from app.web.protocol import (
     SetTyping,
     SlotsMessage,
     Snapshot,
+    WireEvent,
 )
 from app.web.sockets import Sockets
 
@@ -43,7 +44,7 @@ def make_router(pipeline: Actions, sockets: Sockets) -> APIRouter:
         user = await pipeline.user(phone)
         history = await pipeline.history(phone)
         return Snapshot(
-            events=[e.model_dump(mode="json") for e in history],
+            events=[WireEvent.of(e) for e in history],
             slots=user.slots,
             call=user.call,
             floor=user.floor,
@@ -61,7 +62,7 @@ def make_router(pipeline: Actions, sockets: Sockets) -> APIRouter:
         live = pipeline.live_users.get(phone)
 
         async def on_event(event: Event) -> None:
-            await sockets.push(phone, EventMessage(event=event.model_dump(mode="json")))
+            await sockets.push(phone, EventMessage(event=WireEvent.of(event)))
             if event.kind in STATE_KINDS:
                 user = await pipeline.user(phone)
                 await sockets.push(phone, SlotsMessage(slots=user.slots))

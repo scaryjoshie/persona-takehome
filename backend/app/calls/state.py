@@ -23,7 +23,7 @@ class CallPhase(StrEnum):
 
 
 class CallState(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, json_schema_serialization_defaults_required=True)
 
     phase: CallPhase = CallPhase.NONE
     reason: str | None = None

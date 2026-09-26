@@ -8,7 +8,7 @@ from app.gmail.events import GmailPhase
 
 
 class Slots(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, json_schema_serialization_defaults_required=True)
 
     agent_name: str | None = None
     user_name: str | None = None

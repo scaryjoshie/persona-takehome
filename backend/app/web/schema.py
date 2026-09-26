@@ -12,9 +12,9 @@ from app.web.protocol import ClientMessage, ServerMessage
 
 def schema() -> dict[str, object]:
     return {
-        "client_message": TypeAdapter(ClientMessage).json_schema(),
-        "server_message": TypeAdapter(ServerMessage).json_schema(),
-        "payload": TypeAdapter(AnyPayload).json_schema(),
+        "client_message": TypeAdapter(ClientMessage).json_schema(mode="serialization"),
+        "server_message": TypeAdapter(ServerMessage).json_schema(mode="serialization"),
+        "payload": TypeAdapter(AnyPayload).json_schema(mode="serialization"),
     }
 
 

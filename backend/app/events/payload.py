@@ -46,7 +46,9 @@ class Payload(BaseModel):
     """Base for every event payload. Subclasses declare `kind: Literal["..."] = "..."`,
     which is the discriminator pydantic needs, and override the hooks they care about."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", json_schema_serialization_defaults_required=True
+    )
 
     # Subclasses declare `kind: Literal["..."] = "..."`; it is the union discriminator.
     routes: ClassVar[bool] = True  # does submitting this event trigger routing?
