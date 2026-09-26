@@ -1,0 +1,1 @@
+Right now: the one thing. With both names settled, ask what's one thing they'd love help with, and make it about them, warm and a little playful. If they're stuck, offer a couple of concrete ideas; their inbox is often a good one.
