@@ -135,6 +135,7 @@ async def run_call(
                 asyncio.create_task(_signals(session, call)),
                 asyncio.create_task(_hang_up_when_done(call, end)),
                 asyncio.create_task(_silence(call)),
+                asyncio.create_task(_time_limit(call)),
             ]
             await ended.wait()
             unsubscribe()
@@ -275,6 +276,8 @@ GOODBYE = re.compile(r"\b(bye|goodbye|talk soon|see you|later)\b", re.I)
 SILENCE = 20.0  # seconds of nobody talking before the voice checks in
 DROP_GRACE = 0.6  # seconds for a hang-up message to beat the audio closing
 HANG_UP_WAIT = 10.0  # seconds: hang up anyway if no goodbye plays
+MAX_CALL = 600.0  # seconds: calls are billed by the minute, so a forgotten tab can't run on
+WRAP_UP = 45.0  # seconds before MAX_CALL that the voice starts wrapping up
 
 
 async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None:
@@ -313,6 +316,20 @@ async def _silence(call: LiveCall) -> None:
             call.hang_up_after = call.agent_lines
             call.hang_up_asked.set()
             return
+
+
+async def _time_limit(call: LiveCall) -> None:
+    """Calls are capped at MAX_CALL: near the end, wrap up and hang up; text carries on."""
+    await asyncio.sleep(MAX_CALL - WRAP_UP)
+    await call.send(
+        "The call is nearly at its 10-minute limit. Wrap up in a sentence or two: say you'll "
+        "keep going by text, and say bye.",
+        speak=True,
+    )
+    await asyncio.sleep(WRAP_UP)
+    call.hang_up_reason = "time_limit"
+    call.hang_up_after = call.agent_lines
+    call.hang_up_asked.set()
 
 
 async def _signals(session: RealtimeSession, call: LiveCall) -> None:

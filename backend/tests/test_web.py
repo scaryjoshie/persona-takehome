@@ -296,3 +296,10 @@ def test_declining_on_googles_screen_is_a_failed_connection(client: TestClient) 
     state = parse_qs(urlparse(to_google.headers["location"]).query)["state"][0]
     client.get(f"/api/auth/google/callback?state={state}&error=access_denied")
     assert [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]["phase"] == "failed"
+
+
+def test_calls_per_ip_limit() -> None:
+    from app.voice.routes import over_call_limit
+
+    assert [over_call_limit("10.0.0.9", 2) for _ in range(3)] == [False, False, True]
+    assert over_call_limit("10.0.0.10", 2) is False  # another IP has its own count

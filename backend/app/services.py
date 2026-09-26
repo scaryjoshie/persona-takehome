@@ -33,6 +33,7 @@ class Services:
     voice_notes_dir: Path
     app_base_url: str
     google: Google  # connected Google accounts
+    calls_per_ip_per_day: int = 100  # a guard against a runaway script
 
 
 def _services(connection: HTTPConnection) -> Services:
