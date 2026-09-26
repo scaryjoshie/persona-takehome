@@ -22,8 +22,12 @@ class AgentEnv:
     # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
     hang_up: Callable[[str], bool] | None = None
 
-    def deps(self, user: User, medium: Medium, *, back_office: bool = False) -> Deps:
-        return Deps(user=user, medium=medium, env=self, back_office=back_office)
+    def deps(
+        self, user: User, medium: Medium, *, first_reply: bool = False, back_office: bool = False
+    ) -> Deps:
+        return Deps(
+            user=user, medium=medium, env=self, first_reply=first_reply, back_office=back_office
+        )
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,7 @@ class Deps:
     # and the back office. Only the back office records facts and sends things.
     back_office: bool = False
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
+    first_reply: bool = False  # nothing has been said to them yet
 
     @property
     def pipeline(self) -> Pipeline:

@@ -13,7 +13,7 @@ from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
 from app.agent.deps import AgentEnv
 from app.events.payload import Channel, Origin
-from app.text.events import Reaction, UserMessage, VoiceNote
+from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
 
 Sleep = Callable[[float], Awaitable[None]]
@@ -33,8 +33,10 @@ class Replier:
     async def reply(self, phone: str, through_seq: int) -> None:
         env = self._env
         pipeline = env.pipeline
-        deps = env.deps(await pipeline.user(phone), Medium.TEXT)
-        history = to_model_messages(await pipeline.history(phone))
+        events = await pipeline.history(phone)
+        first = not any(isinstance(e.payload, AgentMessage) for e in events)
+        deps = env.deps(await pipeline.user(phone), Medium.TEXT, first_reply=first)
+        history = to_model_messages(events)
         result = await agent.run(
             None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
         )

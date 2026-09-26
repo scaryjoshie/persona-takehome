@@ -40,7 +40,7 @@ from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import to_model_messages, trim_history, what_you_know
+from app.agent.context import current_stage, to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
 from app.events.event import Event
 from app.events.payload import Channel, Origin
@@ -97,7 +97,7 @@ async def run_call(
     delegation = dict((live_model.settings or {}).get("openai_live_delegation", {}))
     delegation["instructions"] = prompts.VOICE_BACKEND
     settings = OpenAILiveModelSettings(
-        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.ONBOARDING}\n\n{prompts.CALL}",
+        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}",
         openai_live_delegation=cast(OpenAILiveResponsesDelegation, delegation),
     )
 
@@ -136,7 +136,8 @@ async def run_call(
             # Say hi, then pick up the setup where it stands. The reason for the call is
             # background, not a script: reading it out made the voice lead with the ask.
             next_step = (
-                "ask what they want to call you"
+                "ask what they want to call you, with a light reason (you can't really be "
+                "their assistant without a name)"
                 if user.slots.agent_name is None
                 else "ask their name"
                 if user.slots.user_name is None
@@ -328,7 +329,8 @@ class StateNotes:
 
     async def _note(self) -> str:
         user = await self._pipeline.user(self._phone)
-        return f"{NOW}\n{what_you_know(user.slots, user.call)}"
+        stage = current_stage(user.slots) or ""
+        return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
 
 
 BACK_OFFICE_STEPS = 4  # model requests per run: a runaway run must not block the next turn

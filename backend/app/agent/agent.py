@@ -13,7 +13,7 @@ from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
-from app.agent.context import what_you_know
+from app.agent.context import current_stage, what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.events.payload import Channel, Origin, Payload
@@ -47,7 +47,8 @@ def dynamic_instructions(ctx: RunContext[Deps]) -> str:
         return ""  # the Live backend: its snapshot would go stale; state reaches it as notes
     known = what_you_know(d.user.slots, d.user.call)
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    return f"# What you know\n\n{known}\n\n{tail}"
+    stage = current_stage(d.user.slots, first_reply=d.first_reply) or ""
+    return f"# What you know\n\n{known}\n\n{stage}\n\n{tail}"
 
 
 # ---- helpers ----------------------------------------------------------------
