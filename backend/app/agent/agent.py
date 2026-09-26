@@ -160,6 +160,17 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
 
 
 @agent.tool(prepare=not_the_voice)
+async def send_contact_card(ctx: RunContext[Deps]) -> str:
+    """Text your contact card again (they asked, or the last one got lost)."""
+    name = (await ctx.deps.pipeline.user(ctx.deps.phone)).slots.agent_name
+    if not name:
+        return "you don't have a name yet; settle one first (set_agent_name sends the card)"
+    await _submit(ctx, ContactCard(name=name))
+    await _record(ctx, "send_contact_card", {}, {})
+    return f"your {name} contact card went out"
+
+
+@agent.tool(prepare=not_the_voice)
 async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
     if problem := not_a_name(name.strip()):
@@ -227,6 +238,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     if not await _submit(ctx, ringing):
         return "can't call right now; a call is already ringing or in progress"
     d.placed_call = True  # the call is this reply; its bubbles are dropped
+    await d.env.messenger.set_typing(d.phone, False)  # calling, not typing
     missed = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id=call_id)
     d.pipeline.later(RING_SECONDS, d.phone, Origin.SYSTEM, Channel.SYSTEM, missed)
     await _record(ctx, "start_call", {"reason": reason}, {})
