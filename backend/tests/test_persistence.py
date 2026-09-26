@@ -40,8 +40,8 @@ async def test_user_state_round_trips(db: SessionFactory, clock: FakeClock) -> N
     async with db() as s, s.begin():
         u = await users.ensure_user(s, PHONE, now=clock())
         assert u.slots.missing() == ("agent_name", "user_name", "help_need", "gmail")
-        u = await users.set_slot(s, PHONE, "agent_name", "Jarvis")
-        u = await users.set_slot(s, PHONE, "gmail", GmailPhase.LINK_SENT)
+        u = await users.set_slots(s, PHONE, agent_name="Jarvis")
+        u = await users.set_slots(s, PHONE, gmail=GmailPhase.LINK_SENT)
         u = await users.set_call(
             s, PHONE, CallState(phase=CallPhase.CONNECTED, call_id="c1", started_at=clock())
         )

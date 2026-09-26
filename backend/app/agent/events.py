@@ -7,14 +7,19 @@ from typing import Any, Literal
 
 from app.events.payload import Payload, Role, Turn
 
+NamedSlot = Literal["agent_name", "user_name", "help_need"]
+
 
 class SlotChanged(Payload):
+    """The agent recorded a name or the help need. The pipeline fills in `old` and drops the
+    event if the value did not change."""
+
     kind: Literal["slot_changed"] = "slot_changed"
     routes = False
 
-    slot: str
-    old: Any
-    new: Any
+    slot: NamedSlot
+    new: str
+    old: str | None = None
 
 
 class ToolCall(Payload):

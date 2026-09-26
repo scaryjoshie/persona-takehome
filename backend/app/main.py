@@ -14,12 +14,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 
-from app.actions import Actions
 from app.agent.agent import agent
 from app.agent.call_notes import call_note
 from app.agent.model import agent_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
 from app.payloads import PAYLOADS
+from app.pipeline import Pipeline
 from app.routing.types import Medium
 from app.settings import get_settings
 from app.text.decider import text_decider
@@ -44,13 +44,13 @@ def build_app(
     jev_model: str = "typesafe/jev-1.13",
     timers: Timers | None = None,
     clock: Clock = utc_now,
-) -> Actions:
+) -> Pipeline:
     def new_live_user(phone: str) -> LiveUser:
         live = LiveUser(phone)
         reply = Reply(
             agent,
             phone=phone,
-            actions=actions,  # defined below; only called after build_app returns
+            pipeline=pipeline,  # defined below; only called after build_app returns
             messenger=messenger,
             model=model,
             app_base_url=app_base_url,
@@ -69,8 +69,8 @@ def build_app(
         )
         return live
 
-    actions = Actions(db, LiveUsers(new_live_user), payloads=PAYLOADS, clock=clock)
-    return actions
+    pipeline = Pipeline(db, LiveUsers(new_live_user), payloads=PAYLOADS, clock=clock)
+    return pipeline
 
 
 # ---- the web app: `uv run uvicorn app.main:app --reload` --------------------------

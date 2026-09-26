@@ -12,7 +12,7 @@ Revised 2026-09-26 after the data-layer review (conventions borrowed from cado b
 
 - `app/database.py`: one async engine (`sqlite+aiosqlite`), one session factory, schema creation. Nothing else opens connections.
 - Each section has `models.py` (SQLModel tables, persistence only, plain names, string enums as string columns) and `service.py` (module functions that take a session, touch only their own tables, never commit).
-- `app/actions.py` owns transactions: validate, one short transaction, then notify the runtime and route. It is the only place that composes sections. `submit` is the one door for events; `set_slot` is the one door for slot writes.
+- `app/pipeline.py`: `submit` is the one door for every event. It saves the event in one short transaction, first applying it to the user's state if it is one of the kinds that change state (call events → call state and floor; slot, Gmail, and graduated events → slots), then pushes it to the browser and routes it. An event that would change nothing is dropped.
 - `app/runtime.py`: `Runtime` (lock, drivers, voice session, subscribers) and `Runtimes` (registry by phone).
 - The user is a frozen value (`app/users/types.py`) built from its row; it is replaced, never mutated.
 - Migrations: none. Tables are created at startup. A migration flow for a SQLite demo is ceremony.

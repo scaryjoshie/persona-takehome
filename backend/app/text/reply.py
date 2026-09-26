@@ -10,10 +10,10 @@ from collections.abc import Awaitable, Callable
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
 
-from app.actions import Actions
 from app.agent.agent import Bubbles, say
 from app.agent.context import to_model_messages
 from app.agent.deps import Deps
+from app.pipeline import Pipeline
 from app.routing.types import Medium
 from app.text.messenger import Messenger
 from app.text.responder import RunRequest, RunResult
@@ -33,7 +33,7 @@ class Reply:
         agent: Agent[Deps, str],
         *,
         phone: str,
-        actions: Actions,
+        pipeline: Pipeline,
         messenger: Messenger,
         model: Model,
         app_base_url: str,
@@ -41,18 +41,18 @@ class Reply:
     ) -> None:
         self._agent = agent
         self._phone = phone
-        self._actions = actions
+        self._pipeline = pipeline
         self._messenger = messenger
         self._model = model
         self._app_base_url = app_base_url
         self._sleep = sleep
 
     async def __call__(self, request: RunRequest) -> RunResult:
-        user = await self._actions.user(self._phone)
-        history = to_model_messages(await self._actions.history(self._phone))
+        user = await self._pipeline.user(self._phone)
+        history = to_model_messages(await self._pipeline.history(self._phone))
         deps = Deps(
             user=user,
-            actions=self._actions,
+            pipeline=self._pipeline,
             messenger=self._messenger,
             medium=Medium.TEXT,
             app_base_url=self._app_base_url,

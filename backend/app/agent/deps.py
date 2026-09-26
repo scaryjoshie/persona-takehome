@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.actions import Actions
 from app.events.payload import Channel, Origin
+from app.pipeline import Pipeline
 from app.routing.types import Medium
 from app.text.messenger import Messenger
 from app.users.user import User
@@ -14,7 +14,7 @@ from app.users.user import User
 @dataclass
 class Deps:
     user: User  # a snapshot taken when the run started
-    actions: Actions
+    pipeline: Pipeline
     messenger: Messenger
     medium: Medium
     app_base_url: str

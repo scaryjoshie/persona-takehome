@@ -14,7 +14,7 @@ backend/app/
   main.py               entry point: assembles the payload union, wires live users + actions; FastAPI app (slice 2b)
   settings.py           pydantic-settings; nothing else reads the environment
   database.py           async engine, session factory, schema creation
-  actions.py            transaction owners: submit (the one door for events), set_slot; composes sections
+  pipeline.py           submit: the one door for events (save, applying state changes; publish; route)
   timers.py             timer abstraction so responders test without sleeping
   events/   payload.py (Payload base, Origin, Channel, Role, Turn)  event.py (Event)  models.py  service.py
   users/    models.py (user row: identity + state columns)  user.py (User frozen value)  service.py

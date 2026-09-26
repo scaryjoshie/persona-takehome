@@ -8,10 +8,10 @@ import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
-from app.actions import Actions
 from app.calls.events import CallEvent, CallTransition, Initiator
 from app.events.event import Event
 from app.events.payload import Channel, Origin
+from app.pipeline import Pipeline
 from app.text.events import Typing, UserMessage
 from app.web.protocol import (
     CLIENT_MESSAGE,
@@ -37,7 +37,7 @@ class SessionRequest(BaseModel):
     phone: str
 
 
-def make_router(pipeline: Actions, sockets: Sockets) -> APIRouter:
+def make_router(pipeline: Pipeline, sockets: Sockets) -> APIRouter:
     router = APIRouter()
 
     async def snapshot(phone: str) -> Snapshot:

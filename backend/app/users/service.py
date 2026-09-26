@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -27,9 +28,11 @@ async def get_user(session: AsyncSession, phone: str) -> User | None:
     return None if row is None else User.of(row)
 
 
-async def set_slot(session: AsyncSession, phone: str, slot: str, value: Any) -> User:
+async def set_slots(session: AsyncSession, phone: str, **values: Any) -> User:
+    """Write slot columns by name. Enum values are stored as their string value."""
     row = await _row(session, phone)
-    setattr(row, slot, value.value if hasattr(value, "value") else value)
+    for slot, value in values.items():
+        setattr(row, slot, value.value if isinstance(value, StrEnum) else value)
     await session.flush()
     return User.of(row)
 

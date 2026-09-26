@@ -1,4 +1,4 @@
-"""What happens to an event after it is saved. Called by `Actions.submit`.
+"""What happens to an event after it is saved. Called by `Pipeline.submit`.
 
     1. Pick the responder: voice if a call is connected, text otherwise (the user's floor).
     2. Nothing in progress on that responder: it starts responding to the event.

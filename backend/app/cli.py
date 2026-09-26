@@ -26,7 +26,7 @@ async def main(phone: str) -> None:
     settings = get_settings()
     engine = make_engine(settings.database_url)
     await create_schema(engine)
-    actions = build_app(
+    pipeline = build_app(
         db=make_sessions(engine),
         messenger=ConsoleMessenger(),
         model=agent_model(settings),
@@ -43,7 +43,7 @@ async def main(phone: str) -> None:
         if not line:
             break
         if line.strip():
-            await actions.submit(phone, Origin.USER, Channel.TEXT, UserMessage(text=line.strip()))
+            await pipeline.submit(phone, Origin.USER, Channel.TEXT, UserMessage(text=line.strip()))
 
 
 if __name__ == "__main__":

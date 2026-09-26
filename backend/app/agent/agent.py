@@ -1,5 +1,5 @@
 """The shared agent: one definition for text and voice. Instructions are markdown
-fragments plus a dynamic state block; tools write facts through actions."""
+fragments plus a dynamic state block; tools write facts through pipeline."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from pydantic_ai.tools import ToolDefinition
 from app.agent import prompts
 from app.agent.context import state_block
 from app.agent.deps import Deps
-from app.agent.events import Graduated, ToolCall
+from app.agent.events import Graduated, SlotChanged, ToolCall
 from app.calls.events import CallEvent, CallTransition, Initiator
+from app.events.payload import Payload
 from app.gmail.events import GmailEvent, GmailPhase
 from app.routing.types import Medium
 from app.text.events import AgentMessage
@@ -45,21 +46,19 @@ def dynamic_instructions(ctx: RunContext[Deps]) -> str:
 async def _record(
     ctx: RunContext[Deps], name: str, args: dict[str, Any], result: dict[str, Any]
 ) -> None:
-    d = ctx.deps
-    await d.actions.submit(
-        d.phone, d.origin, d.channel, ToolCall(name=name, args=args, result=result)
-    )
+    await _submit(ctx, ToolCall(name=name, args=args, result=result))
 
 
-async def _set(ctx: RunContext[Deps], slot: str, value: Any) -> bool:
+async def _submit(ctx: RunContext[Deps], payload: Payload) -> bool:
+    """Submit an event from the agent. False if the pipeline dropped it (nothing changed)."""
     d = ctx.deps
-    return await d.actions.set_slot(d.phone, slot, value, origin=d.origin, channel=d.channel)
+    return await d.pipeline.submit(d.phone, d.origin, d.channel, payload) is not None
 
 
 async def say(deps: Deps, text: str) -> None:
     """Send a bubble: record it, then push it through the messenger."""
     bubble = AgentMessage(text=text, from_call=deps.medium is Medium.VOICE)
-    await deps.actions.submit(deps.phone, deps.origin, deps.channel, bubble)
+    await deps.pipeline.submit(deps.phone, deps.origin, deps.channel, bubble)
     await deps.messenger.send(deps.phone, text)
 
 
@@ -77,7 +76,7 @@ async def only_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinit
 @agent.tool
 async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the name the user chose for you. Call this the moment they pick one."""
-    changed = await _set(ctx, "agent_name", name.strip())
+    changed = await _submit(ctx, SlotChanged(slot="agent_name", new=name.strip()))
     await _record(ctx, "set_agent_name", {"name": name}, {"changed": changed})
     return f"recorded: your name is {name.strip()}"
 
@@ -85,7 +84,7 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
 @agent.tool
 async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
-    changed = await _set(ctx, "user_name", name.strip())
+    changed = await _submit(ctx, SlotChanged(slot="user_name", new=name.strip()))
     await _record(ctx, "set_user_name", {"name": name}, {"changed": changed})
     return f"recorded: user is called {name.strip()}"
 
@@ -93,7 +92,7 @@ async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
 @agent.tool
 async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     """Record one concrete thing the user wants help with, in their words."""
-    changed = await _set(ctx, "help_need", need.strip())
+    changed = await _submit(ctx, SlotChanged(slot="help_need", new=need.strip()))
     await _record(ctx, "record_help_need", {"need": need}, {"changed": changed})
     return "recorded"
 
@@ -104,8 +103,7 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     d = ctx.deps
     link = f"{d.app_base_url}/api/auth/google/start?phone={d.phone}"
     await say(d, link)
-    await _set(ctx, "gmail", GmailPhase.LINK_SENT)
-    await d.actions.submit(d.phone, d.origin, d.channel, GmailEvent(phase=GmailPhase.LINK_SENT))
+    await _submit(ctx, GmailEvent(phase=GmailPhase.LINK_SENT))
     await _record(ctx, "send_gmail_link", {}, {"link": link})
     return "link sent by text; the user will tap it when ready"
 
@@ -113,9 +111,7 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
 @agent.tool
 async def skip_gmail(ctx: RunContext[Deps]) -> str:
     """The user declined to connect Gmail. Do not ask again."""
-    d = ctx.deps
-    await _set(ctx, "gmail", GmailPhase.SKIPPED)
-    await d.actions.submit(d.phone, d.origin, d.channel, GmailEvent(phase=GmailPhase.SKIPPED))
+    await _submit(ctx, GmailEvent(phase=GmailPhase.SKIPPED))
     await _record(ctx, "skip_gmail", {}, {})
     return "recorded: gmail skipped"
 
@@ -123,11 +119,10 @@ async def skip_gmail(ctx: RunContext[Deps]) -> str:
 @agent.tool(prepare=only_text)
 async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     """Call the user now. Give the reason for the call in one line; you will have it on the call."""
-    d = ctx.deps
     ringing = CallEvent(
         transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT
     )
-    await d.actions.submit(d.phone, d.origin, d.channel, ringing)
+    await _submit(ctx, ringing)
     await _record(ctx, "start_call", {"reason": reason}, {})
     return "calling now; the user's phone is ringing"
 
@@ -135,9 +130,8 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
 @agent.tool(prepare=only_voice)
 async def end_call(ctx: RunContext[Deps]) -> str:
     """Hang up the call after saying goodbye."""
-    d = ctx.deps
     ended = CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
-    await d.actions.submit(d.phone, d.origin, d.channel, ended)
+    await _submit(ctx, ended)
     await _record(ctx, "end_call", {}, {})
     return "call ending"
 
@@ -145,8 +139,6 @@ async def end_call(ctx: RunContext[Deps]) -> str:
 @agent.tool
 async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     """Move the user into the main experience. Say what you will do first, in one line."""
-    d = ctx.deps
-    await _set(ctx, "graduated", True)
-    await d.actions.submit(d.phone, d.origin, d.channel, Graduated())
+    await _submit(ctx, Graduated())
     await _record(ctx, "graduate", {"first_action": first_action}, {})
     return "graduated"
