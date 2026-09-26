@@ -562,11 +562,14 @@
   font-size: 20px;
 }
 
-/* A link card lines up with the bubble bodies above and below it, which stop short of their tail. */
-.messages-screen .message-sent.message-link .message-bubble {
+/* Link cards and pictures line up with the bubbles around them: the iOS bubble mask leaves a 6px
+   tail strip on the outer side of every bubble box, and these have no mask. */
+.messages-screen .message-sent.message-link .message-bubble,
+.messages-screen .message-sent.message-photo .message-bubble {
   margin-right: 6px;
 }
-.messages-screen .message-received.message-link .message-bubble {
+.messages-screen .message-received.message-link .message-bubble,
+.messages-screen .message-received.message-photo .message-bubble {
   margin-left: 6px;
 }
 
