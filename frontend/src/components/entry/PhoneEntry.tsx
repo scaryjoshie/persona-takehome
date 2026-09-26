@@ -62,20 +62,8 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           onChange={setValue}
           pattern={REGEXP_ONLY_DIGITS}
           inputMode="tel"
-          // Keep autofill and password-manager badges off the field; they draw icons over the blanks.
-          autoComplete="off"
-          pushPasswordManagerStrategy="none"
-          data-1p-ignore
-          data-lpignore="true"
-          data-bwignore
-          data-form-type="other"
-          spellCheck={false}
-          data-gramm="false"
-          data-enable-grammarly="false"
+          autoComplete="tel-national"
           aria-label="Phone number"
-          // The real input sits invisibly over the blanks. Opacity 0 (not just transparent text)
-          // also hides the caret and selection it would otherwise paint when the number fills.
-          style={{ opacity: 0 }}
           pasteTransformer={(pasted) => pasted.replace(/\D/g, "").slice(-DIGITS)}
           containerClassName="flex items-end gap-1"
           render={({ slots }) => (
