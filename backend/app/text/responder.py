@@ -10,6 +10,7 @@ Duplicate checks are harmless: once ReplyStarted is recorded, nothing is waiting
 
 from __future__ import annotations
 
+from app.agent.context import last_lines
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin
@@ -103,9 +104,4 @@ class TextResponder:
 
 
 def _state(ctx: Context) -> dict[str, object]:
-    conversation: list[str] = []
-    for event in ctx.recent[-12:]:
-        turn = event.payload.turn(event.ts)
-        if turn is not None:
-            conversation.append(f"{turn.role.value}: {turn.text}")
-    return {"channel": "text messages", "conversation": conversation}
+    return {"channel": "text messages", "conversation": last_lines(ctx.recent)}

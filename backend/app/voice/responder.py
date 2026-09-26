@@ -12,6 +12,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from app.agent.context import last_lines
 from app.events.decision import Decision
 from app.events.event import Event
 from app.gmail.events import GmailEvent, GmailPhase
@@ -180,15 +181,10 @@ class VoiceResponder:
 
 
 def _state(event: Event, call: LiveCall, ctx: Context) -> dict[str, object]:
-    conversation: list[str] = []
-    for e in ctx.recent[-12:]:
-        turn = e.payload.turn(e.ts)
-        if turn is not None:
-            conversation.append(f"{turn.role.value}: {turn.text}")
     return {
         "channel": "voice call",
         "assistant_currently_responding": call.speaking,
         "assistant_last_turn_asked_a_question": call.asked_question,
-        "conversation": conversation,
+        "conversation": last_lines(ctx.recent),
         "new_event": event.payload.describe(),
     }
