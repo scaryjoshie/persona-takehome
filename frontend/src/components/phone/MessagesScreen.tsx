@@ -1,5 +1,5 @@
 import "./f7";
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   App,
   Icon,
@@ -47,6 +47,8 @@ export function MessagesScreen({
   initialDraft = "",
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useStickToBottom(rootRef, messages.length, typing);
   const send = () => {
     if (!draft.trim()) return;
     onSend?.(draft.trim());
@@ -56,7 +58,7 @@ export function MessagesScreen({
   const endsSent = messages.at(-1)?.side === "sent";
 
   return (
-    <div className={`messages-screen${keyboard ? " has-keyboard" : ""}`}>
+    <div ref={rootRef} className={`messages-screen${keyboard ? " has-keyboard" : ""}`}>
       <div className="status-bar">
         <Scaled width={SCREEN.width} height={STATUS_H}>
           <IOSStatusBar theme="dark" time="9:41" />
@@ -87,7 +89,7 @@ export function MessagesScreen({
               <Link slot="inner-end" iconF7="mic" aria-label="Audio message" />
             )}
           </Messagebar>
-          <Messages>
+          <Messages scrollMessages={false}>
             <MessagesTitle>
               <b>iMessage</b>
               <br />
@@ -115,4 +117,30 @@ export function MessagesScreen({
       <div className="home-indicator" />
     </div>
   );
+}
+
+/**
+ * Keeps the thread pinned to the newest message the way iMessage does: if the reader is at the
+ * bottom, every change glides to the new bottom; if they scrolled up to read, it leaves them there.
+ * Framework7's own auto-scroll is off because it only fires when the message count changes, so a
+ * typing bubble turning into a message grew the thread without following it.
+ */
+function useStickToBottom(root: React.RefObject<HTMLDivElement | null>, count: number, typing: boolean) {
+  const atBottom = useRef(true);
+
+  useEffect(() => {
+    const el = root.current?.querySelector<HTMLElement>(".page-content");
+    if (!el) return;
+    const onScroll = () => {
+      atBottom.current = el.scrollHeight - el.clientHeight - el.scrollTop < 60;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    el.scrollTop = el.scrollHeight;
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [root]);
+
+  useLayoutEffect(() => {
+    const el = root.current?.querySelector<HTMLElement>(".page-content");
+    if (el && atBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [root, count, typing]);
 }

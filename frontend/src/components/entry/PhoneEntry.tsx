@@ -43,15 +43,16 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
   return (
     <motion.form
       onSubmit={submit}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.5 } }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-black/40 backdrop-blur-2xl"
+      initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+      animate={{ opacity: 1, backdropFilter: "blur(40px)" }}
+      exit={{ opacity: 0, backdropFilter: "blur(0px)", transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] } }}
+      transition={{ duration: 0.6 }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10 bg-black/40"
     >
-      <div className="text-center">
+      <motion.div className="text-center" exit={{ y: -12, opacity: 0, transition: { duration: 0.35 } }}>
         <h1 className="text-2xl font-medium text-white">Enter your phone number</h1>
         <p className="mt-2 text-sm text-neutral-400">It's how Persona knows it's you.</p>
-      </div>
+      </motion.div>
 
       <div className="flex items-end gap-4">
         <OTPInput
@@ -61,7 +62,13 @@ export function PhoneEntry({ initial = "", onSubmit }: Props) {
           onChange={setValue}
           pattern={REGEXP_ONLY_DIGITS}
           inputMode="tel"
-          autoComplete="tel-national"
+          // Keep autofill and password-manager badges off the field; they draw icons over the blanks.
+          autoComplete="off"
+          pushPasswordManagerStrategy="none"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
+          data-form-type="other"
           aria-label="Phone number"
           pasteTransformer={(pasted) => pasted.replace(/\D/g, "").slice(-DIGITS)}
           containerClassName="flex items-end gap-1"

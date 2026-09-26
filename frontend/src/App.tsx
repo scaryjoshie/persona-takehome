@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { IPhone17Pro } from "./components/phone/IPhone17Pro";
 import { MessagesScreen } from "./components/phone/MessagesScreen";
 import { CallIsland } from "./components/phone/CallIsland";
@@ -70,38 +70,46 @@ function Demo({ session }: { session: Session | null }) {
   const orbMode = !active ? "off" : mock.speaking ? "speaking" : "on";
 
   return (
-    <Stage
-      phone={
-        <IPhone17Pro
-          scale={scale}
-          overlay={
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: ISLAND_TOP, pointerEvents: "auto" }}>
-              <CallIsland
-                agentName={AGENT_NAME}
-                phase={call?.phase ?? null}
-                seconds={call?.seconds}
-                expanded={call?.expanded}
-                onAccept={mock.accept}
-                onDecline={mock.decline}
-                onEnd={mock.end}
-                onToggleExpanded={mock.toggleExpanded}
-              />
-            </div>
-          }
-        >
-          <MessagesScreen
-            contact={AGENT_NAME}
-            messages={mock.messages}
-            typing={mock.typing}
-            onSend={mock.send}
-            onCall={mock.startCall}
-            initialDraft={session?.isNew ? FIRST_MESSAGE : ""}
-          />
-        </IPhone17Pro>
-      }
-      orb={<VoiceOrb mode={orbMode} level={level} />}
-      caption={active && <Transcript lines={mock.transcript} />}
-      controls={<CallControls visible={active} muted={mock.muted} onToggleMute={mock.toggleMute} onEnd={mock.end} />}
-    />
+    // The stage settles in as the frost lifts: a slight rise to full size and brightness.
+    <motion.div
+      className="h-full"
+      initial={session ? { opacity: 0.55, scale: 0.97 } : false}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Stage
+        phone={
+          <IPhone17Pro
+            scale={scale}
+            overlay={
+              <div style={{ display: "flex", justifyContent: "center", paddingTop: ISLAND_TOP, pointerEvents: "auto" }}>
+                <CallIsland
+                  agentName={AGENT_NAME}
+                  phase={call?.phase ?? null}
+                  seconds={call?.seconds}
+                  expanded={call?.expanded}
+                  onAccept={mock.accept}
+                  onDecline={mock.decline}
+                  onEnd={mock.end}
+                  onToggleExpanded={mock.toggleExpanded}
+                />
+              </div>
+            }
+          >
+            <MessagesScreen
+              contact={AGENT_NAME}
+              messages={mock.messages}
+              typing={mock.typing}
+              onSend={mock.send}
+              onCall={mock.startCall}
+              initialDraft={session?.isNew ? FIRST_MESSAGE : ""}
+            />
+          </IPhone17Pro>
+        }
+        orb={<VoiceOrb mode={orbMode} level={level} />}
+        caption={active && <Transcript lines={mock.transcript} />}
+        controls={<CallControls visible={active} muted={mock.muted} onToggleMute={mock.toggleMute} onEnd={mock.end} />}
+      />
+    </motion.div>
   );
 }
