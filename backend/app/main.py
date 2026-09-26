@@ -62,8 +62,14 @@ def assemble(
     clock: Clock = utc_now,
 ) -> App:
     pipeline = Pipeline(db, payloads=PAYLOADS, clock=clock, timers=timers or AsyncioTimers())
-    env = AgentEnv(pipeline=pipeline, messenger=messenger, model=model, app_base_url=app_base_url)
     voice = VoiceResponder(notes=call_note, jev=jev)
+    env = AgentEnv(
+        pipeline=pipeline,
+        messenger=messenger,
+        model=model,
+        app_base_url=app_base_url,
+        hang_up=voice.hang_up,
+    )
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env), jev=jev)
     pipeline.responders[Medium.VOICE] = voice
     return App(env=env, voice=voice)

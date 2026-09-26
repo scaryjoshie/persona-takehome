@@ -129,6 +129,8 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     if changed:
         await _submit(ctx, ContactCard(name=name))  # one tap for them to save it
     await _record(ctx, "set_agent_name", {"name": name}, {"changed": changed})
+    if not changed:
+        return f"{name} was already your name; nothing to do"
     return f"recorded: your name is {name}; your contact card went out, they can tap to save it"
 
 
@@ -137,6 +139,8 @@ async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
     changed = await _submit(ctx, SlotChanged(slot="user_name", new=name.strip()))
     await _record(ctx, "set_user_name", {"name": name}, {"changed": changed})
+    if not changed:
+        return f"they were already called {name.strip()}; nothing to do"
     return f"recorded: user is called {name.strip()}"
 
 
@@ -145,7 +149,7 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     """Record one concrete thing the user wants help with, in their words."""
     changed = await _submit(ctx, SlotChanged(slot="help_need", new=need.strip()))
     await _record(ctx, "record_help_need", {"need": need}, {"changed": changed})
-    return "recorded"
+    return "recorded" if changed else "already recorded; nothing to do"
 
 
 @agent.tool(prepare=not_the_voice)
@@ -216,8 +220,9 @@ HANG_UP_AFTER = 3.0  # seconds, so the goodbye finishes playing before the line 
 async def end_call(ctx: RunContext[Deps]) -> str:
     """Hang up the call. Only after the voice has said goodbye."""
     d = ctx.deps
-    ended = CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
-    d.pipeline.later(HANG_UP_AFTER, d.phone, d.origin, d.channel, ended)
+    if d.env.hang_up is None or not d.env.hang_up(d.phone):
+        ended = CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
+        d.pipeline.later(HANG_UP_AFTER, d.phone, d.origin, d.channel, ended)
     await _record(ctx, "end_call", {}, {})
     return "call ending"
 

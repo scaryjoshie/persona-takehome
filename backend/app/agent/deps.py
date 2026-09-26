@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pydantic_ai.models import Model
@@ -18,6 +19,8 @@ class AgentEnv:
     messenger: Messenger
     model: Model  # the text model; also runs the call's back-office listener
     app_base_url: str  # for links the agent sends, like the Gmail link
+    # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
+    hang_up: Callable[[str], bool] | None = None
 
     def deps(self, user: User, medium: Medium, *, back_office: bool = False) -> Deps:
         return Deps(user=user, medium=medium, env=self, back_office=back_office)

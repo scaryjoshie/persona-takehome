@@ -4,8 +4,7 @@ While the call is up, these run at once:
 - microphone: browser audio frames → the Live session
 - speaker: the agent's audio → the browser
 - captions: live transcript deltas → `partial` messages to the browser
-- turns: finished turns, stitched back together (turns.py) → a VoiceUtterance event each
-- quiet: closes a stitched turn once its speaker has been quiet for a moment
+- turns: each finished turn → a VoiceUtterance event
 - signals: turn boundaries and tool activity → the voice responder
 - state: whenever a fact changes, a silent note with where things stand
 
@@ -37,6 +36,7 @@ from pydantic_ai.realtime.openai_live import (
     OpenAILiveModelSettings,
     OpenAILiveResponsesDelegation,
 )
+from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
@@ -49,7 +49,6 @@ from app.users.user import Medium
 from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
-from app.voice.turns import Line, TurnJoiner
 
 log = logging.getLogger(__name__)
 
@@ -151,14 +150,14 @@ async def run_call(
             if user.slots.agent_name:
                 opener += " Your name is already on their screen; don't say it."
             await session.send(opener)
-            transcript = Transcript(phone, pipeline, push, Listener(env, call, phone))
+            transcript = Transcript(phone, pipeline, push, call, Listener(env, call, phone))
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
                 asyncio.create_task(_captions(session, call, transcript)),
                 asyncio.create_task(_turns(session, transcript)),
-                asyncio.create_task(transcript.close_quiet_turns()),
                 asyncio.create_task(_signals(session, call)),
+                asyncio.create_task(_hang_up_when_done(call, end)),
             ]
             await ended.wait()
             unsubscribe()
@@ -176,14 +175,9 @@ async def run_call(
         closing = voice.calls.pop(phone, None)
         if closing is not None:
             closing.closed = True
-        reason = outcome["reason"]
-        if reason != "agent_hangup":  # end_call already recorded its own ended event
-            await pipeline.submit(
-                phone,
-                Origin.CALL,
-                Channel.SYSTEM,
-                CallEvent(transition=CallTransition.ENDED, reason=reason),
-            )
+        # One "ended" event with the first reason; a second one is dropped by the pipeline.
+        ended_event = CallEvent(transition=CallTransition.ENDED, reason=outcome["reason"])
+        await pipeline.submit(phone, Origin.CALL, Channel.SYSTEM, ended_event)
         with contextlib.suppress(Exception):
             await websocket.close()
 
@@ -212,57 +206,43 @@ def _speaker_of(raw: str) -> Speaker:
 
 
 class Transcript:
-    """Captions and utterances for one call, stitched with a TurnJoiner. A turn is recorded
-    (and the back office runs) once it closes: the other speaker started, or it went quiet."""
+    """Captions and utterances for one call. Each finished turn is recorded under the id its
+    captions used (so the browser replaces the caption), and wakes the back office."""
 
-    def __init__(self, phone: str, pipeline: Pipeline, push: Push, listener: Listener) -> None:
+    def __init__(
+        self, phone: str, pipeline: Pipeline, push: Push, call: LiveCall, listener: Listener
+    ) -> None:
         self._phone = phone
+        self._call = call
         self._pipeline = pipeline
         self._push = push
         self._listener = listener
-        self._joiner = TurnJoiner()
-        self._live: dict[Speaker, Line] = {}  # captions shown but not finished yet
-        self._raw: dict[Speaker, str] = {}  # Live's id for each speaker's turn in progress
+        self._open: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
 
-    async def caption(self, speaker: Speaker, raw_id: str, text: str) -> None:
-        line, closed = self._joiner.caption(speaker, raw_id, text)
-        self._live[speaker], self._raw[speaker] = line, raw_id
-        await self._record(closed)
-        await self._show(line, final=False)
+    async def caption(self, speaker: Speaker, turn_id: str, text: str) -> None:
+        self._open[speaker] = (turn_id, text)
+        await self._show(speaker, turn_id, text, final=False)
 
     async def final(self, speaker: Speaker, text: str) -> None:
-        """A finished turn. It carries no id; it is the turn its speaker's captions showed."""
-        self._live.pop(speaker, None)
-        raw_id = self._raw.pop(speaker, None) or f"{speaker.value}-{uuid.uuid4().hex}"
-        line, closed = self._joiner.final(speaker, raw_id, text)
-        await self._record(closed)
-        await self._show(line, final=False)
-
-    async def close_quiet_turns(self) -> None:
-        while True:
-            await asyncio.sleep(0.2)
-            await self._record(self._joiner.due())
+        """A finished turn carries no id; it is the turn its speaker's captions showed."""
+        opened = self._open.pop(speaker, None)
+        turn_id = opened[0] if opened else f"{speaker.value}-{uuid.uuid4().hex}"
+        await self._show(speaker, turn_id, text, final=True)
+        utterance = VoiceUtterance(speaker=speaker, text=text, turn_id=turn_id)
+        await self._pipeline.submit(self._phone, Origin.VOICE_AGENT, Channel.VOICE, utterance)
+        if speaker is Speaker.AGENT:
+            self._call.said(text)
+        if speaker is Speaker.USER or PROMISE.search(text):
+            self._listener.heard()
 
     async def finish(self) -> None:
-        """The call ended: record the open turn; close captions cut off mid-sentence."""
-        await self._record(self._joiner.close())
-        for line in self._live.values():
-            await self._show(line, final=True)
+        """The call ended: close captions cut off mid-sentence."""
+        for speaker, (turn_id, text) in self._open.items():
+            await self._show(speaker, turn_id, text, final=True)
 
-    async def _show(self, line: Line, *, final: bool) -> None:
-        partial = TranscriptPartial(
-            speaker=line.speaker, turn_id=line.turn_id, text=line.text, final=final
-        )
+    async def _show(self, speaker: Speaker, turn_id: str, text: str, *, final: bool) -> None:
+        partial = TranscriptPartial(speaker=speaker, turn_id=turn_id, text=text, final=final)
         await self._push(self._phone, partial)
-
-    async def _record(self, line: Line | None) -> None:
-        if line is None or not line.text:
-            return
-        await self._show(line, final=True)
-        utterance = VoiceUtterance(speaker=line.speaker, text=line.text, turn_id=line.turn_id)
-        await self._pipeline.submit(self._phone, Origin.VOICE_AGENT, Channel.VOICE, utterance)
-        if line.speaker is Speaker.USER or PROMISE.search(line.text):
-            self._listener.heard()
 
 
 async def _captions(session: RealtimeSession, call: LiveCall, transcript: Transcript) -> None:
@@ -280,6 +260,25 @@ async def _turns(session: RealtimeSession, transcript: Transcript) -> None:
     async for part in session.stream_transcripts():
         if part.transcript:
             await transcript.final(_speaker_of(part.speaker), part.transcript)
+
+
+GOODBYE = re.compile(r"\b(bye|goodbye|talk soon|see you|later)\b", re.I)
+HANG_UP_WAIT = 10.0  # seconds: hang up anyway if no goodbye plays
+
+
+async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None:
+    """After end_call: wait for the voice to finish a goodbye (one it says next, or one it
+    already said), let it play out, then hang up."""
+    await call.hang_up_asked.wait()
+    before = call.hang_up_after or 0
+    asked = time.monotonic()
+    while time.monotonic() - asked < HANG_UP_WAIT:  # noqa: ASYNC110 (polls two conditions)
+        said_bye = call.agent_lines > before or GOODBYE.search(call.last_agent_line)
+        if said_bye and not call.speaking:
+            await asyncio.sleep(1.0)
+            break
+        await asyncio.sleep(0.2)
+    end("agent_hangup")
 
 
 async def _signals(session: RealtimeSession, call: LiveCall) -> None:
@@ -300,10 +299,6 @@ async def _signals(session: RealtimeSession, call: LiveCall) -> None:
             for p in getattr(last, "parts", []):
                 if isinstance(p, SpeechPart) and p.speaker != "user" and p.transcript:
                     last_agent_text = p.transcript
-
-
-class NoteForVoice(BaseModel):
-    note: str | None = None
 
 
 class StateNotes:
@@ -334,6 +329,10 @@ class StateNotes:
     async def _note(self) -> str:
         user = await self._pipeline.user(self._phone)
         return f"{NOW}\n{what_you_know(user.slots, user.call)}"
+
+
+BACK_OFFICE_STEPS = 4  # model requests per run: a runaway run must not block the next turn
+BACK_OFFICE_SECONDS = 15.0
 
 
 class Listener:
@@ -367,16 +366,18 @@ class Listener:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
                 history = to_model_messages(await pipeline.history(self._phone))
-                result = await agent.run(
+                run = agent.run(
                     None,
                     message_history=history,
                     deps=self._env.deps(user, Medium.VOICE, back_office=True),
-                    output_type=NoteForVoice,
+                    output_type=str,  # plain text: a structured note got answered in prose
                     model=self._env.model,
                     instructions=prompts.LISTENER,
+                    usage_limits=UsageLimits(request_limit=BACK_OFFICE_STEPS),
                 )
-                if result.output.note:
-                    self._call.hold(result.output.note)
+                note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()
+                if note and note.strip(".").lower() not in ("null", "none"):
+                    self._call.hold(note)
             except Exception:
                 log.exception("%s: listener run failed", self._phone)
             log.info("%s: back office ran in %.1fs", self._phone, time.monotonic() - started)

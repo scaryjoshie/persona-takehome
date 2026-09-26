@@ -132,3 +132,12 @@ async def test_held_background_goes_in_when_they_start_talking(app: App) -> None
     assert session.sent == []
     await call.user_started()
     assert session.sent == [("The Gmail link is in their texts.", False)] and call.held == []
+
+
+async def test_end_call_on_a_live_call_waits_for_the_goodbye(app: App) -> None:
+    pipeline, call, _ = await on_a_call(app, app.voice)
+    assert app.env.hang_up is not None and app.env.hang_up(PHONE)
+    assert call.hang_up_after == 0
+    assert (await pipeline.user(PHONE)).call.phase.value == "connected"  # not ended yet
+    app.voice.calls.clear()
+    assert not app.env.hang_up(PHONE)  # no live call: end_call falls back to a timer
