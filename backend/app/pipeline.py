@@ -32,8 +32,7 @@ from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
 from app.users.user import Medium, User
-from app.voice.call_events import CallEvent, CallTransition
-from app.voice.call_state import next_state
+from app.voice.call_state import CallEvent, CallTransition, next_state
 
 log = logging.getLogger(__name__)
 

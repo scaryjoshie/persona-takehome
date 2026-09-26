@@ -47,7 +47,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
 from app.web.protocol import TranscriptPartial

@@ -16,7 +16,7 @@ from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.services import ServicesDep
 from app.text.events import Reaction, Typing, UserMessage
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.web.protocol import (
     CLIENT_MESSAGE,
     CallAction,

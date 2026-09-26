@@ -20,7 +20,7 @@ from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.text.timing import Timing, delay, waiting
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition
+from app.voice.call_state import CallEvent, CallTransition
 from tests.conftest import (
     PHONE,
     CapturingMessenger,

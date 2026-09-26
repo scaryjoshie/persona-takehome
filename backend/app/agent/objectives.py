@@ -31,8 +31,7 @@ from app.events.event import Event
 from app.gmail.events import GmailEvent
 from app.text.events import AgentMessage, ReplyStarted
 from app.users.user import Medium, User
-from app.voice.call_events import CallEvent, CallTransition
-from app.voice.call_state import CallState
+from app.voice.call_state import CallEvent, CallState, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
 
 PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart

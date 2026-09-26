@@ -7,7 +7,7 @@ from app.gmail.events import GmailEvent, GmailPhase
 from app.pipeline import Pipeline
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition, Initiator
+from app.voice.call_state import CallEvent, CallTransition, Initiator
 from tests.conftest import PHONE, FakeClock, FakeResponder, FakeTimers
 
 
