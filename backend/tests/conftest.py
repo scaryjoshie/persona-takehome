@@ -41,13 +41,8 @@ class FakeTimers:
         self.clock = clock
         self._entries: list[tuple[datetime, Callable[[], None], bool]] = []
 
-    def call_later(self, delay: float, cb: Callable[[], None]) -> _Handle:
+    def call_later(self, delay: float, cb: Callable[[], None]) -> None:
         self._entries.append((self.clock() + timedelta(seconds=delay), cb, False))
-        return _Handle(self, len(self._entries) - 1)
-
-    def cancel(self, idx: int) -> None:
-        due, cb, _ = self._entries[idx]
-        self._entries[idx] = (due, cb, True)
 
     @property
     def pending(self) -> list[float]:
@@ -61,17 +56,9 @@ class FakeTimers:
         assert live, "nothing scheduled"
         i, due = min(live, key=lambda x: x[1])
         cb = self._entries[i][1]
-        self.cancel(i)
+        self._entries[i] = (due, cb, True)
         self.clock.t = max(self.clock.t, due)
         cb()
-
-
-class _Handle:
-    def __init__(self, timers: FakeTimers, idx: int) -> None:
-        self._timers, self._idx = timers, idx
-
-    def cancel(self) -> None:
-        self._timers.cancel(self._idx)
 
 
 class CapturingMessenger:

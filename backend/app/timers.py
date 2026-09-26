@@ -10,14 +10,10 @@ from typing import Protocol
 Clock = Callable[[], datetime]
 
 
-class TimerHandle(Protocol):
-    def cancel(self) -> None: ...
-
-
 class Timers(Protocol):
-    def call_later(self, delay: float, cb: Callable[[], None]) -> TimerHandle: ...
+    def call_later(self, delay: float, cb: Callable[[], None]) -> None: ...
 
 
 class AsyncioTimers:
-    def call_later(self, delay: float, cb: Callable[[], None]) -> TimerHandle:
-        return asyncio.get_running_loop().call_later(delay, cb)
+    def call_later(self, delay: float, cb: Callable[[], None]) -> None:
+        asyncio.get_running_loop().call_later(delay, cb)
