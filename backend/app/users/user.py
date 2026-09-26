@@ -42,6 +42,7 @@ class User(BaseModel):
                 gmail=GmailPhase(row.gmail) if row.gmail else None,
                 gmail_email=row.gmail_email,
                 graduated=row.graduated,
+                contact_name=row.contact_name,
             ),
             call=CallState(
                 phase=CallPhase(row.call_phase),

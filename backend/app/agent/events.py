@@ -42,3 +42,28 @@ class Graduated(Payload):
 
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.NOTE, "user graduated to the main experience")
+
+
+class ContactCard(Payload):
+    """The agent's contact card (a .vcf), sent whenever its name is set or changed. The
+    user's phone only shows the new name once they tap to save it (ContactSaved)."""
+
+    kind: Literal["contact_card"] = "contact_card"
+    routes = False
+
+    name: str
+
+    def turn(self, at: datetime) -> Turn | None:
+        return Turn(Role.NOTE, f"your contact card went out as {self.name}")
+
+
+class ContactSaved(Payload):
+    """The user saved the agent's contact card. Sets what their phone calls the agent."""
+
+    kind: Literal["contact_saved"] = "contact_saved"
+    routes = False
+
+    name: str
+
+    def turn(self, at: datetime) -> Turn | None:
+        return Turn(Role.NOTE, f"they saved your contact as {self.name}")

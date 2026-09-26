@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.events.event import Event
-from app.text.events import ReplyStarted, UserMessage
+from app.text.events import Reaction, ReplyStarted, UserMessage, VoiceNote
+
+MESSAGES = (UserMessage, VoiceNote, Reaction)  # things a person sends; answered after a pause
 
 
 @dataclass(frozen=True)
@@ -39,9 +41,9 @@ def delay(pending: list[Event], typing_since: datetime | None, now: datetime, t:
     """Seconds from now until a reply is due. 0 means reply now."""
     if not pending:
         return 0.0
-    if any(not isinstance(e.payload, UserMessage) for e in pending):
+    if any(not isinstance(e.payload, MESSAGES) for e in pending):
         return 0.0  # a call ended or Gmail connected: nobody is typing that, answer now
-    messages = [e for e in pending if isinstance(e.payload, UserMessage)]
+    messages = [e for e in pending if isinstance(e.payload, MESSAGES)]
     if len(messages) >= t.max_messages:
         return 0.0
     cap_left = (pending[0].ts - now).total_seconds() + t.hard_cap

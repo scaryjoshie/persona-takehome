@@ -27,9 +27,11 @@ from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
 from app.services import Services
 from app.settings import Settings, get_settings
+from app.text import voice_notes as voice_note_routes
 from app.text.messenger import Messenger
 from app.text.reply import Replier
 from app.text.responder import TextResponder
+from app.text.voice_notes import Transcriber
 from app.timers import AsyncioTimers, Clock, Timers
 from app.users.user import Medium
 from app.voice import routes as voice_routes
@@ -106,14 +108,22 @@ def create_app() -> FastAPI:
         yield
 
     web = FastAPI(lifespan=lifespan)
+    voice_notes_dir = Path(settings.data_dir) / "voice_notes"
+    voice_notes_dir.mkdir(parents=True, exist_ok=True)
+    assert settings.openai_api_key is not None
     web.state.services = Services(
         pipeline=built.pipeline,
         voice=built.voice,
         sockets=sockets,
         run_call=start_call,
+        transcribe=Transcriber(
+            api_key=settings.openai_api_key.get_secret_value(), model=settings.transcribe_model
+        ),
+        voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
     )
-    for router in (web_routes.router, voice_routes.router, preview_routes.router):
+    routers = (web_routes.router, voice_routes.router, voice_note_routes.router)
+    for router in (*routers, preview_routes.router):
         web.include_router(router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():

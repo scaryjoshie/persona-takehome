@@ -85,6 +85,13 @@ def what_you_know(slots: Slots, call: CallState) -> str:
         if slots.help_need
         else "You don't know what they want help with yet.",
     ]
+    if slots.agent_name and slots.contact_name != slots.agent_name:
+        lines.append(
+            "They haven't saved your contact card yet; you can mention it once, casually."
+            if slots.contact_name is None
+            else f"They still have you saved as {slots.contact_name}; "
+            "your card with the new name is in their texts."
+        )
     match slots.gmail:
         case None:
             lines.append("Gmail isn't connected and you haven't sent the link.")

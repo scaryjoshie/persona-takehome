@@ -10,11 +10,12 @@ import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
+from app.agent.events import ContactSaved
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.services import ServicesDep
-from app.text.events import Typing, UserMessage
+from app.text.events import Reaction, Typing, UserMessage
 from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.web.protocol import (
     CLIENT_MESSAGE,
@@ -22,7 +23,9 @@ from app.web.protocol import (
     CallCommand,
     CallMessage,
     EventMessage,
+    React,
     Reset,
+    SaveContact,
     SendMessage,
     SetTyping,
     SlotsMessage,
@@ -74,9 +77,26 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
                 log.info("%s: bad message %s", phone, exc.errors()[:1])
                 continue
             match message:
-                case SendMessage(text=text):
+                case SendMessage(text=text, reply_to=reply_to):
                     typing_since = None
-                    await pipeline.submit(phone, Origin.USER, Channel.TEXT, UserMessage(text=text))
+                    quoted = await text_of(pipeline, phone, reply_to)
+                    said = UserMessage(text=text, reply_to=reply_to, reply_to_text=quoted)
+                    await pipeline.submit(phone, Origin.USER, Channel.TEXT, said)
+                case React(target_seq=seq, emoji=emoji, remove=remove):
+                    tapback = Reaction(
+                        target_seq=seq,
+                        target_text=await text_of(pipeline, phone, seq),
+                        emoji=emoji,
+                        by="user",
+                        removed=remove,
+                    )
+                    await pipeline.submit(phone, Origin.USER, Channel.TEXT, tapback)
+                case SaveContact():
+                    name = (await pipeline.user(phone)).slots.agent_name
+                    if name:
+                        await pipeline.submit(
+                            phone, Origin.USER, Channel.TEXT, ContactSaved(name=name)
+                        )
                 case SetTyping(active=active):
                     now = time.monotonic()
                     typing_since = (typing_since or now) if active else None
@@ -94,6 +114,18 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
     finally:
         unsubscribe()
         svc.sockets.remove(phone, websocket)
+
+
+async def text_of(pipeline: Pipeline, phone: str, seq: int | None) -> str | None:
+    """The text of bubble `seq`, if it has any, so a reply or tapback can quote it."""
+    if seq is None:
+        return None
+    for event in await pipeline.history(phone):
+        if event.seq == seq:
+            return getattr(event.payload, "text", None) or getattr(
+                event.payload, "transcript", None
+            )
+    return None
 
 
 async def snapshot(pipeline: Pipeline, phone: str) -> Snapshot:

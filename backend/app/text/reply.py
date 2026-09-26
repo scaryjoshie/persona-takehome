@@ -12,6 +12,8 @@ from collections.abc import Awaitable, Callable
 from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
 from app.agent.deps import AgentEnv
+from app.events.payload import Channel, Origin
+from app.text.events import Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
 
 Sleep = Callable[[float], Awaitable[None]]
@@ -37,6 +39,8 @@ class Replier:
             None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
         )
         bubbles = [b.strip() for b in result.output.bubbles if b.strip()] + deps.after_reply
+        if result.output.react:
+            await self._react(phone, through_seq, result.output.react)
         try:
             for i, text in enumerate(bubbles):
                 if await self._superseded(phone, through_seq):
@@ -48,6 +52,15 @@ class Replier:
                 await say(deps, text)
         finally:
             await self._env.messenger.set_typing(phone, False)
+
+    async def _react(self, phone: str, through_seq: int, emoji: str) -> None:
+        """Tapback on their latest message among those this reply answers."""
+        for event in reversed(await self._env.pipeline.history(phone, limit=30)):
+            if event.seq <= through_seq and isinstance(event.payload, UserMessage | VoiceNote):
+                text = event.payload.text if isinstance(event.payload, UserMessage) else None
+                tapback = Reaction(target_seq=event.seq, target_text=text, emoji=emoji, by="agent")
+                await self._env.pipeline.submit(phone, Origin.TEXT_AGENT, Channel.TEXT, tapback)
+                return
 
     async def _superseded(self, phone: str, through_seq: int) -> bool:
         """Did anything that wants a reply arrive after the events this reply answers?"""

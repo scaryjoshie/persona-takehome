@@ -16,6 +16,7 @@ class Slots(BaseModel):
     gmail: GmailPhase | None = None  # None = not asked yet
     gmail_email: str | None = None
     graduated: bool = False
+    contact_name: str | None = None  # what the user saved the agent as; None = not saved
 
     def missing(self) -> tuple[str, ...]:
         out: list[str] = []

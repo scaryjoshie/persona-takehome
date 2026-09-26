@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.events import Graduated, SlotChanged
+from app.agent.events import ContactSaved, Graduated, SlotChanged
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
@@ -140,3 +140,10 @@ async def test_the_gmail_link_goes_out_once(pipeline: Pipeline) -> None:
     sent = GmailEvent(phase=GmailPhase.LINK_SENT)
     assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, sent) is not None
     assert await pipeline.submit(PHONE, Origin.VOICE_AGENT, Channel.VOICE, sent) is None
+
+
+async def test_contact_saved_sets_what_the_phone_calls_the_agent(pipeline: Pipeline) -> None:
+    saved = ContactSaved(name="Mila")
+    assert await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, saved) is not None
+    assert await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, saved) is None  # no change
+    assert (await pipeline.user(PHONE)).slots.contact_name == "Mila"

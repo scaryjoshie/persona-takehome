@@ -19,6 +19,7 @@ class UserRow(SQLModel, table=True):
     gmail: str | None = None  # GmailPhase value, None = not asked
     gmail_email: str | None = None
     graduated: bool = False
+    contact_name: str | None = None  # what the user saved the agent as
     # current call
     call_phase: str = "none"
     call_reason: str | None = None

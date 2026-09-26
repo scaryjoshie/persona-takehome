@@ -12,7 +12,7 @@ from pydantic_ai.tools import ToolDefinition
 from app.agent import prompts
 from app.agent.context import what_you_know
 from app.agent.deps import Deps
-from app.agent.events import Graduated, SlotChanged, ToolCall
+from app.agent.events import ContactCard, Graduated, SlotChanged, ToolCall
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage
@@ -21,9 +21,12 @@ from app.voice.call_events import CallEvent, CallTransition, Initiator
 
 
 class Bubbles(BaseModel):
-    """The text channel's output: zero to four bubbles."""
+    """The text channel's output: zero to four bubbles, and optionally a tapback."""
 
     bubbles: list[str] = Field(default_factory=list, max_length=4)
+    react: str | None = Field(
+        default=None, description="An emoji tapback on their latest message, e.g. ❤️ 👍 😂"
+    )
 
 
 agent: Agent[Deps, str] = Agent(
@@ -77,9 +80,12 @@ async def only_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinit
 @agent.tool
 async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the name the user chose for you. Call this the moment they pick one."""
-    changed = await _submit(ctx, SlotChanged(slot="agent_name", new=name.strip()))
+    name = name.strip()
+    changed = await _submit(ctx, SlotChanged(slot="agent_name", new=name))
+    if changed:
+        await _submit(ctx, ContactCard(name=name))  # one tap for them to save it
     await _record(ctx, "set_agent_name", {"name": name}, {"changed": changed})
-    return f"recorded: your name is {name.strip()}"
+    return f"recorded: your name is {name}; your contact card went out, they can tap to save it"
 
 
 @agent.tool

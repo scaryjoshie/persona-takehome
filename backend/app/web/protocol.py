@@ -53,6 +53,23 @@ class CallAction(StrEnum):
 class SendMessage(Message):
     type: Literal["message"] = "message"
     text: str
+    reply_to: int | None = None  # seq of the bubble being replied to
+
+
+class React(Message):
+    """A tapback on a bubble; `remove` takes it back."""
+
+    type: Literal["react"] = "react"
+    target_seq: int
+    emoji: str
+    remove: bool = False
+
+
+class SaveContact(Message):
+    """The user tapped the agent's contact card to save it."""
+
+    type: Literal["contact"] = "contact"
+    action: Literal["save"] = "save"
 
 
 class SetTyping(Message):
@@ -71,7 +88,8 @@ class Reset(Message):
 
 
 ClientMessage = Annotated[
-    SendMessage | SetTyping | CallCommand | Reset, Field(discriminator="type")
+    SendMessage | SetTyping | CallCommand | React | SaveContact | Reset,
+    Field(discriminator="type"),
 ]
 CLIENT_MESSAGE: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 

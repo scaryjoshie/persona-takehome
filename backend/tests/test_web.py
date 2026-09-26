@@ -20,6 +20,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.database import create_schema, make_engine, make_sessions
 from app.main import assemble
 from app.services import Services
+from app.text import voice_notes as voice_note_routes
 from app.voice import routes as voice_routes
 from app.web import routes as web_routes
 from app.web.routes import normalize
@@ -31,6 +32,10 @@ async def reply_hi(messages: list[ModelMessage], info: AgentInfo) -> ModelRespon
 
 
 calls: list[str] = []
+
+
+async def fake_transcribe(audio: bytes, filename: str, content_type: str) -> str | None:
+    return "call yourself mila"
 
 
 async def fake_call(websocket: WebSocket, phone: str) -> None:
@@ -64,10 +69,13 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         voice=built.voice,
         sockets=sockets,
         run_call=fake_call,
+        transcribe=fake_transcribe,
+        voice_notes_dir=tmp_path,
         app_base_url="http://x",
     )
     web.include_router(web_routes.router)
     web.include_router(voice_routes.router)
+    web.include_router(voice_note_routes.router)
     with TestClient(web) as c:
         yield c
 
@@ -177,3 +185,57 @@ def test_two_sockets_each_get_every_event_once(client: TestClient) -> None:
             seen += [receive(ws), receive(ws)]
             kinds = [m["type"] for m in seen]
             assert kinds.count("event") == 1 and kinds.count("call") == 1, kinds
+
+
+def events_of(client: TestClient, phone: str) -> list[dict[str, Any]]:
+    snap = client.post("/api/session", json={"phone": phone}).json()
+    return [e["payload"] for e in snap["events"]]
+
+
+def test_reply_and_tapback_quote_their_target(client: TestClient) -> None:
+    with client.websocket_connect("/ws?phone=15550007777") as ws:
+        receive(ws)
+        ws.send_text(json.dumps({"type": "message", "text": "first"}))
+        first = receive_until(ws, "user_message")[-1]["event"]["seq"]
+        ws.send_text(json.dumps({"type": "message", "text": "about that", "reply_to": first}))
+        reply = receive_until(ws, "user_message")[-1]["event"]["payload"]
+        assert reply["reply_to"] == first and reply["reply_to_text"] == "first"
+        ws.send_text(json.dumps({"type": "react", "target_seq": first, "emoji": "❤️"}))
+        tapback = receive_until(ws, "reaction")[-1]["event"]["payload"]
+        assert tapback["target_text"] == "first" and tapback["by"] == "user"
+        assert tapback["emoji"] == "❤️" and not tapback["removed"]
+
+
+def test_saving_the_contact_card(client: TestClient) -> None:
+    phone = "15550008888"
+    with client.websocket_connect(f"/ws?phone={phone}") as ws:
+        receive(ws)
+        ws.send_text(json.dumps({"type": "contact", "action": "save"}))  # no name yet: ignored
+    assert all(p["kind"] != "contact_saved" for p in events_of(client, phone))
+
+
+def test_voice_message_upload_transcribes_and_plays_back(client: TestClient) -> None:
+    phone = "15550009999"
+    with client.websocket_connect(f"/ws?phone={phone}") as ws:
+        receive(ws)
+        r = client.post(
+            f"/api/voice-note?phone={phone}",
+            files={"audio": ("note.webm", b"fake-opus", "audio/webm;codecs=opus")},
+            data={"duration_ms": "2400"},
+        )
+        assert r.status_code == 200
+        audio_id = r.json()["audio_id"]
+        note = receive_until(ws, "voice_note")[-1]["event"]["payload"]
+        assert note == {
+            "kind": "voice_note",
+            "audio_id": audio_id,
+            "duration_ms": 2400,
+            "transcript": "call yourself mila",
+        }
+    played = client.get(f"/api/voice-note/{audio_id}")
+    assert played.status_code == 200 and played.content == b"fake-opus"
+    assert client.get("/api/voice-note/../../etc/passwd").status_code == 404
+    bad = client.post(
+        f"/api/voice-note?phone={phone}", files={"audio": ("x.txt", b"hi", "text/plain")}
+    )
+    assert bad.status_code == 415

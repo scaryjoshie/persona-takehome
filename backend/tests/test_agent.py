@@ -103,3 +103,17 @@ async def test_instructions_include_state_and_text_tail(
     text = captured["instructions"]
     assert "Your name is Jarvis." in text and "Still missing: user name, help need, gmail." in text
     assert "zero to four" in text and prompts.PERSONA[:40] in text
+
+
+async def test_naming_the_agent_sends_its_contact_card(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    model = scripted(
+        [ToolCallPart("set_agent_name", {"name": "Mila"})],
+        [ToolCallPart("final_result", {"bubbles": ["mila it is"], "react": "❤️"})],
+    )
+    await run_text(pipeline, messenger, model, [])
+    kinds = [e.kind for e in await pipeline.history(PHONE)]
+    assert "contact_card" in kinds and kinds[-1] == "agent_message"
+    tapbacks = [e for e in await pipeline.history(PHONE) if e.kind == "reaction"]
+    assert len(tapbacks) == 1 and tapbacks[0].payload.model_dump()["by"] == "agent"

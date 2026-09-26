@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic-ai-slim[openai,openai-realtime,openrouter]>=2.51.0",
     "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
     "sqlalchemy[asyncio]>=2.0.54",
     "sqlmodel>=0.0.47",
     "uvicorn[standard]>=0.54.0",

@@ -6,12 +6,22 @@ from typing import Literal
 from app.events.payload import Payload, Role, Turn
 
 
+def _quoted(text: str | None) -> str:
+    """How a quoted bubble reads in the model's context."""
+    if not text:
+        return ""
+    short = text if len(text) <= 80 else text[:77] + "..."
+    return f'(replying to "{short}") '
+
+
 class UserMessage(Payload):
     kind: Literal["user_message"] = "user_message"
     text: str
+    reply_to: int | None = None  # seq of the bubble this replies to (an iMessage inline reply)
+    reply_to_text: str | None = None  # that bubble's text, kept so the model sees the quote
 
     def turn(self, at: datetime) -> Turn | None:
-        return Turn(Role.USER, self.text)
+        return Turn(Role.USER, _quoted(self.reply_to_text) + self.text)
 
     def describe(self) -> str:
         return f"the user texted: {self.text}"
@@ -25,6 +35,7 @@ class AgentMessage(Payload):
 
     text: str
     from_call: bool = False  # sent by the voice side via a tool
+    reply_to: int | None = None
 
     def turn(self, at: datetime) -> Turn | None:
         if self.from_call:
@@ -62,3 +73,44 @@ class ReplyStarted(Payload):
     routes = False
 
     through_seq: int
+
+
+class VoiceNote(Payload):
+    """A voice message the user sent. Handled like a text: `transcript` is what they said."""
+
+    kind: Literal["voice_note"] = "voice_note"
+
+    audio_id: str
+    duration_ms: int | None = None
+    transcript: str | None = None
+
+    def turn(self, at: datetime) -> Turn | None:
+        return Turn(Role.USER, f"(voice message) {self.transcript or '[could not transcribe]'}")
+
+    def describe(self) -> str:
+        return f"the user sent a voice message: {self.transcript or '(unclear)'}"
+
+
+class Reaction(Payload):
+    """A tapback (❤️ 👍 😂 …) on a bubble, by either side. The user's route: a 👍 on
+    "want me to call?" is an answer. The agent's are recorded only."""
+
+    kind: Literal["reaction"] = "reaction"
+
+    target_seq: int
+    target_text: str | None = None
+    emoji: str
+    by: Literal["user", "agent"]
+    removed: bool = False
+
+    def should_route(self) -> bool:
+        return self.by == "user" and not self.removed
+
+    def turn(self, at: datetime) -> Turn | None:
+        who = "user" if self.by == "user" else "you"
+        verb = "took back their" if self.removed else "reacted"
+        target = f' to "{self.target_text}"' if self.target_text else ""
+        return Turn(Role.NOTE, f"{who} {verb} {self.emoji}{target}")
+
+    def describe(self) -> str:
+        return f"the user reacted {self.emoji} to: {self.target_text or 'a message'}"

@@ -22,7 +22,7 @@ from typing import Protocol
 from pydantic import TypeAdapter
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import Graduated, SlotChanged
+from app.agent.events import ContactSaved, Graduated, SlotChanged
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -222,6 +222,10 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
                 return None  # the link goes out once
             email = email or user.slots.gmail_email
             await users.set_slots(s, user.phone, gmail=phase, gmail_email=email)
+        case ContactSaved(name=name):
+            if user.slots.contact_name == name:
+                return None
+            await users.set_slots(s, user.phone, contact_name=name)
         case Graduated():
             if user.slots.graduated:
                 return None
