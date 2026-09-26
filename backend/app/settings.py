@@ -4,6 +4,7 @@ Nothing else in the app reads the environment directly.
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,8 +13,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # OpenAI: used ONLY for the Realtime voice session (call creation + sideband).
+    # OpenAI: the voice call only. GPT-Live speaks and delegates reasoning to an OpenAI
+    # Responses backend that runs our tools locally (docs 07b). Realtime is the fallback (07).
     openai_api_key: SecretStr | None = None
+    voice_layer: Literal["live", "realtime"] = "live"
+    openai_live_model: str = "gpt-live-1"
+    openai_live_backend_model: str = "gpt-6-sol"   # pinned; 'auto' would float
     openai_realtime_model: str = "gpt-realtime-2.1"
 
     # OpenRouter: everything else (text agent, decider fallback model, one-shot tasks).

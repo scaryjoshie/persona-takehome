@@ -1,11 +1,10 @@
 # Frontend to backend protocol
 
-HTTP for the few request/response things, one WebSocket per browser tab for everything live. The UI is a pure function of the snapshot plus the event stream; nothing on the client has state the server does not. That is what makes refresh, second tab, and come-back-later free.
+HTTP for the few request/response things, one WebSocket per browser tab for everything live, and a second WebSocket for call audio that exists only while a call is connected. The UI is a pure function of the snapshot plus the event stream; nothing on the client has state the server does not. That is what makes refresh, second tab, and come-back-later free.
 
 ## HTTP
 
 - `POST /session` with the phone number: creates or resumes the user. Returns a full snapshot (events, slots, call state, floor). The browser keeps the phone in local storage.
-- `POST /call/offer` with the SDP offer: server creates the Realtime call with the API key, attaches the sideband, returns the SDP answer. Audio then flows browser to OpenAI directly.
 - `GET /auth/google/start` and `GET /auth/google/callback`: OAuth. The callback writes the Integration row and the `gmail connected` event, then redirects to a "you can close this" page.
 - Static files for the Vite app.
 
@@ -42,9 +41,11 @@ class Channel(Protocol):
     # inbound: on_message and on_typing callbacks registered at startup
 ```
 
-## WebRTC in the browser
+## Audio WebSocket (`/ws/audio?phone=...`)
 
-Create a peer connection, add the microphone track, create an offer, post it, set the answer, play the remote track in an audio element. No data channel: the server owns control through the sideband. Hang-up sends the call action and closes the peer connection. If the connection state goes to failed or disconnected, the browser sends `dropped`. If the tab dies, the WebSocket close is the signal instead.
+Opened by the browser when a call connects (accept, or the user's own call button); closed on hang-up. Binary frames only: mono PCM16 at 24 kHz, both directions, in ~20 ms chunks. The browser captures with an AudioWorklet and plays back through a ring buffer; when the mic is muted it still sends silence, because GPT-Live only takes text context while audio is flowing.
+
+**The audio socket is the call.** Open means connected; close means ended. Hang-up button, tab close, and network drop all end the same way, so call-end detection has three sources instead of six: this socket closing, the agent's end-call tool (we close the session and the socket), and the session ending on its own (`live_session_expired`, `live_session_content`, `live_session_connection_lost`). WebRTC is not used (pydantic-ai does not support it for GPT-Live); it would only matter as a latency optimization on the Realtime fallback.
 
 ## Call state machine
 
@@ -52,7 +53,7 @@ Every transition is a call event in the store.
 
 - **none.** Text has the floor. The text agent's start-call tool (with a reason) moves to ringing. The user's own call button moves straight to connected.
 - **ringing.** Text still has the floor. Accept moves to connected. Decline, or a 30 s timeout, logs a declined event and returns to none; the text agent responds to that event.
-- **connected.** Voice has the floor. The voice handler is created here.
-- **ended.** From connected by any of the six sources in [07-voice-realtime.md](07-voice-realtime.md). One ended event with a reason, tear down the voice handler, floor back to text, text agent responds. Collapses immediately to none.
+- **connected.** Voice has the floor. The audio socket is open and the voice handler's session is created and seeded here.
+- **ended.** From connected by any of the three sources above. One ended event with a reason, tear down the voice handler, floor back to text, text agent responds. Collapses immediately to none.
 
 The ended event and the floor flip happen in the same queue step, before anything async.

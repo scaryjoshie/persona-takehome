@@ -5,7 +5,7 @@
 - **Python 3.12**, FastAPI, pydantic-ai 2.x (`pydantic-ai-slim[openai,openrouter,openai-realtime]`: OpenRouter for text, OpenAI Realtime for voice), SQLModel over SQLite, `cryptography` for Fernet, pydantic-settings. Tooling: uv, ruff, pyright strict, pytest with asyncio auto mode. Installed 2026-09-25: pydantic-ai-slim 2.51, fastapi 0.141, sqlmodel 0.0.47, openai 3.19.
 - **Browser:** a small Vite plus React app served as static files by FastAPI. Only the WebRTC handshake, audio element, phone UI, and a WebSocket back to the server. Everything with logic is Python.
 - **One long-running process** (see [11-hosting.md](11-hosting.md)), deployed on Fly.io or similar with a persistent volume for SQLite.
-- **Models:** OpenAI only for Realtime (`gpt-realtime-2.1`, mini as fallback). OpenRouter for everything else (text agent, decider fallback, one-shot tasks). Model ids live in tier constants, not scattered.
+- **Models:** GPT-Live (`gpt-live-1`) for the spoken call, delegating to an OpenAI Responses backend (`gpt-6-sol` class, pinned via `openai_live_delegation`). OpenRouter for the text agent, decider fallback, and one-shot tasks. `gpt-realtime-2.1` kept as the voice fallback behind the same interface. Model ids live in tier constants and settings, not scattered.
 
 ## Layout
 
@@ -24,13 +24,14 @@ backend/                  uv project; pyproject, .env (gitignored), .env.example
       deciders.py         rule-based decider; Jev decider behind the same Protocol
       views.py            text context view, voice context view, decider view (budgeted), merge rules
     ai/                   cado-style LLM layer
+      agent.py            THE shared pydantic-ai Agent: work instructions, tools, deps type; used by both handlers
       tiers.py            named tiers (TEXT_CHAT, VOICE, DECIDER), fallback chains, OpenRouter specs
       prompts/*.md        prompt files loaded as constants; test fails on orphaned files
       schemas.py          structured outputs (bubble list, etc.)
       jev.py              Jev wrapper with context budgeting and timeout fallback
     handlers/
       text.py             pydantic-ai agent: bubbles + tool calls, abortable, deps dataclass
-      voice.py            realtime session wrapper: verbs as sideband command sequences, transcripts, end detection
+      voice.py            agent.realtime() session on GPT-Live: audio pump to/from /ws/audio, verbs as send(), transcripts, end detection; Realtime fallback
       tools.py            shared tools: set names, record need, send gmail link, skip gmail, start/end call, graduate
     integrations/
       registry.py         provider definitions
@@ -51,7 +52,7 @@ docs/
 
 1. **Core with tests.** Deltas simulated in code, no keys. "Hangs up after giving name" is just a delta sequence, so these tests are the harness seed.
 2. **Text-only onboarding end to end.** Phone UI, text handler, tools, slots, debug panel. Completes the whole flow by text, which is the fallback requirement on its own.
-3. **Voice.** Call screens, WebRTC signaling through the server, sideband, injection, hang-up handling.
+3. **Voice.** One-day spike on GPT-Live first (connect, stream mic, see transcripts, `send()` a note, close). Then call screens, the audio relay socket, injection, hang-up handling. Fallback to Realtime if the spike fails.
 4. **Gmail.** OAuth, the connected event injected mid-call, the mock-inbox moment.
 5. **Polish.** Graduation path, prompt tuning, stress scripts, README and write-up, video.
 

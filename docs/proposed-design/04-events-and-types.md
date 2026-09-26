@@ -21,7 +21,7 @@ class Event(BaseModel):
 ```python
 class UserMessage(BaseModel):     kind: Literal["user_message"];   text: str
 class AgentMessage(BaseModel):    kind: Literal["agent_message"];  text: str; via: Literal["text", "voice"]   # a bubble that was sent
-class VoiceUtterance(BaseModel):  kind: Literal["voice_utterance"]; speaker: Literal["user", "agent"]; text: str | None; item_id: str
+class VoiceUtterance(BaseModel):  kind: Literal["voice_utterance"]; speaker: Literal["user", "agent"]; text: str | None; item_id: str | None; inferred: bool
 class ToolCall(BaseModel):        kind: Literal["tool_call"];      name: str; args: dict; result: dict | None
 class SlotChanged(BaseModel):     kind: Literal["slot_changed"];   slot: str; old: Any; new: Any
 class CallEvent(BaseModel):       kind: Literal["call"];           phase: Literal["ringing", "declined", "connected", "ended"]; reason: str | None; call_id: str | None
@@ -61,9 +61,8 @@ The "still missing" line is the entire steering mechanism. No director logic bey
 Store the atomic unit each source gives us:
 
 - **Text:** one row per bubble, in either direction.
-- **Voice:** one row per completed utterance, which is one Realtime conversation item, i.e. one stretch of speech as the server's turn detection segmented it.
-
-Because user-speech transcription completions can arrive out of order, append a placeholder utterance row when the item-created event arrives (those are in order) and fill in the text when the transcription completes, keyed by `item_id`.
+- **Voice (GPT-Live):** one row per *inferred* turn. Live sends transcript fragments with no item ids and no turn markers; pydantic-ai groups them into a `SpeechPart` per turn, inferring the boundary from silence (`openai_live_turn_silence_ms`). Store one row per `SpeechPart`, with `inferred: true`, and keep `item_id` nullable. A long dramatic pause can split one utterance into two rows; the render-time merge rule below repairs that.
+- **Voice (Realtime fallback):** one row per completed conversation item keyed by `item_id`; append a placeholder on item-created (in order) and fill text on transcription-completed (may be out of order).
 
 ## Rendering and merging
 

@@ -34,11 +34,13 @@ When there is no run, there is nothing to interrupt, and the decision layer is s
 Verb = Literal["interrupt", "absorb", "defer"]
 ```
 
-| Verb | Voice host (sideband commands) | Text host |
-|---|---|---|
-| interrupt | cancel response, inject item, request response | cancel generation task, drop unsent bubbles, re-run with full buffer |
-| absorb | create conversation item, no response request; model picks it up next turn | append to the debounce buffer / extend timer (non-message deltas only) |
-| defer | queue until response-done, then inject and respond | let current bubbles finish, then start a new turn |
+| Verb | Voice host (GPT-Live via pydantic-ai) | Voice host (Realtime fallback) | Text host |
+|---|---|---|---|
+| interrupt | `session.send(text)` as speakable commentary; Live works it in now (no cancel exists) | cancel response, inject item, request response | cancel generation task, drop unsent bubbles, re-run with full buffer |
+| absorb | `session.send(text, respond=False)`, worded as an internal note | create conversation item, no response request | append to the debounce buffer / extend timer (non-message deltas only) |
+| defer | wait for the inferred `RealtimeTurnCompleteEvent`, then `send` | queue until response-done, then inject and respond | let current bubbles finish, then start a new turn |
+
+On Live, a voice `Run` is inferred: it starts at the first output transcript fragment and ends at the inferred turn-complete event; `side_effect_in_flight` is true while a delegation is outstanding. Audio barge-in is handled by Live itself and never reaches the router.
 
 Absorb is a voice-heavy verb. On the text host a message arriving mid-generation should interrupt or defer, never be silently appended.
 
