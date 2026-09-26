@@ -1,9 +1,5 @@
-"""The text responder: buffers messages, waits for the user to finish, runs the agent.
-
-Timing only, no judgment (docs 06): a quiet window after the last message, extended
-while the user is typing, bounded by a hard cap on time and on message count.
-Whether a buffer "looks finished" is a decider question, not a rule here.
-"""
+"""The text responder: when the debounce says now, run one reply; handle events that
+arrive while a reply is running."""
 
 from __future__ import annotations
 
@@ -14,16 +10,9 @@ from dataclasses import dataclass
 from app.events.event import Event
 from app.routing.responder import Responder
 from app.routing.types import Medium, Run, Verb
+from app.text.debounce import Debounce, DebouncePolicy
 from app.text.events import Typing, UserMessage
 from app.timers import Clock, TimerHandle, Timers
-
-
-@dataclass(frozen=True)
-class DebouncePolicy:
-    quiet: float = 1.5  # seconds after the last message
-    typing_extend_max: float = 5.0  # while typing, wait at most this long past the last message
-    hard_cap: float = 8.0  # from the first buffered message
-    max_messages: int = 6
 
 
 @dataclass(frozen=True)
@@ -49,14 +38,10 @@ class TextResponder(Responder):
         self._runner = runner
         self._timers = timers
         self._clock = clock
-        self._policy = policy or DebouncePolicy()
+        self._debounce = Debounce(clock, policy)
         self._run: Run | None = None
         self._task: asyncio.Task[None] | None = None
         self._timer: TimerHandle | None = None
-        self._buffer: list[Event] = []
-        self._first_at: float | None = None
-        self._last_message_at: float | None = None
-        self._typing = False
         self._deferred: Event | None = None
         self._asked_question = False
 
@@ -64,78 +49,61 @@ class TextResponder(Responder):
     def run(self) -> Run | None:
         return self._run
 
-    # ---- responder protocol ---------------------------------------------------
+    @property
+    def task(self) -> asyncio.Task[None] | None:
+        """The reply in progress, for callers that need to await it (tests do)."""
+        return self._task
+
+    # ---- responder --------------------------------------------------------------
 
     async def start(self, event: Event) -> None:
         match event.payload:
             case UserMessage():
-                self._add(event)
+                self._debounce.add(event)
                 self._arm()
             case Typing(active=active):
-                self._typing = active
-                if self._buffer:
+                self._debounce.typing = active
+                if self._debounce:
                     self._arm()
             case _:  # system outcomes (call ended, gmail connected) are answered now
-                self._add(event)
-                self._fire(event)
+                self._debounce.add(event)
+                self._reply(event)
 
     async def apply(self, verb: Verb, event: Event) -> None:
         match verb:
             case Verb.INTERRUPT:
                 self._cancel()
-                self._add(event)
+                self._debounce.add(event)
                 if isinstance(event.payload, UserMessage):
                     self._arm()
                 else:
-                    self._fire(event)
+                    self._reply(event)
             case Verb.ABSORB:
                 if isinstance(event.payload, Typing):
-                    self._typing = event.payload.active
-                    if self._buffer:
+                    self._debounce.typing = event.payload.active
+                    if self._debounce:
                         self._arm()
             case Verb.DEFER:
                 self._deferred = event
             case Verb.START:
                 raise ValueError("START is not a verb a responder applies")
 
-    # ---- timing --------------------------------------------------------------
-
-    def _now(self) -> float:
-        return self._clock().timestamp()
-
-    def _add(self, event: Event) -> None:
-        now = self._now()
-        self._buffer.append(event)
-        self._first_at = self._first_at if self._first_at is not None else now
-        if isinstance(event.payload, UserMessage):
-            self._last_message_at = now
-
-    def _delay(self) -> float:
-        p, now = self._policy, self._now()
-        assert self._first_at is not None
-        if len(self._buffer) >= p.max_messages:
-            return 0.0
-        cap_left = max(0.0, self._first_at + p.hard_cap - now)
-        if self._typing:
-            since_last = now - (self._last_message_at if self._last_message_at else now)
-            return min(max(0.0, p.typing_extend_max - since_last), cap_left)
-        return min(p.quiet, cap_left)
+    # ---- reply lifecycle ------------------------------------------------------------
 
     def _arm(self) -> None:
+        """(Re)schedule a reply for when the debounce says so."""
         if self._timer:
             self._timer.cancel()
-        trigger = self._buffer[-1]
-        self._timer = self._timers.call_later(self._delay(), lambda: self._fire(trigger))
+        trigger = self._debounce.latest
+        self._timer = self._timers.call_later(self._debounce.delay(), lambda: self._reply(trigger))
 
-    def _fire(self, trigger: Event) -> None:
+    def _reply(self, trigger: Event) -> None:
         if self._timer:
             self._timer.cancel()
             self._timer = None
         if self._reply_in_progress():
             return  # _after picks the buffer up when the current reply ends
-        request = RunRequest(trigger=trigger, buffered=tuple(self._buffer))
-        self._buffer.clear()
-        self._first_at = None
+        request = RunRequest(trigger=trigger, buffered=self._debounce.take())
         self._run = Run(
             medium=Medium.TEXT,
             started=self._clock(),
@@ -155,9 +123,9 @@ class TextResponder(Responder):
     def _after(self) -> None:
         deferred, self._deferred = self._deferred, None
         if deferred:
-            self._add(deferred)
-            self._fire(deferred)
-        elif self._buffer:
+            self._debounce.add(deferred)
+            self._reply(deferred)
+        elif self._debounce:
             self._arm()
 
     def _reply_in_progress(self) -> bool:
@@ -169,8 +137,3 @@ class TextResponder(Responder):
             self._task.cancel()
         self._task = None
         self._run = None
-
-    @property
-    def task(self) -> asyncio.Task[None] | None:
-        """The reply in progress, for callers that need to await it (tests do)."""
-        return self._task

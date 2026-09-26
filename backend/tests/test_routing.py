@@ -5,7 +5,8 @@ from app.calls.events import CallEvent, CallTransition
 from app.calls.state import CallState
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
-from app.routing.filter import DefaultDecider, Filter
+from app.routing.deciders import DefaultDecider
+from app.routing.filter import Filter
 from app.routing.router import Router
 from app.routing.types import DecidedBy, Medium, Verb
 from app.users.user import User

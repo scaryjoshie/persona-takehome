@@ -20,7 +20,8 @@ from app.calls.events import CallEvent
 from app.database import SessionFactory, utc_now
 from app.events.payload import Payload
 from app.gmail.events import GmailEvent
-from app.routing.filter import Decider, DefaultDecider, Filter
+from app.routing.deciders import Decider, DefaultDecider
+from app.routing.filter import Filter
 from app.routing.responder import Responder
 from app.routing.router import Router
 from app.routing.types import Decision, Medium
