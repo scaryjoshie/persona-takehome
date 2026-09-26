@@ -15,7 +15,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.main import App, assemble
 from app.pipeline import Context, Pipeline
-from app.text.events import Typing, UserMessage
+from app.text.events import UserMessage
 from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.users.user import Medium, User
@@ -117,10 +117,6 @@ def ev(
 
 def user_text(text: str) -> Event:
     return ev(UserMessage(text=text))
-
-
-def typing(active: bool, seconds: float = 0) -> Event:
-    return ev(Typing(active=active, seconds=seconds))
 
 
 @pytest.fixture
