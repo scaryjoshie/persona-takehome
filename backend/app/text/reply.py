@@ -22,7 +22,7 @@ Sleep = Callable[[float], Awaitable[None]]
 
 
 def bubble_delay(text: str) -> float:
-    return min(0.8 + 0.04 * len(text), 3.0)
+    return min(0.8 + 0.04 * len(text), 2.0)
 
 
 class Reply:

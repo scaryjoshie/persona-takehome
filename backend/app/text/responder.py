@@ -13,10 +13,9 @@ from dataclasses import dataclass
 
 from app.events.event import Event
 from app.routing.responder import Responder
-from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
 from app.text.events import Typing, UserMessage
-from app.timers import TimerHandle, Timers
+from app.timers import Clock, TimerHandle, Timers
 
 
 @dataclass(frozen=True)
@@ -64,14 +63,6 @@ class TextResponder(Responder):
     @property
     def run(self) -> Run | None:
         return self._run
-
-    @property
-    def buffered(self) -> tuple[Event, ...]:
-        return tuple(self._buffer)
-
-    def mark_side_effect(self, in_flight: bool) -> None:
-        if self._run:
-            self._run = self._run.model_copy(update={"side_effect_in_flight": in_flight})
 
     # ---- responder protocol ---------------------------------------------------
 
@@ -140,8 +131,8 @@ class TextResponder(Responder):
         if self._timer:
             self._timer.cancel()
             self._timer = None
-        if self._task and not self._task.done():
-            return  # the running task re-arms on completion if anything is buffered
+        if self._reply_in_progress():
+            return  # _after picks the buffer up when the current reply ends
         request = RunRequest(trigger=trigger, buffered=tuple(self._buffer))
         self._buffer.clear()
         self._first_at = None
@@ -169,16 +160,17 @@ class TextResponder(Responder):
         elif self._buffer:
             self._arm()
 
+    def _reply_in_progress(self) -> bool:
+        return self._task is not None and not self._task.done()
+
     def _cancel(self) -> None:
-        if self._task and not self._task.done():
+        if self._reply_in_progress():
+            assert self._task is not None
             self._task.cancel()
         self._task = None
         self._run = None
 
-    async def wait_idle(self) -> None:
-        """Test helper."""
-        if self._task:
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+    @property
+    def task(self) -> asyncio.Task[None] | None:
+        """The reply in progress, for callers that need to await it (tests do)."""
+        return self._task

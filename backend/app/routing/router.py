@@ -3,16 +3,12 @@ the caller supplies the user and recent events and persists the decision."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime
-
 from app.events.event import Event
 from app.routing.filter import Filter
 from app.routing.responder import Responder
 from app.routing.types import DecidedBy, Decision, Medium, RoutingContext, Verb
+from app.timers import Clock
 from app.users.user import User
-
-Clock = Callable[[], datetime]
 
 
 class Router:

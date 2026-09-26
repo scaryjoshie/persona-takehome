@@ -15,6 +15,14 @@ def make(clock: FakeClock, *, block: bool = False) -> tuple[TextResponder, FakeT
     return TextResponder(runner=runner, timers=timers, clock=clock), timers, runner
 
 
+async def wait_idle(responder: TextResponder) -> None:
+    if responder.task is not None:
+        try:
+            await responder.task
+        except asyncio.CancelledError:
+            pass
+
+
 def texts(runner: FakeRunner, i: int) -> list[str]:
     out: list[str] = []
     for e in runner.requests[i].buffered:
@@ -33,7 +41,7 @@ async def test_message_waits_quiet_window_then_runs(clock: FakeClock) -> None:
     assert timers.pending == [1.5] and responder.run is None
     timers.fire_next()
     assert responder.run is not None
-    await responder.wait_idle()
+    await wait_idle(responder)
     assert texts(runner, 0) == ["hey there"] and responder.run is None
 
 
@@ -45,7 +53,7 @@ async def test_burst_is_one_run(clock: FakeClock) -> None:
         await responder.apply(Verb.INTERRUPT, user_text(t))
     assert len(timers.pending) == 1
     timers.fire_next()
-    await responder.wait_idle()
+    await wait_idle(responder)
     assert len(runner.requests) == 1 and texts(runner, 0) == ["one", "two", "three"]
 
 
@@ -94,7 +102,7 @@ async def test_interrupt_cancels_and_reruns(clock: FakeClock) -> None:
     assert runner.cancelled == 1 and responder.run is None and timers.pending == [1.5]
     runner.block = False
     timers.fire_next()
-    await responder.wait_idle()
+    await wait_idle(responder)
     assert texts(runner, 1) == ["actually nvm"]
 
 
@@ -105,17 +113,17 @@ async def test_defer_runs_after_current(clock: FakeClock) -> None:
     await asyncio.sleep(0)
     await responder.apply(Verb.DEFER, gmail_connected())
     runner.release.set()
-    await responder.wait_idle()
+    await wait_idle(responder)
     await asyncio.sleep(0)
     assert len(runner.requests) == 2 and runner.requests[1].trigger.kind == "gmail"
-    await responder.wait_idle()
+    await wait_idle(responder)
 
 
 async def test_system_outcome_when_idle_runs_now(clock: FakeClock) -> None:
     responder, timers, runner = make(clock)
     await responder.start(gmail_connected())
     assert timers.pending == [] and responder.run is not None
-    await responder.wait_idle()
+    await wait_idle(responder)
     assert runner.requests[0].trigger.kind == "gmail"
 
 
@@ -123,8 +131,8 @@ async def test_run_carries_last_question(clock: FakeClock) -> None:
     responder, timers, _ = make(clock)
     await responder.start(user_text("hi"))
     timers.fire_next()
-    await responder.wait_idle()  # the fake runner reports it asked a question
+    await wait_idle(responder)  # the fake runner reports it asked a question
     await responder.start(user_text("yes"))
     timers.fire_next()
     assert responder.run is not None and responder.run.last_agent_turn_was_question
-    await responder.wait_idle()
+    await wait_idle(responder)

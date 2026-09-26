@@ -11,8 +11,8 @@ from typing import Protocol
 
 from app.events.event import Event
 from app.routing.responder import Responder
-from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
+from app.timers import Clock
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,13 @@
-"""Timer abstraction so responders can be tested without sleeping."""
+"""Time, injectable: a clock and a timer scheduler, so responders test without sleeping."""
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
+
+Clock = Callable[[], datetime]
 
 
 class TimerHandle(Protocol):

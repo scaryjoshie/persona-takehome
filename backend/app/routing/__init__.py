@@ -9,6 +9,9 @@ Glossary, since these words are ours:
 - **verb**: what to do with an event that arrives during a run: interrupt it, absorb the
   event as context, or defer the event until the run ends. START is logged when no run
   existed and the responder simply began one.
+  A run with a side effect in flight (today: a GPT-Live delegation; later: any non-atomic
+  tool on the text side, marked by the reply runner around the call) is never interrupted;
+  the filter degrades interrupt to defer.
 - **filter**: picks the verb. Fixed by the event kind when it can be; otherwise a decider.
 - **decision**: the logged record of one routing pass, for the debug panel and tests.
 """
