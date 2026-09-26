@@ -65,7 +65,7 @@ function reduce(state: SessionState, action: Action): SessionState {
 }
 
 export interface SessionActions {
-  sendMessage(text: string): void;
+  sendMessage(text: string, replyTo?: number): void;
   setTyping(active: boolean): void;
   call(action: CallAction, reason?: CallFailReason): void;
 }
@@ -86,7 +86,10 @@ export function useSession(transport: Transport, snapshot: Snapshot) {
 
   const actions = useMemo<SessionActions>(
     () => ({
-      sendMessage: (text) => transport.send({ type: "message", text }),
+      sendMessage: (text, replyTo) =>
+        transport.send(
+          replyTo === undefined ? { type: "message", text } : { type: "message", text, reply_to: replyTo },
+        ),
       setTyping: (active) => transport.send({ type: "typing", active }),
       call: (action, reason) => transport.send({ type: "call", action, reason: reason ?? null }),
     }),

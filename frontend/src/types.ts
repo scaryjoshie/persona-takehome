@@ -32,3 +32,10 @@ export interface ReactMessage {
   emoji: string;
   remove?: boolean;
 }
+
+/** A text sent as a reply. `reply_to` is announced by the backend, not in the schema yet. */
+export interface ReplyMessage {
+  type: "message";
+  text: string;
+  reply_to: number;
+}

@@ -6,7 +6,16 @@ import type { Reaction } from "../components/phone/Tapback";
 /** The texts in both directions, as the phone shows them, with their tapbacks. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
   const reactions = reactionsBySeq(events);
-  return messagesOf(events).map((m) => (reactions.has(m.id) ? { ...m, reactions: reactions.get(m.id) } : m));
+  const messages = messagesOf(events);
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  return messages.map(({ replyToId, ...m }) => {
+    const original = replyToId ? byId.get(replyToId) : undefined;
+    return {
+      ...m,
+      ...(reactions.has(m.id) && { reactions: reactions.get(m.id) }),
+      ...(original && { replyTo: { id: original.id, side: original.side, text: original.text } }),
+    };
+  });
 }
 
 /** Each message's current tapbacks: one per reactor, the latest winning, removals applied. */
@@ -22,15 +31,18 @@ function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
   return out;
 }
 
-function messagesOf(events: WireEvent[]): ThreadMessage[] {
-  return events.flatMap((e): ThreadMessage[] => {
+/** Each thread message, with the id of the message it replies to (reply_to is not in the schema yet). */
+function messagesOf(events: WireEvent[]): Array<ThreadMessage & { replyToId?: string }> {
+  return events.flatMap((e): Array<ThreadMessage & { replyToId?: string }> => {
     const p = e.payload as WireEvent["payload"] | VoiceNotePayload;
     if (p.kind === "voice_note") {
       const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms, transcript: p.transcript };
       return [{ id: String(e.seq), side: "sent", text: "", ts: e.ts, voice, audioId: p.audio_id }];
     }
-    if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts }];
-    if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text, ts: e.ts }];
+    const reply = (p as { reply_to?: number | null }).reply_to;
+    const replyToId = reply == null ? undefined : String(reply);
+    if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts, replyToId }];
+    if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text, ts: e.ts, replyToId }];
     return [];
   });
 }

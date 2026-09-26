@@ -1,4 +1,4 @@
-import type { ClientMessage, ReactMessage, ServerMessage, Snapshot } from "../types";
+import type { ClientMessage, ReactMessage, ReplyMessage, ServerMessage, Snapshot } from "../types";
 import { Emitter, type AudioLink, type ConnectionStatus, type Transport } from "./types";
 
 function wsUrl(path: string): string {
@@ -51,7 +51,7 @@ export class WsTransport implements Transport {
     };
   }
 
-  send(msg: ClientMessage | ReactMessage): void {
+  send(msg: ClientMessage | ReactMessage | ReplyMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
     else console.warn("socket not open, dropped", msg);
   }

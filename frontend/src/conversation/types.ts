@@ -19,7 +19,8 @@ export interface Conversation {
   muted: boolean;
   /** The agent's voice level, 0..1, read every frame for the orb. */
   outputLevel: () => number;
-  send: (text: string) => void;
+  /** Sends a text; `replyTo` is the id of the message it answers. */
+  send: (text: string, replyTo?: string) => void;
   sendVoiceNote: (recording: Recording) => void;
   /** Sets, or with `null` removes, the user's tapback on a message. */
   react: (messageId: string, emoji: string | null) => void;

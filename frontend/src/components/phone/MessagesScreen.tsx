@@ -37,6 +37,8 @@ export interface ThreadMessage {
   audioId?: string;
   /** Tapbacks on this message, oldest first. */
   reactions?: Reaction[];
+  /** The message this one replies to, shown faded above it. */
+  replyTo?: Pick<ThreadMessage, "id" | "side" | "text">;
 }
 
 interface Props {
@@ -46,7 +48,8 @@ interface Props {
   receipt?: string;
   typing?: boolean;
   keyboard?: boolean;
-  onSend?: (text: string) => void;
+  /** Sends a text; `replyTo` is the id of the message it answers, if any. */
+  onSend?: (text: string, replyTo?: string) => void;
   /** The phone icon in the header. Hidden when absent. */
   onCall?: () => void;
   /** Text already in the composer when the screen appears. */
@@ -78,11 +81,13 @@ export function MessagesScreen({
   const clock = useClock();
   const rootRef = useRef<HTMLDivElement>(null);
   useStickToBottom(rootRef, messages.length, typing);
+  const [replyingTo, setReplyingTo] = useState<ThreadMessage | null>(null);
   const send = () => {
     if (!draft.trim()) return;
     typingSignal.stop();
-    onSend?.(draft.trim());
+    onSend?.(draft.trim(), replyingTo?.id);
     setDraft("");
+    setReplyingTo(null);
   };
   const edit = (text: string) => {
     setDraft(text);
@@ -134,6 +139,19 @@ export function MessagesScreen({
             onInput={(e) => edit((e.target as HTMLTextAreaElement).value)}
             onSubmit={send}
           >
+            {replyingTo && (
+              <div slot="before-inner" className="reply-preview">
+                <div className="reply-preview-text">
+                  <span className="reply-preview-label">
+                    Replying to {replyingTo.side === "sent" ? "yourself" : contact}
+                  </span>
+                  <span className="reply-preview-quote">{quoteOf(replyingTo)}</span>
+                </div>
+                <button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}>
+                  <Icon f7="xmark_circle_fill" />
+                </button>
+              </div>
+            )}
             <Link slot="inner-start" iconF7="plus" />
             {draft ? (
               <Link slot="after-area" className="send-button" iconF7="arrow_up" onClick={send} aria-label="Send" />
@@ -202,6 +220,11 @@ export function MessagesScreen({
                   footer={footer}
                   className={b.link ? "message-link" : b.voice ? "message-voice" : undefined}
                 >
+                  {b.key === b.messageId && message.replyTo && (
+                    <span slot="header" className={`reply-quote reply-quote-${message.replyTo.side}`}>
+                      <span className="reply-quote-bubble">{quoteOf(message.replyTo)}</span>
+                    </span>
+                  )}
                   {b.key === b.messageId && message.reactions && (
                     <ReactionBadges slot="content-start" reactions={message.reactions} side={b.side} />
                   )}
@@ -238,6 +261,15 @@ export function MessagesScreen({
             onReact?.(pressed.message.id, emoji);
             setPressed(null);
           }}
+          onReply={
+            onSend
+              ? () => {
+                  setReplyingTo(pressed.message);
+                  setPressed(null);
+                  rootRef.current?.querySelector("textarea")?.focus();
+                }
+              : undefined
+          }
           onCopy={() => {
             void navigator.clipboard?.writeText(pressed.message.text);
             setPressed(null);
@@ -420,4 +452,9 @@ function RecordingClock({ since }: { since: number | null }) {
   // `since` arrives once the mic is live, which can be just after this clock last ticked.
   const s = since === null ? 0 : Math.max(0, Math.floor((now - since) / 1000));
   return <span className="recording-time">{`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`}</span>;
+}
+
+/** A message as quoted in a reply: its text, or what kind of message it was. */
+function quoteOf(m: Pick<ThreadMessage, "text"> & { voice?: unknown }): string {
+  return m.voice ? "Audio Message" : m.text;
 }

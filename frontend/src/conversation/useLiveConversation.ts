@@ -41,7 +41,10 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
     transcript,
     muted: audio.muted,
     outputLevel: audio.getOutputLevel,
-    send: actions.sendMessage,
+    send: (text, replyTo) => {
+      const seq = Number(replyTo);
+      actions.sendMessage(text, replyTo !== undefined && Number.isInteger(seq) ? seq : undefined);
+    },
     sendVoiceNote: voiceNotes.send,
     react: (messageId, emoji) => {
       const target_seq = Number(messageId);

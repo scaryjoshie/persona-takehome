@@ -47,9 +47,10 @@ export function useMockConversation(): Conversation {
       setMessages((m) => [...m, { id: nextId(), side: "received", text, ts: new Date().toISOString() }]);
     }, 1000);
   };
-  const userSays = (text = pick(RANDOM_USER_LINES)) => {
+  const userSays = (text = pick(RANDOM_USER_LINES), replyTo?: ThreadMessage) => {
     const id = nextId();
-    setMessages((m) => [...m, { id, side: "sent", text, ts: new Date().toISOString() }]);
+    const quote = replyTo && { id: replyTo.id, side: replyTo.side, text: replyTo.text };
+    setMessages((m) => [...m, { id, side: "sent", text, ts: new Date().toISOString(), replyTo: quote }]);
     return id;
   };
 
@@ -144,9 +145,12 @@ export function useMockConversation(): Conversation {
       900,
     );
   };
-  const send = (text: string) => {
+  const send = (text: string, replyTo?: string) => {
     const first = messages.length === 0;
-    const id = userSays(text);
+    const id = userSays(
+      text,
+      messages.find((m) => m.id === replyTo),
+    );
     if (!first) return void setTimeout(() => agentSays(), 600);
     setTimeout(() => react(id, "❤️", "agent"), 900);
     INTRO.forEach((line, i) => setTimeout(() => agentSays(line), 600 + i * 1600));
