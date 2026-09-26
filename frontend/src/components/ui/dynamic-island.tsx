@@ -3,7 +3,16 @@
 // Local changes: colors are explicit (black pill, white text) instead of theme tokens.
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { EASE_OUT } from "@/lib/ease";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +61,11 @@ function Slot({ keyId, children, className }: { keyId: string; children: ReactNo
       key={keyId}
       initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: -8, filter: "blur(5px)" }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-      exit={reduce ? { opacity: 0, transition: { duration: 0.1 } } : { opacity: 0, scale: 0.9, y: -6, transition: { duration: 0.08, ease: EASE_OUT } }}
+      exit={
+        reduce
+          ? { opacity: 0, transition: { duration: 0.1 } }
+          : { opacity: 0, scale: 0.9, y: -6, transition: { duration: 0.08, ease: EASE_OUT } }
+      }
       transition={reduce ? { duration: 0.15 } : CONTENT_SPRING}
       style={{ transformOrigin: "top center" }}
       className={cn("flex items-center justify-center", className)}

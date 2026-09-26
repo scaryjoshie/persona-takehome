@@ -55,7 +55,17 @@ function Waveform() {
   );
 }
 
-function RoundButton({ color, label, onClick, children }: { color: string; label: string; onClick?: () => void; children: React.ReactNode }) {
+function RoundButton({
+  color,
+  label,
+  onClick,
+  children,
+}: {
+  color: string;
+  label: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -76,7 +86,16 @@ function RoundButton({ color, label, onClick, children }: { color: string; label
  * The Dynamic Island as iOS uses it for calls: incoming call expands it with accept and decline,
  * an active call collapses to handset, timer and waveform, and a tap unfolds speaker and end.
  */
-export function CallIsland({ agentName, phase, seconds = 0, expanded = false, onAccept, onDecline, onEnd, onToggleExpanded }: CallIslandProps) {
+export function CallIsland({
+  agentName,
+  phase,
+  seconds = 0,
+  expanded = false,
+  onAccept,
+  onDecline,
+  onEnd,
+  onToggleExpanded,
+}: CallIslandProps) {
   const view = phase === "incoming" ? "incoming" : phase === "active" && expanded ? "controls" : null;
 
   const compact =
@@ -98,7 +117,12 @@ export function CallIsland({ agentName, phase, seconds = 0, expanded = false, on
     ) : null;
 
   return (
-    <DynamicIsland view={view} compact={compact} onClick={phase === "active" ? onToggleExpanded : undefined} className={phase === "active" ? "cursor-pointer" : ""}>
+    <DynamicIsland
+      view={view}
+      compact={compact}
+      onClick={phase === "active" ? onToggleExpanded : undefined}
+      className={phase === "active" ? "cursor-pointer" : ""}
+    >
       <DynamicIslandView id="incoming" className="w-[300px] gap-3 py-2.5">
         <Avatar name={agentName} size={40} />
         <div className="flex flex-1 flex-col leading-tight">

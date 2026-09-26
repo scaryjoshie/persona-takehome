@@ -10,13 +10,10 @@ export interface AudioLink {
   onFrame(cb: (frame: ArrayBuffer) => void): () => void;
   onClose(cb: (code: number) => void): () => void;
   close(): void;
-  /** Demo links that carry no audio can still tell the UI how loud the agent "is". */
-  levelHint?: () => number;
 }
 
-/** Everything the UI can do to the backend. One real implementation, one scripted one for demos. */
+/** Everything the UI can do to the backend. */
 export interface Transport {
-  readonly kind: "ws" | "scripted";
   connect(phone: string): Promise<Snapshot>;
   send(msg: ClientMessage): void;
   onMessage(cb: (msg: ServerMessage) => void): () => void;

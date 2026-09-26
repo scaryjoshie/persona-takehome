@@ -6,8 +6,8 @@ import { VoiceOrb } from "./components/orb/VoiceOrb";
 import { Transcript } from "./components/orb/Transcript";
 import { CallControls } from "./components/call/CallControls";
 import { Stage } from "./components/stage/Stage";
-import { useMockPhone } from "./visual/useMockPhone";
-import { AGENT_NAME, speechLevel } from "./visual/mock";
+import { useMockPhone } from "./mock/useMockPhone";
+import { AGENT_NAME, speechLevel } from "./mock/data";
 
 // The island sits 14pt below the top of the screen, centered; measured from Apple's bezel PNG.
 const ISLAND_TOP = 14;
@@ -67,7 +67,13 @@ export default function App() {
             </div>
           }
         >
-          <MessagesScreen contact={AGENT_NAME} messages={mock.messages} typing={mock.typing} onSend={mock.send} onCall={mock.startCall} />
+          <MessagesScreen
+            contact={AGENT_NAME}
+            messages={mock.messages}
+            typing={mock.typing}
+            onSend={mock.send}
+            onCall={mock.startCall}
+          />
         </IPhone17Pro>
       }
       orb={<VoiceOrb mode={orbMode} level={level} />}

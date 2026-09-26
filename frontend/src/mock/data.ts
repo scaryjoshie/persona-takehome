@@ -32,7 +32,14 @@ export const CALL_SCRIPT: Array<Pick<TranscriptLine, "speaker" | "text">> = [
   { speaker: "agent", text: "got it. I just texted you a link to connect your gmail. tap it whenever, I'll wait." },
 ];
 
-export const RANDOM_USER_LINES = ["sounds good", "yes please", "hold on", "can you check my calendar too?", "thanks!", "skip that for now"];
+export const RANDOM_USER_LINES = [
+  "sounds good",
+  "yes please",
+  "hold on",
+  "can you check my calendar too?",
+  "thanks!",
+  "skip that for now",
+];
 
 let n = 100;
 export function nextId(): string {

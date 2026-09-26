@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { CallAction, CallFailReason, CallState, Event, Medium, PartialTranscript, ServerMessage, Slots, Snapshot } from "../types";
+import type {
+  CallAction,
+  CallFailReason,
+  CallState,
+  Event,
+  Medium,
+  PartialTranscript,
+  ServerMessage,
+  Slots,
+  Snapshot,
+} from "../types";
 import { EMPTY_CALL, EMPTY_SLOTS } from "../types";
 import type { ConnectionStatus, Transport } from "../transport/types";
 
@@ -31,7 +41,16 @@ const initial: SessionState = {
 };
 
 function applySnapshot(state: SessionState, s: Snapshot): SessionState {
-  return { ...state, loaded: true, events: s.events, slots: s.slots, call: s.call, floor: s.floor, partials: {}, agentTyping: false };
+  return {
+    ...state,
+    loaded: true,
+    events: s.events,
+    slots: s.slots,
+    call: s.call,
+    floor: s.floor,
+    partials: {},
+    agentTyping: false,
+  };
 }
 
 function reduce(state: SessionState, action: Action): SessionState {
@@ -124,11 +143,15 @@ export function useSession(transport: Transport, phone: string, firstMessage: st
   const send = useCallback((text: string) => transport.send({ type: "message", text }), [transport]);
   const setTyping = useCallback((active: boolean) => transport.send({ type: "typing", active }), [transport]);
   const call = useCallback(
-    (action: CallAction, reason?: CallFailReason) => transport.send(reason ? { type: "call", action, reason } : { type: "call", action }),
+    (action: CallAction, reason?: CallFailReason) =>
+      transport.send(reason ? { type: "call", action, reason } : { type: "call", action }),
     [transport],
   );
   const reset = useCallback(() => transport.send({ type: "reset" }), [transport]);
 
-  const actions = useMemo<SessionActions>(() => ({ sendMessage: send, setTyping, call, reset }), [send, setTyping, call, reset]);
+  const actions = useMemo<SessionActions>(
+    () => ({ sendMessage: send, setTyping, call, reset }),
+    [send, setTyping, call, reset],
+  );
   return { state, actions };
 }

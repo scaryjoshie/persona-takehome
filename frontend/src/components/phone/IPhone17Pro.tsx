@@ -21,9 +21,30 @@ export function IPhone17Pro({ finish = "silver", scale = 1, overlay, children }:
     <div style={{ width: FRAME.width * scale, height: FRAME.height * scale }}>
       <div style={{ position: "relative", ...FRAME, transform: `scale(${scale})`, transformOrigin: "top left" }}>
         {/* zIndex: 0 keeps Framework7's own z-indices inside the screen. */}
-        <div style={{ position: "absolute", ...SCREEN_OFFSET, ...SCREEN, borderRadius: 62, overflow: "hidden", background: "#000", zIndex: 0 }}>{children}</div>
-        <img src={`/bezels/iphone-17-pro-${finish}.png`} alt="" draggable={false} style={{ position: "absolute", inset: 0, width: "100%", pointerEvents: "none", zIndex: 1 }} />
-        {overlay && <div style={{ position: "absolute", ...SCREEN_OFFSET, ...SCREEN, pointerEvents: "none", zIndex: 2 }}>{overlay}</div>}
+        <div
+          style={{
+            position: "absolute",
+            ...SCREEN_OFFSET,
+            ...SCREEN,
+            borderRadius: 62,
+            overflow: "hidden",
+            background: "#000",
+            zIndex: 0,
+          }}
+        >
+          {children}
+        </div>
+        <img
+          src={`/bezels/iphone-17-pro-${finish}.png`}
+          alt=""
+          draggable={false}
+          style={{ position: "absolute", inset: 0, width: "100%", pointerEvents: "none", zIndex: 1 }}
+        />
+        {overlay && (
+          <div style={{ position: "absolute", ...SCREEN_OFFSET, ...SCREEN, pointerEvents: "none", zIndex: 2 }}>
+            {overlay}
+          </div>
+        )}
       </div>
     </div>
   );

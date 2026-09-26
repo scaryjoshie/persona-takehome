@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import { CONVERSATION, RANDOM_AGENT_LINES, RANDOM_USER_LINES, CALL_SCRIPT, nextId, pick } from "./mock";
+import { CONVERSATION, RANDOM_AGENT_LINES, RANDOM_USER_LINES, CALL_SCRIPT, nextId, pick } from "./data";
 
 export interface MockCall {
   phase: CallPhase;
@@ -41,7 +41,8 @@ export function useMockPhone(autoplay = true) {
       tick.current += 1;
       if (callRef.current) return;
       if (tick.current % 5 === 0) return setCall({ phase: "incoming", seconds: 0, expanded: false });
-      Math.random() < 0.7 ? agentSays() : userSays();
+      if (Math.random() < 0.7) agentSays();
+      else userSays();
     }, 4000);
     return () => clearInterval(t);
   }, [autoplay]);
@@ -66,16 +67,25 @@ export function useMockPhone(autoplay = true) {
       const words = line.text.split(" ");
       setSpeaking(line.speaker === "agent");
       words.forEach((_, n) => {
-        timers.push(setTimeout(() => {
-          if (cancelled) return;
-          const partial = n < words.length - 1;
-          const text = words.slice(0, n + 1).join(" ");
-          setTranscript((t) => (t.at(-1)?.id === id ? [...t.slice(0, -1), { id, speaker: line.speaker, text, partial }] : [...t, { id, speaker: line.speaker, text, partial }]));
-          if (!partial) {
-            setSpeaking(false);
-            timers.push(setTimeout(next, 1400));
-          }
-        }, 95 * (n + 1)));
+        timers.push(
+          setTimeout(
+            () => {
+              if (cancelled) return;
+              const partial = n < words.length - 1;
+              const text = words.slice(0, n + 1).join(" ");
+              setTranscript((t) =>
+                t.at(-1)?.id === id
+                  ? [...t.slice(0, -1), { id, speaker: line.speaker, text, partial }]
+                  : [...t, { id, speaker: line.speaker, text, partial }],
+              );
+              if (!partial) {
+                setSpeaking(false);
+                timers.push(setTimeout(next, 1400));
+              }
+            },
+            95 * (n + 1),
+          ),
+        );
       });
     };
     timers.push(setTimeout(next, 800));
@@ -108,5 +118,19 @@ export function useMockPhone(autoplay = true) {
     setTimeout(() => agentSays(), 600);
   };
 
-  return { messages, typing, call, transcript, speaking, muted, startCall, accept, decline, end, toggleExpanded, toggleMute, send };
+  return {
+    messages,
+    typing,
+    call,
+    transcript,
+    speaking,
+    muted,
+    startCall,
+    accept,
+    decline,
+    end,
+    toggleExpanded,
+    toggleMute,
+    send,
+  };
 }

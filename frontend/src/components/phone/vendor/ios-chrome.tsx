@@ -12,7 +12,11 @@ export const INTER = '-apple-system, "SF Pro Text", Inter, system-ui, sans-serif
 export const W = 1080;
 
 /** Renders children laid out on the 1080px canvas, scaled to `width`. */
-export const Scaled: React.FC<{ width: number; height: number; children: React.ReactNode }> = ({ width, height, children }) => (
+export const Scaled: React.FC<{ width: number; height: number; children: React.ReactNode }> = ({
+  width,
+  height,
+  children,
+}) => (
   <div style={{ width, height: height * (width / W), overflow: "hidden" }}>
     <div style={{ width: W, height, transform: `scale(${width / W})`, transformOrigin: "0 0" }}>{children}</div>
   </div>
@@ -30,21 +34,35 @@ type StatusTheme = "light" | "dark";
  * low battery — exactly what the Discord / Telegram references show.
  */
 export const IOSStatusBar: React.FC<{
-  theme?: StatusTheme; time?: string; bg?: string;
+  theme?: StatusTheme;
+  time?: string;
+  bg?: string;
 }> = ({ theme = "light", time = "9:41", bg }) => {
   const ink = theme === "dark" ? "#FFFFFF" : "#111B21";
   const background = bg ?? (theme === "dark" ? "transparent" : "#F6F6F6");
   return (
-    <div style={{
-      height: STATUS_H, background, display: "flex", alignItems: "flex-end",
-      justifyContent: "space-between", padding: "0 150px 12px 130px", fontFamily: INTER,
-    }}>
+    <div
+      style={{
+        height: STATUS_H,
+        background,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        padding: "0 150px 12px 130px",
+        fontFamily: INTER,
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <div style={{ fontSize: 34, fontWeight: 600, color: ink, letterSpacing: -0.4 }}>{time}</div>
         {theme === "dark" && (
           <svg width="30" height="30" viewBox="0 0 24 24">
-            <path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.4 5.4 1.4 5.4H5.1s1.4-1.4 1.4-5.4z"
-              stroke={ink} strokeWidth="1.7" fill="none" strokeLinejoin="round" />
+            <path
+              d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.4 5.4 1.4 5.4H5.1s1.4-1.4 1.4-5.4z"
+              stroke={ink}
+              strokeWidth="1.7"
+              fill="none"
+              strokeLinejoin="round"
+            />
             <path d="M10.4 18.4a2 2 0 0 0 3.2 0" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
             <path d="M4 4 L20 20" stroke={ink} strokeWidth="1.7" strokeLinecap="round" />
           </svg>
@@ -86,17 +104,32 @@ export const IOSStatusBar: React.FC<{
 export const KB_H = 690;
 
 export type KBTheme = {
-  bg: string; key: string; keyDark: string; ink: string;
-  hot: string; hotInk: string; keyShadow: string;
+  bg: string;
+  key: string;
+  keyDark: string;
+  ink: string;
+  hot: string;
+  hotInk: string;
+  keyShadow: string;
 };
 
 export const KB_LIGHT: KBTheme = {
-  bg: "#D1D4DA", key: "#FFFFFF", keyDark: "#ADB3BE", ink: "#111B21",
-  hot: "#8E96A3", hotInk: "#FFFFFF", keyShadow: "rgba(0,0,0,0.28)",
+  bg: "#D1D4DA",
+  key: "#FFFFFF",
+  keyDark: "#ADB3BE",
+  ink: "#111B21",
+  hot: "#8E96A3",
+  hotInk: "#FFFFFF",
+  keyShadow: "rgba(0,0,0,0.28)",
 };
 export const KB_DARK: KBTheme = {
-  bg: "#2C2C2E", key: "#6C6C70", keyDark: "#48484A", ink: "#FFFFFF",
-  hot: "#8E8E93", hotInk: "#FFFFFF", keyShadow: "rgba(0,0,0,0.5)",
+  bg: "#2C2C2E",
+  key: "#6C6C70",
+  keyDark: "#48484A",
+  ink: "#FFFFFF",
+  hot: "#8E8E93",
+  hotInk: "#FFFFFF",
+  keyShadow: "rgba(0,0,0,0.5)",
 };
 
 const ROWS = [
@@ -127,29 +160,48 @@ const EmojiGlyph: React.FC<{ c: string }> = ({ c }) => (
 
 /** The iOS system keyboard. Themed light or dark; the pressed key flashes. */
 export const IOSKeyboard: React.FC<{ activeKey: string | null; theme?: KBTheme }> = ({
-  activeKey, theme = KB_LIGHT,
+  activeKey,
+  theme = KB_LIGHT,
 }) => {
   const kw = (W - 2 * 12) / 10 - 10;
   const kh = 116;
   const key = (id: string, body: React.ReactNode, width: number, dark = false, big = false) => {
     const hot = activeKey === id;
     return (
-      <div key={id + width} style={{
-        width, height: kh, borderRadius: 14,
-        background: hot ? theme.hot : dark ? theme.keyDark : theme.key,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: INTER, fontSize: big ? 30 : 44, fontWeight: 400,
-        color: hot ? theme.hotInk : theme.ink,
-        boxShadow: hot ? "none" : `0 1.5px 0 ${theme.keyShadow}`,
-        transform: hot ? "scale(0.96)" : "none",
-      }}>{body}</div>
+      <div
+        key={id + width}
+        style={{
+          width,
+          height: kh,
+          borderRadius: 14,
+          background: hot ? theme.hot : dark ? theme.keyDark : theme.key,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: INTER,
+          fontSize: big ? 30 : 44,
+          fontWeight: 400,
+          color: hot ? theme.hotInk : theme.ink,
+          boxShadow: hot ? "none" : `0 1.5px 0 ${theme.keyShadow}`,
+          transform: hot ? "scale(0.96)" : "none",
+        }}
+      >
+        {body}
+      </div>
     );
   };
   return (
-    <div style={{
-      height: KB_H, background: theme.bg, paddingTop: 18,
-      display: "flex", flexDirection: "column", gap: 20, alignItems: "center",
-    }}>
+    <div
+      style={{
+        height: KB_H,
+        background: theme.bg,
+        paddingTop: 18,
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+        alignItems: "center",
+      }}
+    >
       {ROWS.map((row, ri) => (
         <div key={ri} style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           {ri === 2 && key("shift", <ShiftGlyph c={theme.ink} />, kw * 1.5, true)}

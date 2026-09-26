@@ -65,7 +65,10 @@ export async function startAudioCall(link: AudioLink): Promise<AudioCall> {
 
   try {
     await ctx.resume();
-    await Promise.all([ctx.audioWorklet.addModule("/worklets/capture.js"), ctx.audioWorklet.addModule("/worklets/playback.js")]);
+    await Promise.all([
+      ctx.audioWorklet.addModule("/worklets/capture.js"),
+      ctx.audioWorklet.addModule("/worklets/playback.js"),
+    ]);
   } catch (e) {
     cleanupMedia();
     link.close();
@@ -121,16 +124,9 @@ export async function startAudioCall(link: AudioLink): Promise<AudioCall> {
     throw new AudioSocketError();
   }
 
-  const hint = link.levelHint
-    ? setInterval(() => {
-        outputLevel.current = Math.max(outputLevel.current * 0.6, link.levelHint!());
-      }, 50)
-    : null;
-
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    if (hint) clearInterval(hint);
     offFrame();
     cleanupMedia();
     link.close();

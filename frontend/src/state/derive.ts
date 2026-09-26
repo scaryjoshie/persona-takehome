@@ -2,7 +2,15 @@ import type { CallState, Event, PartialTranscript, PayloadOf } from "../types";
 
 export type ThreadItem =
   | { kind: "message"; seq: number; ts: string; side: "sent" | "received"; text: string; via: "text" | "voice" }
-  | { kind: "call"; seq: number; ts: string; side: "sent" | "received"; phase: "ended" | "declined" | "failed"; reason: string | null; minutes: number | null };
+  | {
+      kind: "call";
+      seq: number;
+      ts: string;
+      side: "sent" | "received";
+      phase: "ended" | "declined" | "failed";
+      reason: string | null;
+      minutes: number | null;
+    };
 
 const GMAIL_PATH = "/api/auth/google/start";
 
@@ -22,7 +30,14 @@ export function threadItems(events: Event[]): ThreadItem[] {
     if (p.kind === "user_message") {
       out.push({ kind: "message", seq: ev.seq, ts: ev.ts, side: "sent", text: p.text, via: "text" });
     } else if (p.kind === "agent_message") {
-      out.push({ kind: "message", seq: ev.seq, ts: ev.ts, side: "received", text: p.text, via: p.from_call ? "voice" : "text" });
+      out.push({
+        kind: "message",
+        seq: ev.seq,
+        ts: ev.ts,
+        side: "received",
+        text: p.text,
+        via: p.from_call ? "voice" : "text",
+      });
     } else if (p.kind === "call") {
       const t = p.transition;
       if (t === "ringing" || t === "connecting") {
@@ -31,9 +46,18 @@ export function threadItems(events: Event[]): ThreadItem[] {
         connectedAt = Date.parse(ev.ts);
         initiatedBy = p.initiated_by ?? initiatedBy;
       } else if (t === "ended" || t === "declined" || t === "failed") {
-        const minutes = t === "ended" && connectedAt ? Math.max(0, Math.round((Date.parse(ev.ts) - connectedAt) / 60000)) : null;
+        const minutes =
+          t === "ended" && connectedAt ? Math.max(0, Math.round((Date.parse(ev.ts) - connectedAt) / 60000)) : null;
         const by = p.initiated_by ?? initiatedBy;
-        out.push({ kind: "call", seq: ev.seq, ts: ev.ts, side: by === "user" ? "sent" : "received", phase: t, reason: p.reason ?? null, minutes });
+        out.push({
+          kind: "call",
+          seq: ev.seq,
+          ts: ev.ts,
+          side: by === "user" ? "sent" : "received",
+          phase: t,
+          reason: p.reason ?? null,
+          minutes,
+        });
         connectedAt = null;
         initiatedBy = null;
       }
@@ -50,7 +74,11 @@ export interface TranscriptLine {
 }
 
 /** Utterances from the current or most recent call, with live partials appended. */
-export function transcript(events: Event[], partials: Record<string, PartialTranscript>, call: CallState): TranscriptLine[] {
+export function transcript(
+  events: Event[],
+  partials: Record<string, PartialTranscript>,
+  call: CallState,
+): TranscriptLine[] {
   // Find the start of the most recent call: the last connecting/connected call event.
   let start = 0;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -63,10 +91,12 @@ export function transcript(events: Event[], partials: Record<string, PartialTran
   const lines: TranscriptLine[] = [];
   for (let i = start; i < events.length; i++) {
     const p = events[i].payload;
-    if (p.kind === "voice_utterance" && p.text) lines.push({ id: p.turn_id, speaker: p.speaker, text: p.text, partial: false });
+    if (p.kind === "voice_utterance" && p.text)
+      lines.push({ id: p.turn_id, speaker: p.speaker, text: p.text, partial: false });
   }
   if (call.phase === "connected" || call.phase === "connecting") {
-    for (const p of Object.values(partials)) lines.push({ id: p.turn_id, speaker: p.speaker, text: p.text, partial: !p.final });
+    for (const p of Object.values(partials))
+      lines.push({ id: p.turn_id, speaker: p.speaker, text: p.text, partial: !p.final });
   }
   return lines;
 }

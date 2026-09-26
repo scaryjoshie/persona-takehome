@@ -1,6 +1,19 @@
 import "./f7";
 import { useState } from "react";
-import { App, Icon, Link, Message, Messagebar, Messages, MessagesTitle, NavLeft, NavRight, NavTitle, Navbar, Page } from "framework7-react";
+import {
+  App,
+  Icon,
+  Link,
+  Message,
+  Messagebar,
+  Messages,
+  MessagesTitle,
+  NavLeft,
+  NavRight,
+  NavTitle,
+  Navbar,
+  Page,
+} from "framework7-react";
 import { IOSKeyboard, IOSStatusBar, KB_DARK, KB_H, STATUS_H, Scaled } from "./vendor/ios-chrome";
 import { SCREEN } from "./IPhone17Pro";
 import "./messages-screen.css";
@@ -51,7 +64,12 @@ export function MessagesScreen({ contact, messages, typing = false, keyboard = f
             </NavTitle>
             <NavRight>{onCall && <Link iconF7="phone_fill" onClick={onCall} aria-label="Call" />}</NavRight>
           </Navbar>
-          <Messagebar placeholder="iMessage" value={draft} onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)} onSubmit={send}>
+          <Messagebar
+            placeholder="iMessage"
+            value={draft}
+            onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
+            onSubmit={send}
+          >
             <Link slot="inner-start" iconF7="plus" />
             {draft ? (
               <Link slot="after-area" className="send-button" iconF7="arrow_up" onClick={send} aria-label="Send" />
@@ -69,7 +87,9 @@ export function MessagesScreen({ contact, messages, typing = false, keyboard = f
               const first = messages[i - 1]?.side !== m.side;
               const last = messages[i + 1]?.side !== m.side;
               const footer = endsSent && m.id === lastSentId ? "Delivered" : undefined;
-              return <Message key={m.id} type={m.side} text={m.text} first={first} last={last} tail={last} footer={footer} />;
+              return (
+                <Message key={m.id} type={m.side} text={m.text} first={first} last={last} tail={last} footer={footer} />
+              );
             })}
             {typing && <Message type="received" typing first last tail />}
           </Messages>

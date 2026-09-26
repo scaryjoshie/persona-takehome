@@ -8,10 +8,31 @@
 @import "framework7-icons/css/framework7-icons.css" layer(framework7);
 @import "tailwindcss";
 
-html, body, #root { height: 100%; margin: 0; background: #000; color: #8e8e93; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: #000;
+  color: #8e8e93;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
 
 @keyframes word-in {
-  from { opacity: 0; filter: blur(2px); }
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
 }
-.transcript-word { display: inline-block; margin-right: 0.28em; animation: word-in 180ms ease-out both; }
-.transcript-word:last-of-type { margin-right: 0; }
+.transcript-word {
+  display: inline-block;
+  margin-right: 0.28em;
+  animation: word-in 180ms ease-out both;
+}
+.transcript-word:last-of-type {
+  margin-right: 0;
+}

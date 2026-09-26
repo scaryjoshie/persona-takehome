@@ -7,7 +7,6 @@ function wsUrl(path: string): string {
 }
 
 export class WsTransport implements Transport {
-  readonly kind = "ws" as const;
   private ws: WebSocket | null = null;
   private phone = "";
   private closed = false;
