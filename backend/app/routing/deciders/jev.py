@@ -59,9 +59,12 @@ class JevDecider:
             return verdict.model_copy(update={"note": f"jev failed: {type(exc).__name__}"})
         verb = Verb(answer["choice"])
         probabilities: dict[str, float] = answer.get("probabilities", {})
+        confidence = probabilities.get(verb.value)
+        if confidence is None:
+            confidence = float(answer.get("confidence", 0.0))
         return Verdict(
             verb=verb,
-            confidence=float(probabilities.get(verb.value, answer.get("confidence", 0.0))),
+            confidence=confidence,
             by=DecidedBy.JEV,
             note=", ".join(f"{k}={v:.2f}" for k, v in sorted(probabilities.items())),
         )
