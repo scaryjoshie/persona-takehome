@@ -6,7 +6,7 @@ from app.agent.events import SlotChanged
 from app.agent.objectives import OBJECTIVES, Situation, asks_since_progress, current, render
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
-from app.text.events import ReplyStarted, UserMessage
+from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium
 from app.voice.call_state import CallState
 from app.voice.events import Speaker, VoiceUtterance
@@ -81,14 +81,16 @@ def test_a_step_that_keeps_stalling_is_parked() -> None:
     assert open_name(situation(asks=9)) == "agent_name"  # names are never parked
 
 
-def test_asks_count_agent_turns_since_the_last_saved_step() -> None:
+def test_asks_count_text_replies_sent_since_the_last_saved_step() -> None:
     events = [
         ev(ReplyStarted(through_seq=1)),
+        ev(AgentMessage(text="what should i call you?")),
         ev(SlotChanged(slot="user_name", new="Sam")),
-        ev(UserMessage(text="hmm")),
         ev(ReplyStarted(through_seq=3)),
+        ev(AgentMessage(text="what's up this week?")),
         ev(VoiceUtterance(speaker=Speaker.AGENT, text="so?", turn_id="a")),
-        ev(VoiceUtterance(speaker=Speaker.USER, text="idk", turn_id="u")),
+        ev(UserMessage(text="hmm")),
+        ev(ReplyStarted(through_seq=7)),  # being written now: not an ask yet
     ]
     assert asks_since_progress(events) == 1  # spoken turns don't count
 

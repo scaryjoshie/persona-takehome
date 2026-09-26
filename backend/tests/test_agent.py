@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent import prompts
-from app.agent.agent import RING_SECONDS, Bubbles, agent
+from app.agent.agent import RING_SECONDS, Bubbles, agent, not_a_name
 from app.agent.deps import AgentEnv, Deps
 from app.agent.events import CallOptOut, SlotChanged
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
-from app.text.reply import Replier
+from app.text.reply import REFUSED, Replier
 from app.users.user import Medium, User
 from app.voice.call_state import CallPhase
 from tests.conftest import PHONE, CapturingMessenger, FakeTimers, settle
@@ -199,3 +200,18 @@ async def test_a_reply_that_places_a_call_sends_no_bubbles(
     assert messenger.sent == []  # the call took over; the bubble is dropped
     kinds = [e.kind for e in await pipeline.history(PHONE)]
     assert "call" in kinds and "agent_message" not in kinds
+
+
+def test_things_that_are_not_names() -> None:
+    assert not_a_name("Batman") is None and not_a_name("Siobhán O'Brien") is None
+    assert not_a_name("<script>alert(1)</script>") and not_a_name("") and not_a_name("x" * 41)
+
+
+async def test_a_refused_model_call_still_gets_an_answer(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    async def refuse(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        raise ModelHTTPError(status_code=400, model_name="m", body={"code": "cyber_policy"})
+
+    await run_text(pipeline, messenger, FunctionModel(refuse), [])
+    assert messenger.sent == [REFUSED]

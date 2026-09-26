@@ -124,6 +124,17 @@ def _latest_user_text(ctx: RunContext[Deps]) -> str:
     return ""
 
 
+def not_a_name(name: str) -> str | None:
+    """Why this can't be a name (it shows on their phone), or None. Joke names are fine."""
+    if not name:
+        return "it's empty"
+    if len(name) > 40:
+        return "it's too long for a name"
+    if any(c in name for c in "<>{}[]`\n\\"):
+        return "it looks like code, not a name"
+    return None
+
+
 # ---- tools --------------------------------------------------------------------
 
 
@@ -131,6 +142,8 @@ def _latest_user_text(ctx: RunContext[Deps]) -> str:
 async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the name the user chose for you. Call this the moment they pick one."""
     name = name.strip()
+    if problem := not_a_name(name):
+        return f"not recorded: {problem}; ask for another name"
     changed = await _submit(ctx, SlotChanged(slot="agent_name", new=name))
     if changed:
         await _submit(ctx, ContactCard(name=name))  # one tap for them to save it
@@ -143,6 +156,8 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
 @agent.tool(prepare=not_the_voice)
 async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
+    if problem := not_a_name(name.strip()):
+        return f"not recorded: {problem}; ask what they'd like to be called"
     changed = await _submit(ctx, SlotChanged(slot="user_name", new=name.strip()))
     await _record(ctx, "set_user_name", {"name": name}, {"changed": changed})
     if not changed:

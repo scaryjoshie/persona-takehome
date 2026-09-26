@@ -7,8 +7,11 @@ wants a reply arrived after `through_seq`, a newer reply is on its way and this 
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
+
+from pydantic_ai.exceptions import ModelHTTPError
 
 from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
@@ -18,9 +21,14 @@ from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
 from app.voice.call_state import CallPhase
 
+log = logging.getLogger(__name__)
+
 Sleep = Callable[[float], Awaitable[None]]
 
 GAP = 0.4  # between bubbles
+# When the model call fails, the user still gets an answer rather than silence.
+REFUSED = "that's not something i can help with"
+GLITCHED = "sorry, my brain glitched for a sec. can you say that again?"
 
 
 def typing_time(text: str) -> float:
@@ -45,13 +53,18 @@ class Replier:
             result = await agent.run(
                 None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
             )
+            output = result.output
+        except ModelHTTPError as exc:  # the provider refused the request, or it failed
+            log.warning("%s: reply failed: %s", phone, exc)
+            refused = exc.status_code == 400
+            output = Bubbles(bubbles=[REFUSED if refused else GLITCHED])
         except BaseException:
             await env.messenger.set_typing(phone, False)
             raise
         thought = time.monotonic() - started
-        bubbles = [b.strip() for b in result.output.bubbles if b.strip()] + deps.after_reply
-        if result.output.react:
-            await self._react(phone, through_seq, result.output.react)
+        bubbles = [b.strip() for b in output.bubbles if b.strip()] + deps.after_reply
+        if output.react:
+            await self._react(phone, through_seq, output.react)
         try:
             for i, text in enumerate(bubbles):
                 if deps.placed_call or await self._superseded(phone, through_seq):

@@ -94,15 +94,18 @@ OBJECTIVES: tuple[Objective, ...] = (
 
 
 def asks_since_progress(events: Sequence[Event]) -> int:
-    """Text replies since the last event that moved a step. Spoken turns don't count: a call
-    is a flowing conversation, and minutes of banter would park a step nobody asked about."""
-    asks = 0
+    """Text replies sent since the last event that moved a step (the reply being written now
+    doesn't count). Spoken turns don't count: a call is a flowing conversation, and minutes
+    of banter would park a step nobody asked about."""
+    asks, answered = 0, False
     for event in reversed(events):
         payload = event.payload
         if isinstance(payload, PROGRESS):
             break
-        if isinstance(payload, ReplyStarted):
-            asks += 1
+        if isinstance(payload, AgentMessage):
+            answered = True
+        elif isinstance(payload, ReplyStarted):
+            asks, answered = asks + answered, False
     return asks
 
 
