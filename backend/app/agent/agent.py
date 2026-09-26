@@ -38,10 +38,12 @@ agent: Agent[Deps, str] = Agent(
 
 
 @agent.instructions
-def dynamic_instructions(ctx: RunContext[Deps]) -> str:
-    known = what_you_know(ctx.deps.user.slots, ctx.deps.user.call)
+async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
+    # Read fresh: tools earlier in this same run may have just saved a name.
+    user = await ctx.deps.pipeline.user(ctx.deps.phone)
+    known = what_you_know(user.slots, user.call)
     tail = prompts.TEXT if ctx.deps.medium is Medium.TEXT else ""
-    stage = current_stage(ctx.deps.user.slots, first_reply=ctx.deps.first_reply) or ""
+    stage = current_stage(user.slots, first_reply=ctx.deps.first_reply) or ""
     return f"# What you know\n\n{known}\n\n{stage}\n\n{tail}"
 
 
@@ -142,7 +144,8 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     ringing = CallEvent(
         transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT
     )
-    await _submit(ctx, ringing)
+    if await _submit(ctx, ringing):
+        ctx.deps.placed_call.append(True)  # the call is this reply; its bubbles are dropped
     await _record(ctx, "start_call", {"reason": reason}, {})
     return "calling now; the user's phone is ringing"
 
