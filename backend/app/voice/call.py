@@ -35,7 +35,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.users.user import Medium
-from app.voice.call_events import CallEvent, CallTransition
+from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
 from app.voice.responder import LiveCall, VoiceResponder
 
@@ -113,11 +113,18 @@ async def run_call(
                 Channel.SYSTEM,
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
-            reason_for_call = user.call.reason
-            await session.send(
-                "Internal note: the call just connected. Greet the user"
-                + (f" and say why you are calling ({reason_for_call})." if reason_for_call else ".")
-            )
+            if user.call.initiated_by is Initiator.USER:
+                opener = (
+                    "Internal note: they just called you. Answer like you'd pick up a friend's "
+                    "call: a quick hey, then let them talk."
+                )
+            else:
+                opener = (
+                    "Internal note: they just picked up your call. Say hi like a friend would "
+                    "and get into why you called"
+                    + (f" ({user.call.reason})." if user.call.reason else ".")
+                )
+            await session.send(opener + " Your name is already on their screen; don't say it.")
             listener = Listener(env, session, phone)
             open_turns: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
             tasks = [
