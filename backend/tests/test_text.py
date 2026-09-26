@@ -6,11 +6,13 @@ import asyncio
 import dataclasses
 from datetime import timedelta
 
+import httpx
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.events.decision import Decision
 from app.events.payload import Channel, Origin
+from app.jev import Jev
 from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import ReplyStarted, Typing, UserMessage
@@ -174,3 +176,33 @@ async def test_a_second_check_after_the_reply_is_dropped(
     while timers.pending:
         await fire(timers, pipeline)
     assert messenger.sent == ["hi"]
+
+
+def jev_says_finished(probability: float) -> Jev:
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"answers": {"q": {"noul": probability}}})
+
+    return Jev(api_key="k", client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+
+
+async def test_a_clearly_finished_text_is_answered_early(
+    app: App, pipeline: Pipeline, timers: FakeTimers
+) -> None:
+    replier = Replier(app.env, sleep=no_sleep)
+    pipeline.responders[Medium.TEXT] = TextResponder(replier, jev=jev_says_finished(0.9))
+    await say(pipeline, "call me Sam")
+    assert timers.pending == [0.4]
+    await fire(timers, pipeline)
+    assert "reply" in await decisions(pipeline)
+
+
+async def test_an_unclear_text_waits_out_the_quiet_window(
+    app: App, pipeline: Pipeline, timers: FakeTimers
+) -> None:
+    replier = Replier(app.env, sleep=no_sleep)
+    pipeline.responders[Medium.TEXT] = TextResponder(replier, jev=jev_says_finished(0.5))
+    await say(pipeline, "hey")
+    await fire(timers, pipeline)
+    assert "reply" not in await decisions(pipeline) and timers.pending == [1.1]
+    await fire(timers, pipeline)
+    assert "reply" in await decisions(pipeline)

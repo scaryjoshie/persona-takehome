@@ -7,6 +7,7 @@ wants a reply arrived after `through_seq`, a newer reply is on its way and this 
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 
 from app.agent.agent import Bubbles, agent, say
@@ -38,9 +39,16 @@ class Replier:
         first = not any(isinstance(e.payload, AgentMessage) for e in events)
         deps = env.deps(await pipeline.user(phone), Medium.TEXT, first_reply=first)
         history = to_model_messages(events)
-        result = await agent.run(
-            None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
-        )
+        await env.messenger.set_typing(phone, True)  # the dots cover the thinking time
+        started = time.monotonic()
+        try:
+            result = await agent.run(
+                None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
+            )
+        except BaseException:
+            await env.messenger.set_typing(phone, False)
+            raise
+        thought = time.monotonic() - started
         bubbles = [b.strip() for b in result.output.bubbles if b.strip()] + deps.after_reply
         if result.output.react:
             await self._react(phone, through_seq, result.output.react)
@@ -49,7 +57,10 @@ class Replier:
                 if deps.placed_call or await self._superseded(phone, through_seq):
                     return
                 await self._env.messenger.set_typing(phone, True)
-                await self._sleep(typing_time(text) + (GAP if i else 0.0))
+                # The first bubble's typing already ran while the model was thinking.
+                typed = typing_time(text) - (thought if i == 0 else -GAP)
+                if typed > 0:
+                    await self._sleep(typed)
                 if deps.placed_call or await self._superseded(phone, through_seq):
                     return
                 await say(deps, text)

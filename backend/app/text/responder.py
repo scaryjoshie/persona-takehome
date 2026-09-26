@@ -27,6 +27,7 @@ FINISHED_QUESTION = (
 # ("so basically", "i was thinking and", "hold on") score 0.10–0.15; "hey" and "ok thanks!"
 # 0.35–0.50; complete asks ("call me Sam", "what can you do?") 0.80–0.91.
 MID_THOUGHT_BELOW = 0.25
+FINISHED_ABOVE = 0.8  # clearly complete: answer without waiting out the quiet window
 
 
 class TextResponder:
@@ -45,6 +46,8 @@ class TextResponder:
         if not pending:
             return Decision(trigger_kind=event.kind, verb="ignore", note="nothing waiting")
         seconds = delay(pending, user.typing_since, ctx.pipeline.now(), self._timing)
+        if self._may_answer_early(pending, user):
+            seconds = min(seconds, self._timing.early_look)
         ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
         return Decision(trigger_kind=event.kind, verb="schedule", note=f"check in {seconds:.1f}s")
 
@@ -54,11 +57,20 @@ class TextResponder:
             return None  # an earlier check already started the reply
         now = ctx.pipeline.now()
         seconds = delay(pending, user.typing_since, now, self._timing)
+        last = pending[-1]
+        since_last = (now - last.ts).total_seconds()
+        if seconds > 0.05 and self._jev is not None and self._may_answer_early(pending, user):
+            # Inside the quiet window: answer now only if Jev is sure they've finished.
+            finished = await self._jev.yes_probability(FINISHED_QUESTION, _state(ctx))
+            if finished is None or finished < FINISHED_ABOVE:
+                ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
+                return Decision(
+                    trigger_kind=event.kind, verb="wait", by="jev", note=f"{seconds:.1f}s more"
+                )
+            return await self._start(event, ctx, last, why=f"finished ({finished:.2f})")
         if seconds > 0.05:
             ctx.later(seconds, Origin.SYSTEM, Channel.TEXT, ReplyDue())
             return Decision(trigger_kind=event.kind, verb="wait", note=f"{seconds:.1f}s more")
-        last = pending[-1]
-        since_last = (now - last.ts).total_seconds()
         if (
             self._jev is not None
             and isinstance(last.payload, UserMessage)
@@ -74,9 +86,20 @@ class TextResponder:
                     confidence=1 - finished,
                     note="user seems mid-thought",
                 )
+        return await self._start(event, ctx, last, why=f"through event {last.seq}")
+
+    async def _start(self, event: Event, ctx: Context, last: Event, *, why: str) -> Decision:
         await ctx.record(Origin.TEXT_AGENT, Channel.TEXT, ReplyStarted(through_seq=last.seq))
         ctx.pipeline.spawn(self._replier.reply(ctx.phone, last.seq))
-        return Decision(trigger_kind=event.kind, verb="reply", note=f"through event {last.seq}")
+        return Decision(trigger_kind=event.kind, verb="reply", note=why)
+
+    def _may_answer_early(self, pending: list[Event], user: User) -> bool:
+        """A single typed message, nobody typing, and Jev to ask."""
+        return (
+            self._jev is not None
+            and user.typing_since is None
+            and isinstance(pending[-1].payload, UserMessage)
+        )
 
 
 def _state(ctx: Context) -> dict[str, object]:

@@ -1,0 +1,162 @@
+"""Onboarding as a list of objectives. Exactly one is open at a time, and only its guidance
+is in front of the agent, so each step can carry explicit scripts without them leaking into
+every other moment.
+
+An objective is code (when it is done, which scenario applies, how many asks it gets) plus
+words in prompts/objectives/<name>.md:
+
+    The move, in words. Always shown.
+    ## by text        shown only by text
+    ## on a call      shown only on a call
+    ## script         lines to say; code picks one per user
+    ## script: <scenario>   lines for a named scenario, used instead of `script`
+
+Scripts come in variants. The code picks one per user (seeded by phone and objective), so a
+script is said as written, and three different users still hear three different openers.
+"""
+
+from __future__ import annotations
+
+import zlib
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+
+from app.agent.events import CallOptOut, Graduated, SlotChanged
+from app.agent.slots import Slots
+from app.events.event import Event
+from app.gmail.events import GmailEvent
+from app.text.events import ReplyStarted
+from app.users.user import Medium, User
+from app.voice.call_state import CallState
+from app.voice.events import Speaker, VoiceUtterance
+
+PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
+
+
+@dataclass(frozen=True)
+class Situation:
+    """Everything an objective may look at."""
+
+    slots: Slots
+    call: CallState
+    medium: Medium
+    first_reply: bool = False
+    asks: int = 0  # agent turns since onboarding last moved forward
+
+
+@dataclass(frozen=True)
+class Objective:
+    name: str
+    done: Callable[[Situation], bool]
+    max_asks: int | None = None  # after this many turns without progress, park it for now
+    scenarios: Sequence[tuple[str, Callable[[Situation], bool]]] = field(default=())
+
+    def scenario(self, s: Situation) -> str | None:
+        return next((name for name, applies in self.scenarios if applies(s)), None)
+
+
+OBJECTIVES: tuple[Objective, ...] = (
+    Objective("opener", done=lambda s: not s.first_reply),
+    # Names are never parked: everything after needs them, and the turns before the name
+    # (the opener, the call offer) would count against it.
+    Objective(
+        "agent_name",
+        done=lambda s: s.slots.agent_name is not None,
+        scenarios=(("no call", lambda s: s.slots.no_calls and s.medium is Medium.TEXT),),
+    ),
+    Objective("user_name", done=lambda s: s.slots.user_name is not None),
+    # Asks count from the last saved step, so these count only their own turns.
+    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=3),
+    Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
+    Objective("wrap_up", done=lambda s: s.slots.graduated),
+)
+
+
+def asks_since_progress(events: Sequence[Event]) -> int:
+    """Agent turns (text replies, spoken turns) since the last event that moved a step."""
+    asks = 0
+    for event in reversed(events):
+        payload = event.payload
+        if isinstance(payload, PROGRESS):
+            break
+        if isinstance(payload, ReplyStarted) or (
+            isinstance(payload, VoiceUtterance) and payload.speaker is Speaker.AGENT
+        ):
+            asks += 1
+    return asks
+
+
+def current(s: Situation) -> tuple[Objective, bool] | None:
+    """The open objective, and whether earlier ones were parked on the way to it. A parked
+    objective used up its asks; the next one counts only the turns after that."""
+    parked, asks = False, s.asks
+    for objective in OBJECTIVES:
+        if objective.done(s):
+            continue
+        if objective.max_asks is not None and asks >= objective.max_asks:
+            parked, asks = True, asks - objective.max_asks
+            continue
+        return objective, parked
+    return None
+
+
+def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
+    """The guidance for the open objective, for this channel and scenario."""
+    found = current(s)
+    if found is None:
+        return ""
+    objective, parked = found
+    sections = texts[objective.name]
+    parts: list[str] = []
+    if parked:
+        parts.append(
+            "You've asked about the earlier step enough for now; leave it and move on. "
+            "Pick it up only if they bring it up."
+        )
+    parts.append(sections[""])
+    channel = "on a call" if s.medium is Medium.VOICE else "by text"
+    if channel in sections:
+        parts.append(sections[channel])
+    scenario = objective.scenario(s)
+    script = sections.get(f"script: {scenario}") if scenario else None
+    script = script or sections.get("script")
+    if script:
+        line = pick(script, f"{phone}:{objective.name}:{scenario or ''}")
+        line = line.replace("[name]", s.slots.user_name or "").replace(" ,", ",")
+        parts.append("Say this, as written, adjusting only to fit what they just said:\n" + line)
+    return "\n\n".join(parts)
+
+
+def guidance(
+    user: User, events: Sequence[Event], medium: Medium, *, first_reply: bool = False
+) -> str:
+    """The open objective's guidance for this user, from their state and log."""
+    from app.agent.prompts import OBJECTIVE_TEXTS
+
+    s = Situation(
+        slots=user.slots,
+        call=user.call,
+        medium=medium,
+        first_reply=first_reply,
+        asks=asks_since_progress(events),
+    )
+    return render(s, user.phone, OBJECTIVE_TEXTS)
+
+
+def pick(script: str, seed: str) -> str:
+    """One variant (a `- ` bullet) per seed, stable across runs."""
+    variants = [ln[2:].strip() for ln in script.splitlines() if ln.startswith("- ")] or [script]
+    return variants[zlib.crc32(seed.encode()) % len(variants)]
+
+
+def parse(markdown: str) -> dict[str, str]:
+    """Split an objective file into its sections; the untitled top is the key ""."""
+    sections: dict[str, list[str]] = {"": []}
+    key = ""
+    for line in markdown.splitlines():
+        if line.startswith("## "):
+            key = line[3:].strip().lower()
+            sections[key] = []
+        else:
+            sections[key].append(line)
+    return {k: "\n".join(v).strip() for k, v in sections.items()}
