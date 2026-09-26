@@ -66,7 +66,12 @@ OBJECTIVES: tuple[Objective, ...] = (
     ),
     Objective("user_name", done=lambda s: s.slots.user_name is not None),
     # Asks count from the last saved step, so these count only their own turns.
-    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=3),
+    Objective(
+        "help_need",
+        done=lambda s: s.slots.help_need is not None,
+        max_asks=3,
+        scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
+    ),
     Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
     Objective("wrap_up", done=lambda s: s.slots.graduated),
 )
@@ -101,19 +106,32 @@ def current(s: Situation) -> tuple[Objective, bool] | None:
 
 
 def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
-    """The guidance for the open objective, for this channel and scenario."""
+    """The guidance for the open objective, for this channel and scenario. On a call it also
+    carries the step after it: when a step finishes mid-turn, the voice can go straight on
+    instead of improvising until the next picture of where things stand arrives."""
     found = current(s)
     if found is None:
         return ""
     objective, parked = found
-    sections = texts[objective.name]
     parts: list[str] = []
     if parked:
         parts.append(
             "You've asked about the earlier step enough for now; leave it and move on. "
             "Pick it up only if they bring it up."
         )
-    parts.append(sections[""])
+    parts += _block(objective, s, phone, texts)
+    following = _after(objective, s) if s.medium is Medium.VOICE else None
+    if following is not None:
+        parts.append("The moment that's done, go straight on to this, in the same breath:")
+        parts += _block(following, s, phone, texts)
+    return "\n\n".join(parts)
+
+
+def _block(
+    objective: Objective, s: Situation, phone: str, texts: dict[str, dict[str, str]]
+) -> list[str]:
+    sections = texts[objective.name]
+    parts = [sections[""]]
     channel = "on a call" if s.medium is Medium.VOICE else "by text"
     if channel in sections:
         parts.append(sections[channel])
@@ -122,9 +140,14 @@ def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
     script = script or sections.get("script")
     if script:
         line = pick(script, f"{phone}:{objective.name}:{scenario or ''}")
-        line = line.replace("[name]", s.slots.user_name or "").replace(" ,", ",")
+        line = line.replace("[name]", s.slots.user_name or "(their name)")
         parts.append("Say this, as written, adjusting only to fit what they just said:\n" + line)
-    return "\n\n".join(parts)
+    return parts
+
+
+def _after(objective: Objective, s: Situation) -> Objective | None:
+    later = OBJECTIVES[OBJECTIVES.index(objective) + 1 :]
+    return next((o for o in later if not o.done(s)), None)
 
 
 def guidance(

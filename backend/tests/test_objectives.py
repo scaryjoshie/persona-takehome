@@ -90,3 +90,11 @@ def test_asks_count_agent_turns_since_the_last_saved_step() -> None:
         ev(VoiceUtterance(speaker=Speaker.USER, text="idk", turn_id="u")),
     ]
     assert asks_since_progress(events) == 2
+
+
+def test_on_a_call_the_next_step_comes_along() -> None:
+    on_call = render(situation(Medium.VOICE, agent_name="Mila"), "1", OBJECTIVE_TEXTS)
+    assert "Right now: their name" in on_call and "Right now: the one thing" in on_call
+    assert "(their name)" in on_call  # the name isn't known yet
+    by_text = render(situation(agent_name="Mila"), "1", OBJECTIVE_TEXTS)
+    assert "Right now: the one thing" not in by_text
