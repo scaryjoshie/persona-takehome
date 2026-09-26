@@ -11,8 +11,11 @@ words in prompts/objectives/<name>.md:
     ## script         lines to say; code picks one per user
     ## script: <scenario>   lines for a named scenario, used instead of `script`
 
-Scripts come in variants. The code picks one per user (seeded by phone and objective), so a
-script is said as written, and three different users still hear three different openers.
+Scripts are for the clean case only: fixed moments that are the same for everyone (the
+opener, asking for a name), shown the first time the step comes up and never right after a
+call. Anywhere else a script gets forced into a moment it doesn't fit, so steps that depend
+on what they said (their need, Gmail) have none. Scripts come in variants; the code picks one
+per user (seeded by phone and objective), so three users still hear three different openers.
 """
 
 from __future__ import annotations
@@ -84,12 +87,7 @@ OBJECTIVES: tuple[Objective, ...] = (
     ),
     Objective("user_name", done=lambda s: s.slots.user_name is not None),
     # Asks count from the last saved step, so these count only their own turns.
-    Objective(
-        "help_need",
-        done=lambda s: s.slots.help_need is not None,
-        max_asks=3,
-        scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
-    ),
+    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=3),
     Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
     Objective("wrap_up", done=lambda s: s.slots.graduated),
 )
@@ -164,7 +162,7 @@ def _block(
     scenario = objective.scenario(s)
     script = sections.get(f"script: {scenario}") if scenario else None
     script = script or sections.get("script")
-    if script:
+    if script and s.asks == 0 and not s.after_call:  # the clean case only
         fresh = [v for v in variants(script) if _norm(v) not in s.said]
         if not fresh:
             parts.append("You've already asked this in those words; ask differently this time.")

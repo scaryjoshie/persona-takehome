@@ -96,7 +96,6 @@ def test_asks_count_agent_turns_since_the_last_saved_step() -> None:
 def test_on_a_call_the_next_step_comes_along() -> None:
     on_call = render(situation(Medium.VOICE, agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
     assert "Right now: their name" in on_call and "Right now: the one thing" in on_call
-    assert "(their name)" in on_call  # the name isn't known yet
     by_text = render(situation(agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
     assert "Right now: the one thing" not in by_text
 
@@ -111,3 +110,13 @@ def test_a_line_already_said_is_not_scripted_again() -> None:
 def test_after_a_call_the_text_picks_up_from_it() -> None:
     after = Situation(Slots(), CallState(), Medium.TEXT, after_call=True)
     assert "A call just ended" in render(after, "1", OBJECTIVE_TEXTS)
+
+
+def test_scripts_show_only_in_the_clean_case() -> None:
+    first = render(situation(), "1", OBJECTIVE_TEXTS)
+    again = render(situation(asks=1), "1", OBJECTIVE_TEXTS)
+    after_call = render(
+        Situation(Slots(), CallState(), Medium.TEXT, after_call=True), "1", OBJECTIVE_TEXTS
+    )
+    assert "use this line" in first
+    assert "use this line" not in again and "use this line" not in after_call
