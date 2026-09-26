@@ -96,15 +96,14 @@ OBJECTIVES: tuple[Objective, ...] = (
 
 
 def asks_since_progress(events: Sequence[Event]) -> int:
-    """Agent turns (text replies, spoken turns) since the last event that moved a step."""
+    """Text replies since the last event that moved a step. Spoken turns don't count: a call
+    is a flowing conversation, and minutes of banter would park a step nobody asked about."""
     asks = 0
     for event in reversed(events):
         payload = event.payload
         if isinstance(payload, PROGRESS):
             break
-        if isinstance(payload, ReplyStarted) or (
-            isinstance(payload, VoiceUtterance) and payload.speaker is Speaker.AGENT
-        ):
+        if isinstance(payload, ReplyStarted):
             asks += 1
     return asks
 
@@ -173,9 +172,10 @@ def _block(
         line = pick_from(fresh, f"{phone}:{objective.name}:{scenario or ''}")
         line = line.replace("[name]", s.slots.user_name or "(their name)")
         parts.append(
-            "When you ask this, use this line, fitted naturally to the moment. If something "
-            "else needs handling first (they went off topic, asked you something, a call just "
-            "ended), handle that first and bring this in after:\n" + line
+            "When you ask this, use this line, fitted naturally to the moment and said in the "
+            "language you're speaking with them. If something else needs handling first (they "
+            "went off topic, asked you something, a call just ended), handle that first and "
+            "bring this in after:\n" + line
         )
     return parts
 

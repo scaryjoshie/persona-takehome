@@ -90,7 +90,7 @@ def test_asks_count_agent_turns_since_the_last_saved_step() -> None:
         ev(VoiceUtterance(speaker=Speaker.AGENT, text="so?", turn_id="a")),
         ev(VoiceUtterance(speaker=Speaker.USER, text="idk", turn_id="u")),
     ]
-    assert asks_since_progress(events) == 2
+    assert asks_since_progress(events) == 1  # spoken turns don't count
 
 
 def test_on_a_call_the_next_step_comes_along() -> None:
