@@ -7,12 +7,14 @@ import contextlib
 import logging
 import time
 
+import httpx
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
 from app.agent.events import ContactSaved
 from app.events.event import Event
 from app.events.payload import Channel, Origin
+from app.google import drafts
 from app.pipeline import Pipeline
 from app.services import ServicesDep
 from app.text.events import Reaction, Typing, UserMessage
@@ -26,6 +28,7 @@ from app.web.protocol import (
     ReactCommand,
     Reset,
     SaveContact,
+    SendDraft,
     SendMessage,
     SetTyping,
     SlotsMessage,
@@ -107,6 +110,13 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
                     await pipeline.submit(phone, Origin.USER, Channel.TEXT, typing)
                 case CallCommand():
                     await pipeline.submit(phone, Origin.USER, Channel.SYSTEM, call_event(message))
+                case SendDraft(ref=ref):  # the card's button is the yes: no model involved
+                    account = await svc.google.account(phone, (await pipeline.user(phone)).slots)
+                    if account is not None:
+                        try:
+                            await drafts.send(pipeline, phone, account, ref, need_reply=False)
+                        except (ValueError, httpx.HTTPError) as exc:
+                            log.info("%s: draft %s not sent: %s", phone, ref, exc)
                 case Reset():
                     await svc.google.disconnect(phone)  # a fresh start reconnects Google too
                     await pipeline.reset(phone)

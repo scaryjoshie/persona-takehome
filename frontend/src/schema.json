@@ -114,6 +114,34 @@
         "title": "SaveContact",
         "type": "object"
       },
+      "SendDraft": {
+        "description": "The Send button on an email draft card.",
+        "properties": {
+          "type": {
+            "const": "draft",
+            "default": "draft",
+            "title": "Type",
+            "type": "string"
+          },
+          "action": {
+            "const": "send",
+            "default": "send",
+            "title": "Action",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "action",
+          "ref"
+        ],
+        "title": "SendDraft",
+        "type": "object"
+      },
       "SendMessage": {
         "properties": {
           "type": {
@@ -172,6 +200,7 @@
       "mapping": {
         "call": "#/$defs/CallCommand",
         "contact": "#/$defs/SaveContact",
+        "draft": "#/$defs/SendDraft",
         "message": "#/$defs/SendMessage",
         "react": "#/$defs/ReactCommand",
         "reset": "#/$defs/Reset",
@@ -194,6 +223,9 @@
       },
       {
         "$ref": "#/$defs/SaveContact"
+      },
+      {
+        "$ref": "#/$defs/SendDraft"
       },
       {
         "$ref": "#/$defs/Reset"
@@ -548,6 +580,61 @@
           "note"
         ],
         "title": "Decision",
+        "type": "object"
+      },
+      "EmailDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "email_draft",
+            "default": "email_draft",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "to": {
+            "default": "",
+            "title": "To",
+            "type": "string"
+          },
+          "subject": {
+            "default": "",
+            "title": "Subject",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "gmail_id": {
+            "default": "",
+            "title": "Gmail Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "sent"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "to",
+          "subject",
+          "body",
+          "gmail_id",
+          "status"
+        ],
+        "title": "EmailDraft",
         "type": "object"
       },
       "EventMessage": {
@@ -1279,6 +1366,7 @@
                 "contact_card": "#/$defs/ContactCard",
                 "contact_saved": "#/$defs/ContactSaved",
                 "decision": "#/$defs/Decision",
+                "email_draft": "#/$defs/EmailDraft",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
                 "reaction": "#/$defs/Reaction",
@@ -1341,6 +1429,9 @@
               },
               {
                 "$ref": "#/$defs/GmailEvent"
+              },
+              {
+                "$ref": "#/$defs/EmailDraft"
               },
               {
                 "$ref": "#/$defs/Decision"
@@ -1622,6 +1713,61 @@
           "note"
         ],
         "title": "Decision",
+        "type": "object"
+      },
+      "EmailDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "email_draft",
+            "default": "email_draft",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "to": {
+            "default": "",
+            "title": "To",
+            "type": "string"
+          },
+          "subject": {
+            "default": "",
+            "title": "Subject",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "gmail_id": {
+            "default": "",
+            "title": "Gmail Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "sent"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref",
+          "to",
+          "subject",
+          "body",
+          "gmail_id",
+          "status"
+        ],
+        "title": "EmailDraft",
         "type": "object"
       },
       "GmailEvent": {
@@ -2089,6 +2235,7 @@
         "contact_card": "#/$defs/ContactCard",
         "contact_saved": "#/$defs/ContactSaved",
         "decision": "#/$defs/Decision",
+        "email_draft": "#/$defs/EmailDraft",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
         "reaction": "#/$defs/Reaction",
@@ -2151,6 +2298,9 @@
       },
       {
         "$ref": "#/$defs/GmailEvent"
+      },
+      {
+        "$ref": "#/$defs/EmailDraft"
       },
       {
         "$ref": "#/$defs/Decision"

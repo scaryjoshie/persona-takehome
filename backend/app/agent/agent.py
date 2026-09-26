@@ -20,6 +20,7 @@ from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.agent.objectives import guidance
 from app.events.payload import Channel, Origin, Payload
+from app.google import drafts
 from app.google.accounts import DEFAULT_TZ, Account
 from app.google.events import GmailEvent, GmailPhase
 from app.pipeline import RECENT
@@ -298,19 +299,49 @@ async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
 
 
 @agent.tool(prepare=google_connected)
-async def draft_email(ctx: RunContext[Deps], to: str, subject: str, body: str) -> str:
-    """Save a draft in their Gmail. Show them what it says; nothing is sent."""
-    draft_id = await (await _account(ctx)).draft(to=to, subject=subject, body=body)
-    await _record(ctx, "draft_email", {"to": to, "subject": subject}, {"draft_id": draft_id})
-    return f"draft {draft_id} saved. show them the draft and ask before sending"
+async def draft_email(
+    ctx: RunContext[Deps], to: str = "", subject: str = "", body: str = "", ref: str = ""
+) -> str:
+    """Draft an email in their Gmail and show it to them as a card (they see exactly what's
+    saved, gaps included; nothing is sent). To change a draft, call again with its ref."""
+    d = ctx.deps
+    try:
+        draft = await drafts.save(
+            d.pipeline,
+            d.phone,
+            await _account(ctx),
+            ref=ref or None,
+            to=to,
+            subject=subject,
+            body=body,
+        )
+    except ValueError as exc:
+        return str(exc)
+    await _record(ctx, "draft_email", {"ref": draft.ref, "subject": subject}, {})
+    gaps = f"; it's missing {', '.join(draft.missing)}" if draft.missing else ""
+    return (
+        f"draft {draft.ref} is on their screen as a card{gaps}. don't retype it; ask whether "
+        f"to send it or what to change (then call draft_email again with ref={draft.ref})"
+    )
 
 
-@agent.tool(prepare=google_connected)
-async def send_draft(ctx: RunContext[Deps], draft_id: str) -> str:
-    """Send a draft you already showed them, by its id. Only after they said yes to it."""
-    await (await _account(ctx)).send(draft_id)
-    await _record(ctx, "send_draft", {"draft_id": draft_id}, {})
-    return "sent"
+async def by_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    """Google tools that act, not just read: only by text, where they can see what happens."""
+    if ctx.deps.medium is not Medium.TEXT:
+        return None
+    return await google_connected(ctx, tool)
+
+
+@agent.tool(prepare=by_text)
+async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
+    """Send a draft you showed them, by its ref, once they've said yes to it."""
+    d = ctx.deps
+    try:
+        sent = await drafts.send(d.pipeline, d.phone, await _account(ctx), ref, need_reply=True)
+    except ValueError as exc:
+        return f"not sent: {exc}"
+    await _record(ctx, "send_draft", {"ref": ref}, {})
+    return f"sent to {sent.to}"
 
 
 @agent.tool(prepare=google_connected)
@@ -321,7 +352,7 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     return "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events) or "nothing"
 
 
-@agent.tool(prepare=google_connected)
+@agent.tool(prepare=by_text)
 async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
     """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
     Only after they said yes to this exact event."""

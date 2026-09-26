@@ -20,7 +20,7 @@ from app.agent.events import (
 )
 from app.events.decision import Decision
 from app.events.payload import Payload
-from app.google.events import GmailEvent
+from app.google.events import EmailDraft, GmailEvent
 from app.text.events import (
     AgentMessage,
     Reaction,
@@ -50,6 +50,7 @@ AnyPayload = Annotated[
     | Graduated
     | CallEvent
     | GmailEvent
+    | EmailDraft
     | Decision,
     Field(discriminator="kind"),
 ]

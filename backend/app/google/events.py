@@ -65,3 +65,29 @@ class GmailEvent(Payload):
 
 def inbox_lines(event: GmailEvent) -> str:
     return "\n".join(f"- [{m.id}] {m.sender}: {m.subject} ({m.snippet[:90]})" for m in event.inbox)
+
+
+class EmailDraft(Payload):
+    kind: Literal["email_draft"] = "email_draft"
+    routes = False  # the agent's own doing
+
+    ref: str  # ours; the same across versions of one draft
+    to: str = ""
+    subject: str = ""
+    body: str = ""
+    gmail_id: str = ""  # the draft in their Gmail
+    status: Literal["draft", "sent"] = "draft"
+
+    @property
+    def missing(self) -> list[str]:
+        return [name for name in ("to", "subject", "body") if not getattr(self, name).strip()]
+
+    def turn(self, at: datetime) -> Turn | None:
+        if self.status == "sent":
+            return Turn(Role.NOTE, f"email {self.ref} sent to {self.to}: {self.subject}")
+        gaps = f" (missing: {', '.join(self.missing)})" if self.missing else ""
+        return Turn(
+            Role.NOTE,
+            f"you showed them email draft {self.ref}{gaps} as a card:\n"
+            f"To: {self.to}\nSubject: {self.subject}\n{self.body}",
+        )
