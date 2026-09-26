@@ -542,3 +542,11 @@
 .messages-screen .reply-preview .icon {
   font-size: 20px;
 }
+
+/* A link card lines up with the bubble bodies above and below it, which stop short of their tail. */
+.messages-screen .message-sent.message-link .message-bubble {
+  margin-right: 6px;
+}
+.messages-screen .message-received.message-link .message-bubble {
+  margin-left: 6px;
+}

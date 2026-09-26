@@ -1,5 +1,5 @@
 import "./f7";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   App,
   Icon,
@@ -105,6 +105,12 @@ export function MessagesScreen({
     } else recorder.cancel();
     setRecording(false);
   };
+  // Stable, like recorder.start: the live waveform reopens the mic whenever these change.
+  const { cancel: cancelRecorder } = recorder;
+  const abandonRecording = useCallback(() => {
+    cancelRecorder();
+    setRecording(false);
+  }, [cancelRecorder]);
   // Press-and-hold on a bubble opens tapbacks and actions for its message.
   const [pressed, setPressed] = useState<{ message: ThreadMessage; target: HTMLElement } | null>(null);
   const press = (message: ThreadMessage) => (el: HTMLElement) => {
@@ -184,7 +190,7 @@ export function MessagesScreen({
                     barColor="#fff"
                     className="recording-wave"
                     onStreamReady={recorder.start}
-                    onError={() => stopRecording(false)}
+                    onError={abandonRecording}
                   />
                   <RecordingClock since={recorder.startedAt} />
                 </div>

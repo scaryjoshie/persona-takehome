@@ -58,7 +58,7 @@ export function PhoneEntry({ initial = "", error, busy = false, onSubmit }: Prop
         exit={{ y: -8, opacity: 0, filter: "blur(4px)", transition: { duration: 0.4 } }}
       >
         <h1 className="text-2xl font-medium text-white">Enter your phone number</h1>
-        <p className="mt-2 text-sm text-neutral-400">It's how Persona knows it's you.</p>
+        <p className="mt-2 text-sm text-neutral-400">It's how I am differentiating users for this project.</p>
       </motion.div>
 
       <div className="flex items-end gap-4">
