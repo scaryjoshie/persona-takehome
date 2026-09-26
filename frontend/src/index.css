@@ -1,0 +1,17 @@
+/* Cascade layers: Framework7 sits above Tailwind's base reset (so its own styling stands) and
+   below Tailwind's utilities (so `w-9` beats its global `button { width: 100% }`). */
+@layer theme, base, framework7, components, utilities;
+@import "framework7/css" layer(framework7);
+@import "framework7/components/input/css" layer(framework7);
+@import "framework7/components/messages/css" layer(framework7);
+@import "framework7/components/messagebar/css" layer(framework7);
+@import "framework7-icons/css/framework7-icons.css" layer(framework7);
+@import "tailwindcss";
+
+html, body, #root { height: 100%; margin: 0; background: #000; color: #8e8e93; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+
+@keyframes word-in {
+  from { opacity: 0; filter: blur(2px); }
+}
+.transcript-word { display: inline-block; margin-right: 0.28em; animation: word-in 180ms ease-out both; }
+.transcript-word:last-of-type { margin-right: 0; }

@@ -1,0 +1,53 @@
+/* Framework7's iOS theme fitted to the 402x874 screen: status bar above, home indicator below. */
+.messages-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  --status-h: 54px;
+  --keyboard-h: 0px;
+}
+.messages-screen.has-keyboard { --keyboard-h: 257px; }
+.messages-screen .framework7-root {
+  position: absolute;
+  inset: 0 0 var(--keyboard-h) 0;
+  height: auto;
+}
+.messages-screen .framework7-root {
+  --f7-safe-area-top: var(--status-h);
+  --f7-safe-area-bottom: calc(34px - min(var(--keyboard-h), 34px));
+  --f7-page-bg-color: #000;
+}
+.status-bar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+  height: var(--status-h);
+  display: flex; align-items: center;
+  pointer-events: none;
+}
+.keyboard { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; }
+.home-indicator {
+  position: absolute; bottom: 8px; left: 50%; z-index: 30;
+  width: 134px; height: 5px; margin-left: -67px;
+  border-radius: 3px; background: #fff;
+}
+.messages-screen .navbar .title {
+  display: flex; flex-direction: column; align-items: center; line-height: 1.1;
+}
+.contact-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(#a5abb8, #858994);
+  color: #fff; font-size: 20px; font-weight: 500;
+}
+.contact-name { font-size: 12px; font-weight: 400; margin-top: 3px; }
+.contact-name .icon { font-size: 9px; opacity: 0.5; }
+
+/* iOS puts the send button inside the field: a blue disc with a white arrow, replacing the mic. */
+.messages-screen .messagebar-area:has(.send-button) textarea { padding-right: 44px; }
+.messages-screen .send-button {
+  position: absolute; right: 5px; bottom: 5px; z-index: 1;
+  width: 30px; height: 30px; min-width: 0; min-height: 0;
+  border-radius: 50%; background: #0a84ff; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.messages-screen .send-button .icon { font-size: 19px; font-weight: 700; }
