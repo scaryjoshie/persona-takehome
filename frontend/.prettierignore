@@ -1,0 +1,3 @@
+# Generated: src/schema.json is exported by the backend, src/protocol.gen.ts by scripts/gen-types.mjs.
+src/schema.json
+src/protocol.gen.ts
