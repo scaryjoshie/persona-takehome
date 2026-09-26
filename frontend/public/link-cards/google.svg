@@ -23,17 +23,10 @@
     <ellipse cx="760" cy="300" rx="180" ry="120" fill="#cfd6c6"/>
   </g>
 
-  <!-- wordmark -->
-  <g transform="translate(96 96)" fill="#2f3431">
-    <circle cx="14" cy="18" r="11" fill="none" stroke="#2f3431" stroke-width="3.2"/>
-    <circle cx="28" cy="18" r="11" fill="none" stroke="#2f3431" stroke-width="3.2"/>
-    <text x="52" y="30" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5">Persona</text>
-  </g>
-
   <!-- headline -->
   <text font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="78" font-weight="600" fill="#3a403b" letter-spacing="-2">
-    <tspan x="96" y="262">One tap and</tspan>
-    <tspan x="96" y="350">I've got it from here</tspan>
+    <tspan x="96" y="232">One tap and</tspan>
+    <tspan x="96" y="320">I've got it from here</tspan>
   </text>
 
   <!-- Connect with Google pill -->
