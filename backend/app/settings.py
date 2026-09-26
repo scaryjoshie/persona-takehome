@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     @classmethod
     def _empty_is_none(cls, v: object) -> object:
         return None if v == "" else v
+
     openai_realtime_model: str = "gpt-realtime-2.1"  # fallback voice layer
 
     # OpenRouter: auxiliary only (one-shot tasks, harness personas).
