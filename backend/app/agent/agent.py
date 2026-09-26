@@ -205,7 +205,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     )
     if not await _submit(ctx, ringing):
         return "can't call right now; a call is already ringing or in progress"
-    d.placed_call.append(True)  # the call is this reply; its bubbles are dropped
+    d.placed_call = True  # the call is this reply; its bubbles are dropped
     missed = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id=call_id)
     d.pipeline.later(RING_SECONDS, d.phone, Origin.SYSTEM, Channel.SYSTEM, missed)
     await _record(ctx, "start_call", {"reason": reason}, {})
