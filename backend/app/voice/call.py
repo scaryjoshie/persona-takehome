@@ -267,10 +267,9 @@ async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None
     """After end_call: wait for the voice to finish a goodbye (one it says next, or one it
     already said), let it play out, then hang up."""
     await call.hang_up_asked.wait()
-    before = call.hang_up_after or 0
     asked = time.monotonic()
     while time.monotonic() - asked < HANG_UP_WAIT:  # noqa: ASYNC110 (polls two conditions)
-        said_bye = call.agent_lines > before or GOODBYE.search(call.last_agent_line)
+        said_bye = call.agent_lines > call.hang_up_after or GOODBYE.search(call.last_agent_line)
         if said_bye and not call.speaking:
             await asyncio.sleep(1.0)
             break

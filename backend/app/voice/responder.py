@@ -72,8 +72,8 @@ class LiveCall:
     voice_owes_reply: bool = False  # they spoke last; the voice's next words answer them
     agent_lines: int = 0  # the voice's finished turns so far
     last_agent_line: str = ""
-    hang_up_after: int | None = None  # set by end_call: agent_lines when it was asked
-    hang_up_asked: asyncio.Event = field(default_factory=asyncio.Event)
+    hang_up_asked: asyncio.Event = field(default_factory=asyncio.Event)  # by end_call
+    hang_up_after: int = 0  # agent_lines when end_call asked
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
     async def send(self, text: str, *, speak: bool) -> None:
@@ -163,7 +163,7 @@ class VoiceResponder:
         call = self.calls.get(phone)
         if call is None:
             return False
-        if call.hang_up_after is None:
+        if not call.hang_up_asked.is_set():
             call.hang_up_after = call.agent_lines
             call.hang_up_asked.set()
         return True
