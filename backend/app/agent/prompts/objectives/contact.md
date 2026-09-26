@@ -7,7 +7,7 @@ Its own bubble, then ask their name in the next bubble. You can't see whether th
 Mention it in passing (they can save it after the call), then ask their name.
 
 ## script
-- just sent you my contact card 📇 save me so you know it's me when i call
+- just sent you my contact card 📇 save me so you know it's me
 - sending you my card real quick, tap it so i'm not just a random number 📇
 
 ## script: on a call
