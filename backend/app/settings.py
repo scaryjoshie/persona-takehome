@@ -6,7 +6,7 @@ Nothing else in the app reads the environment directly.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     voice_layer: Literal["live", "realtime"] = "live"
     openai_live_model: str = "gpt-live-1"
     openai_live_backend_model: str | None = None  # None = the agent's own model (recommended)
+
+    @field_validator("openai_live_backend_model", mode="before")
+    @classmethod
+    def _empty_is_none(cls, v: object) -> object:
+        return None if v == "" else v
     openai_realtime_model: str = "gpt-realtime-2.1"  # fallback voice layer
 
     # OpenRouter: auxiliary only (one-shot tasks, harness personas).
