@@ -23,7 +23,7 @@ from app.web.protocol import (
     CallCommand,
     CallMessage,
     EventMessage,
-    React,
+    ReactCommand,
     Reset,
     SaveContact,
     SendMessage,
@@ -36,7 +36,13 @@ from app.web.protocol import (
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-STATE_KINDS = {"slot_changed", "call", "gmail", "graduated"}  # the browser needs fresh state
+STATE_KINDS = {
+    "slot_changed",
+    "call",
+    "gmail",
+    "graduated",
+    "contact_saved",
+}  # the browser needs fresh state
 
 
 class SessionRequest(BaseModel):
@@ -82,7 +88,7 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
                     quoted = await text_of(pipeline, phone, reply_to)
                     said = UserMessage(text=text, reply_to=reply_to, reply_to_text=quoted)
                     await pipeline.submit(phone, Origin.USER, Channel.TEXT, said)
-                case React(target_seq=seq, emoji=emoji, remove=remove):
+                case ReactCommand(target_seq=seq, emoji=emoji, remove=remove):
                     tapback = Reaction(
                         target_seq=seq,
                         target_text=await text_of(pipeline, phone, seq),

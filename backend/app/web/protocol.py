@@ -56,7 +56,7 @@ class SendMessage(Message):
     reply_to: int | None = None  # seq of the bubble being replied to
 
 
-class React(Message):
+class ReactCommand(Message):
     """A tapback on a bubble; `remove` takes it back."""
 
     type: Literal["react"] = "react"
@@ -88,7 +88,7 @@ class Reset(Message):
 
 
 ClientMessage = Annotated[
-    SendMessage | SetTyping | CallCommand | React | SaveContact | Reset,
+    SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset,
     Field(discriminator="type"),
 ]
 CLIENT_MESSAGE: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
