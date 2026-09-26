@@ -15,6 +15,7 @@ from app.agent.deps import AgentEnv
 from app.events.payload import Channel, Origin
 from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
+from app.voice.call_state import CallPhase
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -65,6 +66,10 @@ class Replier:
                 return
 
     async def _superseded(self, phone: str, through_seq: int) -> bool:
-        """Did anything that wants a reply arrive after the events this reply answers?"""
+        """Stop if a call has taken over the conversation, or if anything that wants a reply
+        arrived after the events this reply answers."""
+        user = await self._env.pipeline.user(phone)
+        if user.call.phase in (CallPhase.RINGING, CallPhase.CONNECTING, CallPhase.CONNECTED):
+            return True
         recent = await self._env.pipeline.history(phone, limit=20)
         return any(e.seq > through_seq and e.payload.should_route() for e in recent)

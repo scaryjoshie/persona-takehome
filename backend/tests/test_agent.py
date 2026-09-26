@@ -117,3 +117,16 @@ async def test_naming_the_agent_sends_its_contact_card(
     assert "contact_card" in kinds and kinds[-1] == "agent_message"
     tapbacks = [e for e in await pipeline.history(PHONE) if e.kind == "reaction"]
     assert len(tapbacks) == 1 and tapbacks[0].payload.model_dump()["by"] == "agent"
+
+
+async def test_a_reply_that_places_a_call_sends_no_bubbles(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    model = scripted(
+        [ToolCallPart("start_call", {"reason": "setup"})],
+        [ToolCallPart("final_result", {"bubbles": ["what do you want to call me?"]})],
+    )
+    await run_text(pipeline, messenger, model, [])
+    assert messenger.sent == []  # the call took over; the bubble is dropped
+    kinds = [e.kind for e in await pipeline.history(PHONE)]
+    assert "call" in kinds and "agent_message" not in kinds
