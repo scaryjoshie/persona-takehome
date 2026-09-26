@@ -1,0 +1,6 @@
+node_modules
+dist
+*.tsbuildinfo
+.DS_Store
+# Apple Design Resources bezels: Apple's license forbids redistribution. Run scripts/fetch-bezel.sh.
+public/bezels/
