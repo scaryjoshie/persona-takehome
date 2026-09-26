@@ -1,0 +1,12 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+**/.env
+**/*.db
+**/*.db.bak*
+backend/data
+backend/evals/out
+.git
+.claude
+component-library

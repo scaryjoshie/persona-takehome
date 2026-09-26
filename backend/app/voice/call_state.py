@@ -56,12 +56,20 @@ class CallEvent(Payload):
                 return Turn(Role.NOTE, f"user declined the call {t}")
             case CallTransition.FAILED if self.reason == "no_answer":
                 return Turn(Role.NOTE, f"they didn't pick up your call {t}")
+            case CallTransition.FAILED if self.reason == "call_limit":
+                return Turn(
+                    Role.NOTE,
+                    f"the call couldn't start {t}: the demo's daily call limit is reached. "
+                    "Carry on by text and don't offer another call today",
+                )
             case CallTransition.FAILED:
                 return Turn(Role.NOTE, f"call failed {t}, reason: {self.reason or 'unknown'}")
             case CallTransition.ENDED if self.reason == "dropped":
                 return Turn(Role.NOTE, f"the call dropped (lost connection, not a hang-up) {t}")
             case CallTransition.ENDED if self.reason == "silence":
                 return Turn(Role.NOTE, f"you ended the call {t} after they went quiet")
+            case CallTransition.ENDED if self.reason == "time_limit":
+                return Turn(Role.NOTE, f"you ended the call {t}: calls are capped at 10 minutes")
             case CallTransition.ENDED:
                 return Turn(Role.NOTE, f"call ended {t}, reason: {self.reason or 'unknown'}")
             case CallTransition.CONNECTING:

@@ -140,6 +140,7 @@ def create_app() -> FastAPI:
         voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
         google=google,
+        calls_per_ip_per_day=settings.calls_per_ip_per_day,
     )
     for module in (web_routes, voice_routes, voice_note_routes, preview_routes, google_routes):
         web.include_router(module.router)
