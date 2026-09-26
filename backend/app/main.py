@@ -10,7 +10,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 
@@ -28,6 +28,7 @@ from app.text.reply import Reply
 from app.text.responder import TextResponder
 from app.timers import AsyncioTimers, Clock, Timers
 from app.users.live import LiveUser, LiveUsers
+from app.voice.call import VoiceConfig, run_call
 from app.voice.decider import voice_decider
 from app.voice.responder import VoiceResponder
 from app.web.routes import make_router
@@ -80,9 +81,10 @@ def create_app() -> FastAPI:
     settings = get_settings()
     engine = make_engine(settings.database_url)
     sockets = Sockets()
+    messenger = WebMessenger(sockets)
     pipeline = build_app(
         db=make_sessions(engine),
-        messenger=WebMessenger(sockets),
+        messenger=messenger,
         model=agent_model(settings),
         app_base_url=settings.app_base_url,
         openrouter_key=(
@@ -97,8 +99,28 @@ def create_app() -> FastAPI:
         yield
         await engine.dispose()
 
+    assert settings.openai_api_key is not None
+    voice = VoiceConfig(
+        listener_model=agent_model(settings),
+        api_key=settings.openai_api_key.get_secret_value(),
+        live_model=settings.openai_live_model,
+        backend_model=settings.openai_live_backend_model,
+        app_base_url=settings.app_base_url,
+    )
+
+    async def start_call(websocket: WebSocket, phone: str) -> None:
+        await run_call(
+            websocket,
+            phone=phone,
+            pipeline=pipeline,
+            agent=agent,
+            messenger=messenger,
+            push=sockets.push,
+            config=voice,
+        )
+
     web = FastAPI(lifespan=lifespan)
-    web.include_router(make_router(pipeline, sockets))
+    web.include_router(make_router(pipeline, sockets, start_call))
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():
         web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")

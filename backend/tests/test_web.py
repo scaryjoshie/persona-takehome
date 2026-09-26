@@ -10,11 +10,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from starlette.testclient import WebSocketTestSession
+from starlette.websockets import WebSocketDisconnect
 
 from app.database import create_schema, make_engine, make_sessions
 from app.main import build_app
@@ -24,6 +25,17 @@ from app.web.sockets import Sockets, WebMessenger
 
 async def reply_hi(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
     return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": ["hi"]})])
+
+
+calls: list[str] = []
+
+
+async def fake_call(websocket: WebSocket, phone: str) -> None:
+    """Stands in for the Live session: echo one audio frame, then hang up."""
+    calls.append(phone)
+    frame = await websocket.receive_bytes()
+    await websocket.send_bytes(frame)
+    await websocket.close()
 
 
 @pytest.fixture
@@ -44,7 +56,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         await engine.dispose()
 
     web = FastAPI(lifespan=lifespan)
-    web.include_router(make_router(pipeline, sockets))
+    web.include_router(make_router(pipeline, sockets, fake_call))
     with TestClient(web) as c:
         yield c
 
@@ -114,3 +126,28 @@ def test_reset_clears_the_user(client: TestClient) -> None:
         ws.send_text(json.dumps({"type": "reset"}))
         snap = receive_until(ws, "snapshot")[-1]
         assert snap["events"] == [] and snap["call"]["phase"] == "none"
+
+
+def test_audio_without_a_call_is_refused(client: TestClient) -> None:
+    with pytest.raises(WebSocketDisconnect) as refused:
+        with client.websocket_connect("/ws/audio?phone=15550004444") as audio:
+            audio.receive_bytes()
+    assert refused.value.code == 4400
+
+
+def test_audio_runs_the_call_once_a_call_is_connecting(client: TestClient) -> None:
+    with client.websocket_connect("/ws?phone=15550005555") as ws:
+        receive(ws)
+        ws.send_text(json.dumps({"type": "call", "action": "start"}))
+        receive_until(ws, "call")
+        with client.websocket_connect("/ws/audio?phone=15550005555") as audio:
+            audio.send_bytes(b"\x00\x01" * 480)
+            assert audio.receive_bytes() == b"\x00\x01" * 480
+    assert calls[-1] == "15550005555"
+
+
+def test_partial_is_in_the_exported_schema() -> None:
+    from app.web.schema import schema
+
+    server = json.dumps(schema()["server_message"])
+    assert '"partial"' in server and "turn_id" in server

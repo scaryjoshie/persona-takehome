@@ -17,7 +17,7 @@ from app.database import SessionFactory
 from app.events import service as events
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.gmail.events import GmailEvent
+from app.gmail.events import GmailEvent, GmailPhase
 from app.routing.route import route
 from app.users import service as users
 from app.users.live import LiveUsers
@@ -115,8 +115,8 @@ class Pipeline:
 
 async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -> Payload | None:
     """The events that change user state, and how. Returns the event to record (possibly
-    filled in), or None to drop it: an impossible call transition, or a slot set to the
-    value it already has."""
+    filled in), or None to drop it: an impossible call transition, a slot set to the value
+    it already has, a second "link sent", or a second graduation."""
     match payload:
         case CallEvent():
             call = next_state(user.call, payload, now)
@@ -130,6 +130,9 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             await users.set_slots(s, user.phone, **{slot: new})
             return payload.model_copy(update={"old": old})
         case GmailEvent(phase=phase, email=email):
+            already = (GmailPhase.LINK_SENT, GmailPhase.CONNECTED)
+            if phase is GmailPhase.LINK_SENT and user.slots.gmail in already:
+                return None  # the link goes out once
             await users.set_slots(
                 s, user.phone, gmail=phase, gmail_email=email or user.slots.gmail_email
             )

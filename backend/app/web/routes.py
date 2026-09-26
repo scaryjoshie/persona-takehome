@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
 from app.calls.events import CallEvent, CallTransition, Initiator
+from app.calls.state import CallPhase
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
@@ -37,8 +39,15 @@ class SessionRequest(BaseModel):
     phone: str
 
 
-def make_router(pipeline: Pipeline, sockets: Sockets) -> APIRouter:
+CallRunner = Callable[[WebSocket, str], Awaitable[None]]
+
+AUDIO_BUSY = 4409  # a call is already running for this user (another tab)
+AUDIO_NO_CALL = 4400  # no call is being connected; send accept or start first
+
+
+def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> APIRouter:
     router = APIRouter()
+    calls_running: set[str] = set()
 
     async def snapshot(phone: str) -> Snapshot:
         user = await pipeline.user(phone)
@@ -103,6 +112,24 @@ def make_router(pipeline: Pipeline, sockets: Sockets) -> APIRouter:
         finally:
             unsubscribe()
             sockets.remove(phone, websocket)
+
+    @router.websocket("/ws/audio")
+    async def audio(websocket: WebSocket, phone: str) -> None:
+        """The call itself: PCM16 mono 24 kHz both ways. Closing this socket hangs up."""
+        phone = normalize(phone)
+        user = await pipeline.user(phone)
+        if phone in calls_running:
+            await websocket.close(code=AUDIO_BUSY)
+            return
+        if user.call.phase is not CallPhase.CONNECTING:
+            await websocket.close(code=AUDIO_NO_CALL)
+            return
+        calls_running.add(phone)
+        try:
+            await websocket.accept()
+            await run_call(websocket, phone)
+        finally:
+            calls_running.discard(phone)
 
     return router
 

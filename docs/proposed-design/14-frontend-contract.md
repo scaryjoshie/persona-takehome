@@ -11,7 +11,7 @@ The one page the frontend needs. Message shapes are in [09-protocol.md](09-proto
 
 ## Status (2026-09-26)
 
-Built and tested: `POST /api/session`, `WS /ws` (snapshot on connect, then `event`, `slots`, `call`, `typing`; accepts `message`, `typing`, `call`, `reset`), static serving of `frontend/dist`, and `uv run python -m app.web.schema` for the JSON Schema. Not yet built: `/ws/audio` and the voice session (slice 3), Google OAuth (slice 4), `partial` messages (come with voice). Until slice 3, a call that is accepted or started stays in `connecting`.
+Built and tested: `POST /api/session`, `WS /ws` (snapshot on connect, then `event`, `slots`, `call`, `typing`; accepts `message`, `typing`, `call`, `reset`), static serving of `frontend/dist`, and `uv run python -m app.web.schema` for the JSON Schema. Built 2026-09-26: `/ws/audio` with GPT-Live, and `partial` messages. Not yet built: Google OAuth (slice 4). `/ws/audio` closes with 4400 if no call is connecting (send `accept` or `start` first) and 4409 if a call is already running for the user.
 
 Two details: the user id is the phone's **digits only** (a `+` in a query string decodes to a space, so the server strips everything but digits; send whatever the user typed). Decision events use verb `start` in addition to interrupt/absorb/defer (logged when nothing was in progress).
 

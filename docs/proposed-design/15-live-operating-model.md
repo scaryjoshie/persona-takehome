@@ -67,6 +67,17 @@ Every speculation is a `decision` event, so the debug panel shows "predicted inb
 
 **Routing rule exception.** The routing pass consumes transcript rows (normally record-only) and emits deltas with origin `system`, so the router's loop guard does not drop them. This is the one explicit exception to "transcripts are never routed."
 
+## As built (2026-09-26): the back-office listener
+
+First real calls confirmed the field research: across three test calls GPT-Live delegated **zero** times, while saying things like "I'm texting you a link." So the design does not depend on delegation at all:
+
+- **Listener** (`app/voice/call.py`): after each finished user turn, our own agent runs once with the call so far, the same tools, and the `listener.md` instructions. Its tools record what the user said (name, need, Gmail link); its output is a short silent note to the voice ("Recorded name: Siobhan. Gmail link texted."). One run at a time; turns that arrive during a run trigger one more run.
+- **Speaking prompt** tells the voice a back office listens and records, and to say a link was texted only after a note confirms it. Observed: the voice waits for the note, then says "I just texted it."
+- **Greeting**: on connect, a speakable note tells the voice to greet (and give the reason for the call if the agent placed it). Without it the voice stayed silent until spoken to.
+- **Idempotency in the pipeline, not the prompt**: a second "link sent" is dropped, so the tool texts the link once even when two listener runs both call it (seen in testing).
+
+Measured on a synthesized-speech test call: connected in 1.2–1.9 s; slots recorded 2–5 s after the user finished speaking; link texted about 1 s after "text me the Gmail link".
+
 ## Implications from field research (2026-09-25)
 
 Full report: [research/gpt-live-behavior.md](research/gpt-live-behavior.md). What changes:

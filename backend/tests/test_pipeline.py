@@ -136,3 +136,9 @@ async def test_events_never_overlap_across_awaits(pipeline: Pipeline, timers: Fa
     seqs = [e.seq for e in await a.history(PHONE)]
     assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
     assert isinstance((await a.history(PHONE))[0], Event)
+
+
+async def test_the_gmail_link_goes_out_once(pipeline: Pipeline) -> None:
+    sent = GmailEvent(phase=GmailPhase.LINK_SENT)
+    assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, sent) is not None
+    assert await pipeline.submit(PHONE, Origin.VOICE_AGENT, Channel.VOICE, sent) is None

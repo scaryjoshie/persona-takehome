@@ -101,9 +101,10 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
 async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     """Text the user a link to connect their Gmail. Say in your own words that you sent it."""
     d = ctx.deps
+    if not await _submit(ctx, GmailEvent(phase=GmailPhase.LINK_SENT)):
+        return "the link was already sent (or Gmail is connected); it is in their texts"
     link = f"{d.app_base_url}/api/auth/google/start?phone={d.phone}"
     await say(d, link)
-    await _submit(ctx, GmailEvent(phase=GmailPhase.LINK_SENT))
     await _record(ctx, "send_gmail_link", {}, {"link": link})
     return "link sent by text; the user will tap it when ready"
 
