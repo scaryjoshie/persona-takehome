@@ -6,8 +6,8 @@ import type { TranscriptPartial, WireEvent } from "../types";
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
   return events.flatMap((e): ThreadMessage[] => {
     const p = e.payload;
-    if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text }];
-    if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text }];
+    if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts }];
+    if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text, ts: e.ts }];
     return [];
   });
 }

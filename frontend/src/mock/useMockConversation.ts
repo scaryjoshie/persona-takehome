@@ -43,10 +43,11 @@ export function useMockConversation(): Conversation {
     setTyping(true);
     setTimeout(() => {
       setTyping(false);
-      setMessages((m) => [...m, { id: nextId(), side: "received", text }]);
+      setMessages((m) => [...m, { id: nextId(), side: "received", text, ts: new Date().toISOString() }]);
     }, 1000);
   };
-  const userSays = (text = pick(RANDOM_USER_LINES)) => setMessages((m) => [...m, { id: nextId(), side: "sent", text }]);
+  const userSays = (text = pick(RANDOM_USER_LINES)) =>
+    setMessages((m) => [...m, { id: nextId(), side: "sent", text, ts: new Date().toISOString() }]);
 
   useEffect(() => {
     if (!autoplay) return;

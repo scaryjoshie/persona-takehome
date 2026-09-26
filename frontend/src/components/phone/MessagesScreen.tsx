@@ -24,6 +24,8 @@ export interface ThreadMessage {
   id: string;
   side: "sent" | "received";
   text: string;
+  /** ISO time it was sent; the thread header shows the first one. */
+  ts?: string;
 }
 
 interface Props {
@@ -56,6 +58,7 @@ export function MessagesScreen({
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
+  const clock = useClock();
   const rootRef = useRef<HTMLDivElement>(null);
   useStickToBottom(rootRef, messages.length, typing);
   const send = () => {
@@ -76,7 +79,7 @@ export function MessagesScreen({
     <div ref={rootRef} className={`messages-screen${keyboard ? " has-keyboard" : ""}`}>
       <div className="status-bar">
         <Scaled width={SCREEN.width} height={STATUS_H}>
-          <IOSStatusBar theme="dark" time="9:41" />
+          <IOSStatusBar theme="dark" time={clock} />
         </Scaled>
       </div>
       <App theme="ios" darkMode name="messages">
@@ -108,7 +111,7 @@ export function MessagesScreen({
             <MessagesTitle>
               <b>iMessage</b>
               <br />
-              Today 9:41 AM
+              {threadDate(messages[0]?.ts)}
             </MessagesTitle>
             {bubblesFor(messages).map((b, i, all) => {
               const first = all[i - 1]?.side !== b.side;
@@ -248,4 +251,36 @@ function LinkedText({ text }: { text: string }) {
       )}
     </>
   );
+}
+
+/** The status bar clock, h:mm like iOS, refreshed on the minute. */
+function useClock(): string {
+  const format = () =>
+    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M$/i, "");
+  const [time, setTime] = useState(format);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setTime(format());
+      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000));
+    };
+    timer = setTimeout(tick, 60_000 - (Date.now() % 60_000));
+    return () => clearTimeout(timer);
+  }, []);
+  return time;
+}
+
+/** "Today 4:51 PM", "Yesterday 9:02 AM", or "Mon, Sep 22 at 9:02 AM", as Messages labels a thread. */
+function threadDate(iso?: string): string {
+  const date = iso ? new Date(iso) : new Date();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000);
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  const day = date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  return `${day} at ${time}`;
+}
+
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
