@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import TypeAdapter
 from sqlalchemy import delete, func
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -13,6 +12,7 @@ from app.database import aware
 from app.events.event import Event
 from app.events.models import EventRow
 from app.events.payload import Channel, Origin, Payload
+from app.payloads import PAYLOADS
 
 
 async def append(
@@ -44,7 +44,7 @@ async def append(
 
 
 async def list_events(
-    session: AsyncSession, phone: str, *, payloads: TypeAdapter[Payload], limit: int | None = None
+    session: AsyncSession, phone: str, *, limit: int | None = None
 ) -> list[Event]:
     """All of a user's events in order, or the most recent `limit` of them."""
     query = select(EventRow).where(EventRow.user_phone == phone)
@@ -59,7 +59,7 @@ async def list_events(
             ts=aware(r.ts),
             origin=Origin(r.origin),
             channel=Channel(r.channel),
-            payload=payloads.validate_python(r.payload),
+            payload=PAYLOADS.validate_python(r.payload),
         )
         for r in rows
     ]

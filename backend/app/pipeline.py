@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from pydantic import TypeAdapter
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
@@ -70,13 +69,11 @@ class Pipeline:
         self,
         db: SessionFactory,
         *,
-        payloads: TypeAdapter[Payload],
         clock: Clock,
         timers: Timers,
     ) -> None:
         self.responders: dict[Medium, Responder] = {}
         self._db = db
-        self._payloads = payloads
         self._clock = clock
         self._timers = timers
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -93,7 +90,7 @@ class Pipeline:
 
     async def history(self, phone: str, *, limit: int | None = None) -> list[Event]:
         async with self._db() as s:
-            return await events.list_events(s, phone, payloads=self._payloads, limit=limit)
+            return await events.list_events(s, phone, limit=limit)
 
     def now(self) -> datetime:
         return self._clock()
@@ -192,7 +189,7 @@ class Pipeline:
     async def _route(self, phone: str, event: Event) -> None:
         async with self._db() as s:
             user = await users.get_user(s, phone)
-            recent = await events.list_events(s, phone, payloads=self._payloads, limit=RECENT)
+            recent = await events.list_events(s, phone, limit=RECENT)
         assert user is not None
         responder = self.responders[user.floor]
         decision = await responder.handle(event, user, Context(self, phone, recent))

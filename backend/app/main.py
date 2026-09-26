@@ -21,7 +21,6 @@ from app.agent.deps import AgentEnv
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
 from app.jev import Jev
-from app.payloads import PAYLOADS
 from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
 from app.services import Services
@@ -60,7 +59,7 @@ def assemble(
     timers: Timers | None = None,
     clock: Clock = utc_now,
 ) -> App:
-    pipeline = Pipeline(db, payloads=PAYLOADS, clock=clock, timers=timers or AsyncioTimers())
+    pipeline = Pipeline(db, clock=clock, timers=timers or AsyncioTimers())
     voice = VoiceResponder(jev=jev)
     env = AgentEnv(
         pipeline=pipeline,
