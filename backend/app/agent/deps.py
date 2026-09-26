@@ -19,8 +19,8 @@ class AgentEnv:
     model: Model  # the text model; also runs the call's back-office listener
     app_base_url: str  # for links the agent sends, like the Gmail link
 
-    def deps(self, user: User, medium: Medium) -> Deps:
-        return Deps(user=user, medium=medium, env=self)
+    def deps(self, user: User, medium: Medium, *, back_office: bool = False) -> Deps:
+        return Deps(user=user, medium=medium, env=self, back_office=back_office)
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,9 @@ class Deps:
     user: User  # a snapshot taken when the run started
     medium: Medium
     env: AgentEnv
+    # On a call two runs use the voice medium: the Live backend (the voice's own delegation)
+    # and the back office. Only the back office records facts and sends things.
+    back_office: bool = False
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
 
     @property

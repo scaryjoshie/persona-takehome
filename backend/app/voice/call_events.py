@@ -48,6 +48,8 @@ class CallEvent(Payload):
                 return Turn(Role.NOTE, f"call connected {t}")
             case CallTransition.DECLINED:
                 return Turn(Role.NOTE, f"user declined the call {t}")
+            case CallTransition.FAILED if self.reason == "no_answer":
+                return Turn(Role.NOTE, f"they didn't pick up your call {t}")
             case CallTransition.FAILED:
                 return Turn(Role.NOTE, f"call failed {t}, reason: {self.reason or 'unknown'}")
             case CallTransition.ENDED:

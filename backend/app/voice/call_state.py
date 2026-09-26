@@ -47,10 +47,14 @@ def next_state(current: CallState, event: CallEvent, now: datetime) -> CallState
     """The state after `event`, or None if the event is not valid from `current`."""
     if current.phase not in ALLOWED_FROM[event.transition]:
         return None
+    if event.transition is CallTransition.FAILED and event.call_id not in (None, current.call_id):
+        return None  # a missed-call timer for an attempt that was answered or replaced
     match event.transition:
         case CallTransition.RINGING:
             return CallState(
-                phase=CallPhase.RINGING, initiated_by=event.initiated_by or Initiator.AGENT
+                phase=CallPhase.RINGING,
+                initiated_by=event.initiated_by or Initiator.AGENT,
+                call_id=event.call_id,
             )
         case CallTransition.CONNECTING:
             return CallState(

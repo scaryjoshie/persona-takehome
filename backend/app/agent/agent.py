@@ -3,17 +3,20 @@ fragments plus a dynamic state block; tools write facts through pipeline."""
 
 from __future__ import annotations
 
+import re
+import uuid
 from typing import Any
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
 from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
-from app.events.payload import Payload
+from app.events.payload import Channel, Origin, Payload
 from app.gmail.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage
 from app.users.user import Medium
@@ -39,8 +42,11 @@ agent: Agent[Deps, str] = Agent(
 
 @agent.instructions
 def dynamic_instructions(ctx: RunContext[Deps]) -> str:
-    known = what_you_know(ctx.deps.user.slots, ctx.deps.user.call)
-    tail = prompts.TEXT if ctx.deps.medium is Medium.TEXT else ""
+    d = ctx.deps
+    if d.medium is Medium.VOICE and not d.back_office:
+        return ""  # the Live backend: its snapshot would go stale; state reaches it as notes
+    known = what_you_know(d.user.slots, d.user.call)
+    tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     return f"# What you know\n\n{known}\n\n{tail}"
 
 
@@ -66,18 +72,56 @@ async def say(deps: Deps, text: str) -> None:
     await deps.messenger.send(deps.phone, text)
 
 
+# Who may use which tool. By text the agent does everything itself. On a call the voice only
+# talks (and hangs up); the back office records what was said and sends what was promised.
+
+
 async def only_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
     return tool if ctx.deps.medium is Medium.TEXT else None
 
 
-async def only_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+async def not_the_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    d = ctx.deps
+    return tool if d.medium is Medium.TEXT or d.back_office else None
+
+
+async def only_back_office(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    return tool if ctx.deps.back_office else None
+
+
+async def only_on_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
     return tool if ctx.deps.medium is Medium.VOICE else None
+
+
+ASKS_FOR_CALL = re.compile(r"\b(call|ring|phone)\b", re.IGNORECASE)
+
+
+async def may_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    """After a no, the agent can't call unless their latest message mentions a call."""
+    if ctx.deps.medium is not Medium.TEXT:
+        return None
+    if not ctx.deps.user.slots.no_calls:
+        return tool
+    return tool if ASKS_FOR_CALL.search(_latest_user_text(ctx)) else None
+
+
+def _latest_user_text(ctx: RunContext[Deps]) -> str:
+    for message in reversed(ctx.messages):
+        if isinstance(message, ModelRequest):
+            return "\n".join(
+                p.content
+                for p in message.parts
+                if isinstance(p, UserPromptPart)
+                and isinstance(p.content, str)
+                and not p.content.startswith("[note:")
+            )
+    return ""
 
 
 # ---- tools --------------------------------------------------------------------
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the name the user chose for you. Call this the moment they pick one."""
     name = name.strip()
@@ -88,7 +132,7 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     return f"recorded: your name is {name}; your contact card went out, they can tap to save it"
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     """Record the user's name (what they want to be called)."""
     changed = await _submit(ctx, SlotChanged(slot="user_name", new=name.strip()))
@@ -96,7 +140,7 @@ async def set_user_name(ctx: RunContext[Deps], name: str) -> str:
     return f"recorded: user is called {name.strip()}"
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     """Record one concrete thing the user wants help with, in their words."""
     changed = await _submit(ctx, SlotChanged(slot="help_need", new=need.strip()))
@@ -104,7 +148,7 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     return "recorded"
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     """Text the user a link to connect their Gmail. Say in your own words that you sent it."""
     d = ctx.deps
@@ -119,7 +163,7 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     return "link sent by text; the user will tap it when ready"
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def skip_gmail(ctx: RunContext[Deps]) -> str:
     """The user declined to connect Gmail. Do not ask again."""
     await _submit(ctx, GmailEvent(phase=GmailPhase.SKIPPED))
@@ -135,35 +179,48 @@ async def no_call(ctx: RunContext[Deps]) -> str:
     return "recorded: no calls unless they ask"
 
 
-@agent.tool(prepare=only_text)
+RING_SECONDS = 30.0  # an unanswered call becomes a missed call
+
+
+@agent.tool(prepare=may_call)
 async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     """Call the user now. `reason`: a few words of background for the call, not a script."""
     ringing = CallEvent(
-        transition=CallTransition.RINGING, reason=reason, initiated_by=Initiator.AGENT
+        transition=CallTransition.RINGING,
+        reason=reason,
+        initiated_by=Initiator.AGENT,
+        call_id=call_id,
     )
-    await _submit(ctx, ringing)
+    if not await _submit(ctx, ringing):
+        return "can't call right now; a call is already ringing or in progress"
+    missed = CallEvent(transition=CallTransition.FAILED, reason="no_answer", call_id=call_id)
+    d.pipeline.later(RING_SECONDS, d.phone, Origin.SYSTEM, Channel.SYSTEM, missed)
     await _record(ctx, "start_call", {"reason": reason}, {})
     return "calling now; the user's phone is ringing"
 
 
-@agent.tool(prepare=only_voice)
+@agent.tool(prepare=only_back_office)
 async def send_text(ctx: RunContext[Deps], text: str) -> str:
-    """Text the user during the call, e.g. something easier to read than to hear."""
+    """Text the user during the call. Only what the voice said out loud it would text."""
     await say(ctx.deps, text)
     await _record(ctx, "send_text", {"text": text}, {})
     return "texted"
 
 
-@agent.tool(prepare=only_voice)
+HANG_UP_AFTER = 3.0  # seconds, so the goodbye finishes playing before the line drops
+
+
+@agent.tool(prepare=only_on_call)
 async def end_call(ctx: RunContext[Deps]) -> str:
-    """Hang up the call after saying goodbye."""
+    """Hang up the call. Only after the voice has said goodbye."""
+    d = ctx.deps
     ended = CallEvent(transition=CallTransition.ENDED, reason="agent_hangup")
-    await _submit(ctx, ended)
+    d.pipeline.later(HANG_UP_AFTER, d.phone, d.origin, d.channel, ended)
     await _record(ctx, "end_call", {}, {})
     return "call ending"
 
 
-@agent.tool
+@agent.tool(prepare=not_the_voice)
 async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     """Move the user into the main experience. Say what you will do first, in one line."""
     await _submit(ctx, Graduated())

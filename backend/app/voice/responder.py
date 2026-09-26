@@ -42,9 +42,19 @@ class LiveCall:
     tool_running: bool = False
     asked_question: bool = False
     deferred: list[str] = field(default_factory=lambda: [])
+    closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
     async def send(self, text: str, *, speak: bool) -> None:
-        await self.session.send(text, respond=speak)
+        if not self.closed:
+            await self.session.send(text, respond=speak)
+
+    async def user_started(self) -> None:
+        """They started talking, so the voice stopped. Anything held for the end of its
+        sentence goes in now as silent context rather than being lost with the cut-off turn."""
+        self.speaking = False
+        deferred, self.deferred = self.deferred, []
+        for text in deferred:
+            await self.send(text, speak=False)
 
     async def turn_complete(self, *, asked_question: bool) -> None:
         self.speaking = False
