@@ -21,6 +21,7 @@ Client delegation is the architecture in [03-architecture.md](03-architecture.md
 - **One brain, literally.** The same pydantic-ai agent (over OpenRouter) with the same tools serves text and voice. The style-drift and provenance bugs observed in Persona (see 02) cannot happen because there is no second model with a second prompt.
 - **Slots written by our agent from transcripts,** not by the voice model calling tools. We can run our agent on every completed user turn regardless of delegation events.
 - **Interruption is better and cheaper.** Barge-in is native and reportedly far more accurate; the typing case ("looks like you're typing, go ahead") is a single `session.instructions.append`.
+- **Behavior during backend work, precisely.** Realtime does not block on tool calls either: the response ends when the function call is emitted, audio and turn detection continue, and the result can be returned whenever ready. The difference is default behavior: Realtime goes quiet while waiting unless prompted to say a filler first, and cannot weave a result into a sentence already in progress; Live is trained to keep talking and paraphrase results as they arrive. For onboarding, where every tool takes milliseconds, this is a minor difference.
 - **Verb mapping:** interrupt → `instructions.append` or `commentary.append`; absorb → `thinking.append`; defer → hold the append until output transcript deltas go quiet (weaker, see below).
 
 ## What gets worse
