@@ -8,7 +8,7 @@ from app.agent.slots import Slots
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Role
-from app.gmail.events import GmailEvent, GmailPhase
+from app.google.events import GmailEvent, GmailPhase
 from app.text.events import AgentMessage, UserMessage
 from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
 from app.voice.events import Speaker, VoiceUtterance

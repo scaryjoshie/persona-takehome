@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
 from app.events.event import Event
 from app.events.payload import Channel, Origin
-from app.gmail.events import GmailEvent, GmailPhase
+from app.google.events import GmailEvent, GmailPhase
 from app.pipeline import Pipeline
 from app.text.events import AgentMessage, Typing, UserMessage
 from app.users.user import Medium

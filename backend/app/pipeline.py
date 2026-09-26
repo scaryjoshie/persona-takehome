@@ -27,7 +27,7 @@ from app.events import service as events
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
-from app.gmail.events import GmailEvent, GmailPhase
+from app.google.events import GmailEvent, GmailPhase
 from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users

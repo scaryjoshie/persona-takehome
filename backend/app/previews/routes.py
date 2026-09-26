@@ -22,7 +22,7 @@ async def preview(url: str, svc: ServicesDep) -> Preview:
         return Preview(
             url=url,
             title="Connect your Google account",
-            description="Let your Persona read your Gmail so it can see what needs you.",
+            description="Give your Persona access to Gmail and Calendar.",
             site_name="Persona",
         )
     cached = _cache.get(url)

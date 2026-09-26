@@ -9,6 +9,7 @@ from typing import Protocol
 from pydantic_ai.models import Model
 
 from app.events.payload import Channel, Origin
+from app.google.accounts import Google
 from app.pipeline import Pipeline
 from app.users.user import Medium, User
 
@@ -28,6 +29,7 @@ class AgentEnv:
     app_base_url: str  # for links the agent sends, like the Gmail link
     # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
     hang_up: Callable[[str], bool] | None = None
+    google: Google | None = None  # connected Google accounts (email and calendar tools)
 
     def deps(
         self, user: User, medium: Medium, *, first_reply: bool = False, back_office: bool = False

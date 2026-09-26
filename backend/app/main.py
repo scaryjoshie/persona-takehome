@@ -20,7 +20,8 @@ from pydantic_ai.realtime.openai_live import OpenAILiveModel
 from app.agent.deps import AgentEnv, Messenger
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
-from app.gmail import routes as gmail_routes
+from app.google import routes as google_routes
+from app.google.accounts import Google
 from app.jev import Jev
 from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
@@ -58,6 +59,7 @@ def assemble(
     jev: Jev | None = None,
     timers: Timers | None = None,
     clock: Clock = utc_now,
+    google: Google | None = None,
 ) -> App:
     pipeline = Pipeline(db, clock=clock, timers=timers or AsyncioTimers())
     voice = VoiceResponder(jev=jev)
@@ -67,6 +69,7 @@ def assemble(
         model=model,
         app_base_url=app_base_url,
         hang_up=voice.hang_up,
+        google=google or Google(db),  # demo-only unless real credentials are given
     )
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env), jev=jev)
     pipeline.responders[Medium.VOICE] = voice
@@ -78,12 +81,21 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
     jev = None
     if settings.openrouter_api_key:
         jev = Jev(api_key=settings.openrouter_api_key.get_secret_value(), model=settings.jev_model)
+    db = make_sessions(make_engine(settings.database_url))
     built = assemble(
-        db=make_sessions(make_engine(settings.database_url)),
+        db=db,
         messenger=messenger,
         model=text_model(settings),
         app_base_url=settings.app_base_url,
         jev=jev,
+        google=Google(
+            db,
+            creds=(settings.google_client_id, settings.google_client_secret.get_secret_value())
+            if settings.google_client_id and settings.google_client_secret
+            else None,
+            key=settings.credentials_key.get_secret_value() if settings.credentials_key else None,
+            tz=settings.timezone,
+        ),
     )
     return built, live_model(settings)
 
@@ -115,6 +127,8 @@ def create_app() -> FastAPI:
     voice_notes_dir = Path(settings.data_dir) / "voice_notes"
     voice_notes_dir.mkdir(parents=True, exist_ok=True)
     assert settings.openai_api_key is not None
+    google = built.env.google
+    assert google is not None  # assemble always sets one
     web.state.services = Services(
         pipeline=built.pipeline,
         voice=built.voice,
@@ -125,11 +139,9 @@ def create_app() -> FastAPI:
         ),
         voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
-        google=(settings.google_client_id, settings.google_client_secret.get_secret_value())
-        if settings.google_client_id and settings.google_client_secret
-        else None,
+        google=google,
     )
-    for module in (web_routes, voice_routes, voice_note_routes, preview_routes, gmail_routes):
+    for module in (web_routes, voice_routes, voice_note_routes, preview_routes, google_routes):
         web.include_router(module.router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():

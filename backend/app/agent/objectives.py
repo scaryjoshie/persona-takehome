@@ -29,7 +29,7 @@ from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
 from app.events.event import Event
-from app.gmail.events import GmailEvent
+from app.google.events import GmailEvent
 from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition

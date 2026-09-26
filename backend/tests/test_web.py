@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
@@ -21,8 +22,9 @@ from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
 from app.database import create_schema, make_engine, make_sessions
-from app.gmail import google
-from app.gmail import routes as gmail_routes
+from app.google import api
+from app.google import routes as google_routes
+from app.google.accounts import Google
 from app.main import assemble
 from app.services import Services
 from app.text import voice_notes as voice_note_routes
@@ -51,11 +53,32 @@ async def fake_call(websocket: WebSocket, phone: str) -> None:
     await websocket.close()
 
 
+CLAIMS = base64.urlsafe_b64encode(json.dumps({"email": "kate@gmail.com"}).encode()).decode()
+
+
+def fake_google(request: httpx.Request) -> httpx.Response:
+    """Google's token endpoint and a one-message Gmail."""
+    if request.url.path == "/token":
+        body = {"access_token": "t", "refresh_token": "r", "id_token": f"h.{CLAIMS}.s"}
+        return httpx.Response(200, json=body)
+    if request.url.path.endswith("/messages"):
+        return httpx.Response(200, json={"messages": [{"id": "m1"}]})
+    headers = [{"name": "From", "value": "ConEd"}, {"name": "Subject", "value": "Bill"}]
+    return httpx.Response(200, json={"snippet": "due soon", "payload": {"headers": headers}})
+
+
 @pytest.fixture
 def client(tmp_path: Path) -> Iterator[TestClient]:
     engine = make_engine(f"sqlite+aiosqlite:///{tmp_path / 'web.db'}")
     sockets = Sockets()
+    google = Google(
+        make_sessions(engine),
+        creds=("client-id", "client-secret"),
+        key=Fernet.generate_key().decode(),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(fake_google)),
+    )
     built = assemble(
+        google=google,
         db=make_sessions(engine),
         messenger=WebMessenger(sockets),
         model=FunctionModel(reply_hi),
@@ -77,9 +100,9 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         transcribe=fake_transcribe,
         voice_notes_dir=tmp_path,
         app_base_url="http://x",
-        google=("client-id", "client-secret"),
+        google=google,
     )
-    web.include_router(gmail_routes.router)
+    web.include_router(google_routes.router)
     web.include_router(web_routes.router)
     web.include_router(voice_routes.router)
     web.include_router(voice_note_routes.router)
@@ -250,7 +273,7 @@ def test_voice_message_upload_transcribes_and_plays_back(client: TestClient) -> 
 
 def test_the_gmail_link_offers_a_demo_inbox_and_real_gmail(client: TestClient) -> None:
     page = client.get("/api/auth/google/start?phone=15550009999").text
-    assert "Use a demo inbox" in page and "/api/auth/google/real?phone=15550009999" in page
+    assert "Use a demo account" in page and "/api/auth/google/real?phone=15550009999" in page
 
 
 def test_connecting_the_demo_inbox(client: TestClient) -> None:
@@ -260,22 +283,12 @@ def test_connecting_the_demo_inbox(client: TestClient) -> None:
     assert connected["phase"] == "connected" and connected["demo"] and connected["inbox"]
 
 
-def test_real_gmail_reads_the_inbox_once_and_connects(client: TestClient) -> None:
+def test_real_google_connects_and_peeks_at_the_inbox(client: TestClient) -> None:
     phone = "15550009997"
     to_google = client.get(f"/api/auth/google/real?phone={phone}", follow_redirects=False)
-    assert to_google.headers["location"].startswith(google.AUTH_URL)
-    state = parse_qs(urlparse(to_google.headers["location"]).query)["state"][0]
-    claims = base64.urlsafe_b64encode(json.dumps({"email": "kate@gmail.com"}).encode()).decode()
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/token":
-            return httpx.Response(200, json={"access_token": "t", "id_token": f"h.{claims}.s"})
-        if request.url.path.endswith("/messages"):
-            return httpx.Response(200, json={"messages": [{"id": "m1"}]})
-        headers = [{"name": "From", "value": "ConEd"}, {"name": "Subject", "value": "Bill"}]
-        return httpx.Response(200, json={"snippet": "due soon", "payload": {"headers": headers}})
-
-    gmail_routes._client = httpx.AsyncClient(transport=httpx.MockTransport(handle))  # pyright: ignore[reportPrivateUsage]
+    location = to_google.headers["location"]
+    assert location.startswith(api.AUTH_URL) and "access_type=offline" in location
+    state = parse_qs(urlparse(location).query)["state"][0]
     done = client.get(f"/api/auth/google/callback?state={state}&code=c")
     assert "kate@gmail.com" in done.text
     connected = [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]

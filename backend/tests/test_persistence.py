@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.payload import Channel, Origin
-from app.gmail.events import GmailPhase
+from app.google.events import GmailPhase
 from app.text.events import AgentMessage, UserMessage
 from app.users import service as users
 from app.voice.call_state import CallPhase, CallState

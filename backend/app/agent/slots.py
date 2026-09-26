@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.gmail.events import GmailPhase
+from app.google.events import GmailPhase
 
 
 class Slots(BaseModel):

@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
@@ -18,7 +20,8 @@ from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.agent.objectives import guidance
 from app.events.payload import Channel, Origin, Payload
-from app.gmail.events import GmailEvent, GmailPhase
+from app.google.accounts import DEFAULT_TZ, Account
+from app.google.events import GmailEvent, GmailPhase
 from app.pipeline import RECENT
 from app.text.events import AgentMessage
 from app.users.user import Medium
@@ -53,7 +56,9 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
-    return f"# What you know\n\n{known}\n\n{stage}\n\n{tail}"
+    tz = d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
+    now = f"It's {datetime.now(tz):%A %B %-d, %-I:%M %p} where they are."
+    return f"# What you know\n\n{now}\n{known}\n\n{stage}\n\n{tail}"
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -255,3 +260,87 @@ async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     await _submit(ctx, Graduated())
     await _record(ctx, "graduate", {"first_action": first_action}, {})
     return "graduated"
+
+
+# ---- their Google account (once connected) -------------------------------------------
+
+
+async def google_connected(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    """Email and calendar tools: by text or for the back office, once Google is connected."""
+    d = ctx.deps
+    speaking = d.medium is Medium.VOICE and not d.back_office
+    connected = d.user.slots.gmail is GmailPhase.CONNECTED and d.env.google is not None
+    return tool if connected and not speaking else None
+
+
+async def _account(ctx: RunContext[Deps]) -> Account:
+    d = ctx.deps
+    assert d.env.google is not None
+    account = await d.env.google.account(d.phone, (await d.pipeline.user(d.phone)).slots)
+    if account is None:
+        raise ModelRetry("their Google account isn't connected")
+    return account
+
+
+@agent.tool(prepare=google_connected)
+async def search_email(ctx: RunContext[Deps], query: str) -> str:
+    """Search their Gmail (Gmail search syntax works, e.g. from:landlord newer_than:7d)."""
+    found = await (await _account(ctx)).search(query)
+    await _record(ctx, "search_email", {"query": query}, {"found": len(found)})
+    return "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({m.snippet})" for m in found) or "none"
+
+
+@agent.tool(prepare=google_connected)
+async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
+    """Open one email by the id from search_email."""
+    await _record(ctx, "read_email", {"message_id": message_id}, {})
+    return await (await _account(ctx)).read(message_id)
+
+
+@agent.tool(prepare=google_connected)
+async def draft_email(ctx: RunContext[Deps], to: str, subject: str, body: str) -> str:
+    """Save a draft in their Gmail. Show them what it says; nothing is sent."""
+    draft_id = await (await _account(ctx)).draft(to=to, subject=subject, body=body)
+    await _record(ctx, "draft_email", {"to": to, "subject": subject}, {"draft_id": draft_id})
+    return f"draft {draft_id} saved. show them the draft and ask before sending"
+
+
+@agent.tool(prepare=google_connected)
+async def send_draft(ctx: RunContext[Deps], draft_id: str) -> str:
+    """Send a draft you already showed them, by its id. Only after they said yes to it."""
+    await (await _account(ctx)).send(draft_id)
+    await _record(ctx, "send_draft", {"draft_id": draft_id}, {})
+    return "sent"
+
+
+@agent.tool(prepare=google_connected)
+async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
+    """Their calendar for the next few days."""
+    events = await (await _account(ctx)).upcoming(days)
+    await _record(ctx, "upcoming_events", {"days": days}, {"found": len(events)})
+    return "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events) or "nothing"
+
+
+@agent.tool(prepare=google_connected)
+async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
+    """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
+    Only after they said yes to this exact event."""
+    d = ctx.deps
+    assert d.env.google is not None
+    begins = datetime.fromisoformat(start).replace(tzinfo=d.env.google.tz)
+    await (await _account(ctx)).create_event(
+        title=title, start=begins, end=begins + timedelta(minutes=minutes)
+    )
+    await _record(ctx, "create_event", {"title": title, "start": start}, {})
+    return f"added {title} at {begins:%a %b %-d %-I:%M %p}"
+
+
+@agent.tool(prepare=google_connected)
+async def disconnect_google(ctx: RunContext[Deps]) -> str:
+    """They asked to disconnect their Google account. Revokes access for good."""
+    d = ctx.deps
+    assert d.env.google is not None
+    await d.env.google.disconnect(d.phone)
+    await _submit(ctx, GmailEvent(phase=GmailPhase.DISCONNECTED))
+    await _record(ctx, "disconnect_google", {}, {})
+    return "disconnected"

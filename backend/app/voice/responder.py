@@ -16,7 +16,7 @@ from typing import Protocol
 from app.agent.context import last_lines
 from app.events.decision import Decision
 from app.events.event import Event
-from app.gmail.events import GmailEvent, GmailPhase, inbox_lines
+from app.google.events import GmailEvent, GmailPhase, inbox_lines
 from app.jev import Jev
 from app.pipeline import Context
 from app.text.events import Typing, UserMessage

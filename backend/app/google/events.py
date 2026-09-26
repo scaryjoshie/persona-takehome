@@ -14,6 +14,7 @@ class GmailPhase(StrEnum):
     CONNECTED = "connected"
     FAILED = "failed"
     SKIPPED = "skipped"
+    DISCONNECTED = "disconnected"
 
 
 class InboxItem(BaseModel):
@@ -21,6 +22,7 @@ class InboxItem(BaseModel):
 
     model_config = ConfigDict(json_schema_serialization_defaults_required=True)
 
+    id: str = ""  # Gmail's message id, so the agent can open it
     sender: str
     subject: str
     snippet: str
@@ -59,7 +61,9 @@ class GmailEvent(Payload):
                 return Turn(Role.NOTE, "user skipped Gmail; do not ask again")
             case GmailPhase.FAILED:
                 return Turn(Role.NOTE, "Gmail connection failed")
+            case GmailPhase.DISCONNECTED:
+                return Turn(Role.NOTE, "they disconnected their Google account")
 
 
 def inbox_lines(event: GmailEvent) -> str:
-    return "\n".join(f"- {m.sender}: {m.subject} ({m.snippet[:90]})" for m in event.inbox)
+    return "\n".join(f"- [{m.id}] {m.sender}: {m.subject} ({m.snippet[:90]})" for m in event.inbox)

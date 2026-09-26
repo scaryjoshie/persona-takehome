@@ -7,7 +7,7 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Role, Turn
-from app.gmail.events import GmailPhase
+from app.google.events import GmailPhase
 from app.voice.call_state import CallPhase, CallState
 
 
@@ -98,12 +98,22 @@ def what_you_know(slots: Slots, call: CallState) -> str:
             lines.append(
                 "You've texted the Gmail link; it isn't connected yet. Don't send it again."
             )
+        case GmailPhase.CONNECTED if slots.gmail_email == "demo inbox":
+            lines.append(
+                "Their Google account is connected, as a demo inbox and calendar with sample "
+                "data (say so when it matters). Your email and calendar tools work on it."
+            )
         case GmailPhase.CONNECTED:
-            lines.append(f"Gmail is connected ({slots.gmail_email}).")
+            lines.append(
+                f"Their Google account is connected ({slots.gmail_email}): "
+                "your email and calendar tools work on their real Gmail and Calendar."
+            )
         case GmailPhase.SKIPPED:
             lines.append("They said no to Gmail. Don't bring it up again.")
         case GmailPhase.FAILED:
             lines.append("Connecting Gmail failed. Offer to try again once.")
+        case GmailPhase.DISCONNECTED:
+            lines.append("They disconnected Google. Don't bring it up unless they ask.")
     if slots.no_calls:
         lines.append("They'd rather not do a call. Don't offer one again unless they ask.")
     if slots.graduated:

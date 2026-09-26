@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import Depends, WebSocket
 from starlette.requests import HTTPConnection
 
+from app.google.accounts import Google
 from app.pipeline import Pipeline
 from app.voice.responder import VoiceResponder
 from app.web.sockets import Sockets
@@ -31,7 +32,7 @@ class Services:
     transcribe: Transcribe  # voice messages
     voice_notes_dir: Path
     app_base_url: str
-    google: tuple[str, str] | None = None  # OAuth client id and secret, for real Gmail
+    google: Google  # connected Google accounts (real or demo)
 
 
 def _services(connection: HTTPConnection) -> Services:

@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from app.events.payload import Channel, Origin
-from app.gmail.events import GmailEvent, GmailPhase
+from app.google.events import GmailEvent, GmailPhase
 from app.jev import Jev
 from app.main import App
 from app.pipeline import Pipeline

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.agent.slots import Slots
 from app.database import aware
-from app.gmail.events import GmailPhase
+from app.google.events import GmailPhase
 from app.users.models import UserRow
 from app.voice.call_state import CallPhase, CallState, Initiator
 

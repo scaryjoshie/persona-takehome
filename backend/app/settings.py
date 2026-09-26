@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"  # public URL, for links the agent texts
     google_client_id: str | None = None  # real Gmail; without these only the demo inbox
     google_client_secret: SecretStr | None = None
+    credentials_key: SecretStr | None = None  # Fernet key that encrypts stored Google tokens
+    timezone: str = "America/Chicago"  # the user's, for calendar times
 
 
 @lru_cache
