@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { IPhone17Pro } from "./components/phone/IPhone17Pro";
 import { MessagesScreen } from "./components/phone/MessagesScreen";
 import { CallIsland } from "./components/phone/CallIsland";
 import { VoiceOrb } from "./components/orb/VoiceOrb";
 import { Transcript } from "./components/orb/Transcript";
 import { CallControls } from "./components/call/CallControls";
+import { PhoneEntry } from "./components/entry/PhoneEntry";
 import { Stage } from "./components/stage/Stage";
 import { useMockPhone } from "./mock/useMockPhone";
-import { AGENT_NAME, speechLevel } from "./mock/data";
+import { AGENT_NAME, FIRST_MESSAGE, speechLevel } from "./mock/data";
+import { enter, lastNumber } from "./mock/identity";
 
 // The island sits 14pt below the top of the screen, centered; measured from Apple's bezel PNG.
 const ISLAND_TOP = 14;
+
+interface Session {
+  phone: string;
+  isNew: boolean;
+}
 
 /** Scale that fits the 450x920 phone frame in the viewport, leaving room beside it for the orb. */
 function fitScale(): number {
@@ -20,7 +28,21 @@ function fitScale(): number {
 }
 
 export default function App() {
-  const mock = useMockPhone();
+  const [session, setSession] = useState<Session | null>(null);
+  return (
+    <>
+      {/* Keyed by number, so entering one starts that user's conversation fresh. */}
+      <Demo key={session?.phone ?? "none"} session={session} />
+      <AnimatePresence>
+        {!session && <PhoneEntry initial={lastNumber()} onSubmit={(phone) => setSession({ phone, ...enter(phone) })} />}
+      </AnimatePresence>
+    </>
+  );
+}
+
+function Demo({ session }: { session: Session | null }) {
+  const isNew = session?.isNew ?? true;
+  const mock = useMockPhone({ newUser: isNew, running: session !== null });
   const [scale, setScale] = useState(fitScale);
   const [level, setLevel] = useState(0);
 
@@ -73,6 +95,7 @@ export default function App() {
             typing={mock.typing}
             onSend={mock.send}
             onCall={mock.startCall}
+            initialDraft={session?.isNew ? FIRST_MESSAGE : ""}
           />
         </IPhone17Pro>
       }

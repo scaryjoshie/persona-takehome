@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import { CONVERSATION, RANDOM_AGENT_LINES, RANDOM_USER_LINES, CALL_SCRIPT, nextId, pick } from "./data";
+import { CONVERSATION, INTRO, RANDOM_AGENT_LINES, RANDOM_USER_LINES, CALL_SCRIPT, nextId, pick } from "./data";
 
 export interface MockCall {
   phase: CallPhase;
@@ -10,13 +10,21 @@ export interface MockCall {
   expanded: boolean;
 }
 
+interface Options {
+  /** A new user starts with an empty thread, and nothing happens until they send something. */
+  newUser: boolean;
+  /** False while the phone-number screen is up. */
+  running: boolean;
+}
+
 /**
  * Mock conversation state. Autoplay: every few seconds the agent types for a second and a random
  * line lands; every fifth tick the agent calls. During an active call a scripted exchange plays
  * as transcript lines, with `speaking` true while the agent has the floor.
  */
-export function useMockPhone(autoplay = true) {
-  const [messages, setMessages] = useState<ThreadMessage[]>(CONVERSATION);
+export function useMockPhone({ newUser, running }: Options) {
+  const [messages, setMessages] = useState<ThreadMessage[]>(newUser ? [] : CONVERSATION);
+  const autoplay = running && messages.length > 0;
   const [typing, setTyping] = useState(false);
   const [call, setCall] = useState<MockCall | null>(null);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
@@ -114,8 +122,10 @@ export function useMockPhone(autoplay = true) {
   const toggleMute = () => setMuted((m) => !m);
   const toggleExpanded = () => setCall((c) => (c ? { ...c, expanded: !c.expanded } : c));
   const send = (text: string) => {
+    const first = messages.length === 0;
     userSays(text);
-    setTimeout(() => agentSays(), 600);
+    if (!first) return void setTimeout(() => agentSays(), 600);
+    INTRO.forEach((line, i) => setTimeout(() => agentSays(line), 600 + i * 1600));
   };
 
   return {

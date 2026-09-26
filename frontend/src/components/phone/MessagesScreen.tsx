@@ -32,11 +32,21 @@ interface Props {
   onSend?: (text: string) => void;
   /** The phone icon in the header. Hidden when absent. */
   onCall?: () => void;
+  /** Text already in the composer when the screen appears. */
+  initialDraft?: string;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
-export function MessagesScreen({ contact, messages, typing = false, keyboard = false, onSend, onCall }: Props) {
-  const [draft, setDraft] = useState("");
+export function MessagesScreen({
+  contact,
+  messages,
+  typing = false,
+  keyboard = false,
+  onSend,
+  onCall,
+  initialDraft = "",
+}: Props) {
+  const [draft, setDraft] = useState(initialDraft);
   const send = () => {
     if (!draft.trim()) return;
     onSend?.(draft.trim());
