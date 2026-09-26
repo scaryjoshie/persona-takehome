@@ -16,7 +16,10 @@ export function Stage({ phone, orb, caption, controls }: Props) {
       {/* Fixed-height slots below the orb, so the orb never moves when they fill. */}
       <div className="flex w-[340px] flex-col items-center gap-8">
         {orb}
-        <div className="flex h-32 w-full justify-center overflow-hidden">{caption}</div>
+        {/* Bottom-anchored: the newest line always shows; older ones rise and fade out at the top. */}
+        <div className="flex h-32 w-full items-end justify-center overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_35%)]">
+          {caption}
+        </div>
         <div className="flex h-14 items-center">{controls}</div>
       </div>
     </div>
