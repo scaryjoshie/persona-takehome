@@ -29,7 +29,7 @@ from pydantic_ai.realtime.openai_live import OpenAILiveModel, OpenAILiveModelSet
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import to_model_messages, trim_history, what_you_know
+from app.agent.context import current_stage, to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
 from app.events.event import Event
 from app.events.payload import Channel, Origin
@@ -79,8 +79,9 @@ async def run_call(
     deps = env.deps(user, Medium.VOICE)
     settings = OpenAILiveModelSettings(
         openai_live_instructions=(
-            f"{prompts.PERSONA}\n\n{prompts.ONBOARDING}\n\n{prompts.CALL}\n\n"
-            f"# What you know\n\n{what_you_know(user.slots, user.call)}"
+            f"{prompts.PERSONA}\n\n{prompts.CALL}\n\n"
+            f"# What you know\n\n{what_you_know(user.slots, user.call)}\n\n"
+            f"{current_stage(user.slots) or ''}"
         ),
     )
 
@@ -116,7 +117,8 @@ async def run_call(
             # Say hi, then pick up the setup where it stands. The reason for the call is
             # background, not a script: reading it out made the voice lead with the ask.
             next_step = (
-                "ask what they want to call you"
+                "ask what they want to call you, with a light reason (you can't really be "
+                "their assistant without a name)"
                 if user.slots.agent_name is None
                 else "ask their name"
                 if user.slots.user_name is None

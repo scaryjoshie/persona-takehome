@@ -123,3 +123,22 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     if names_sorted and slots.help_need is None:
         lines.append("Names are sorted, so when it fits naturally, it's time for the ask.")
     return "\n".join(lines)
+
+
+def current_stage(slots: Slots, *, first_reply: bool = False) -> str | None:
+    """The guidance for the onboarding step that's open right now, or None when done."""
+    from app.agent.prompts import STAGES
+
+    if first_reply:
+        return STAGES["opener"]
+    if slots.agent_name is None:
+        return STAGES["agent_name"]
+    if slots.user_name is None:
+        return STAGES["user_name"]
+    if slots.help_need is None:
+        return STAGES["help_need"]
+    if slots.gmail is None:
+        return STAGES["gmail"]
+    if not slots.graduated:
+        return STAGES["wrap_up"]
+    return None

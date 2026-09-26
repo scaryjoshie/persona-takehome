@@ -19,8 +19,8 @@ class AgentEnv:
     model: Model  # the text model; also runs the call's back-office listener
     app_base_url: str  # for links the agent sends, like the Gmail link
 
-    def deps(self, user: User, medium: Medium) -> Deps:
-        return Deps(user=user, medium=medium, env=self)
+    def deps(self, user: User, medium: Medium, *, first_reply: bool = False) -> Deps:
+        return Deps(user=user, medium=medium, env=self, first_reply=first_reply)
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ class Deps:
     medium: Medium
     env: AgentEnv
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
+    first_reply: bool = False  # nothing has been said to them yet
 
     @property
     def pipeline(self) -> Pipeline:
