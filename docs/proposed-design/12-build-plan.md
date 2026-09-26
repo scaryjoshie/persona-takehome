@@ -50,7 +50,7 @@ docs/
 
 ## Build order, in slices that each demo on their own
 
-1. **Core with tests.** Deltas simulated in code, no keys. "Hangs up after giving name" is just a delta sequence, so these tests are the harness seed.
+1. **Core with tests.** *Done 2026-09-25 (45 tests): types, store + SQLite sink/loader, router, policy, default decider, text head with debounce, voice head with note rendering, context views, call state machine, actor.* Deltas simulated in code, no keys. "Hangs up after giving name" is just a delta sequence, so these tests are the harness seed.
 2. **Text-only onboarding end to end.** Phone UI, text handler, tools, slots, debug panel. Completes the whole flow by text, which is the fallback requirement on its own.
 3. **Voice.** One-day spike on GPT-Live first (connect, stream mic, see transcripts, `send()` a note, close). Then call screens, the audio relay socket, injection, hang-up handling. Fallback to Realtime if the spike fails.
 4. **Gmail.** OAuth, the connected event injected mid-call, the mock-inbox moment.
