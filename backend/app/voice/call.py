@@ -40,11 +40,12 @@ from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import current_stage, to_model_messages, trim_history, what_you_know
+from app.agent.context import to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
+from app.agent.objectives import guidance
 from app.events.event import Event
 from app.events.payload import Channel, Origin
-from app.pipeline import Pipeline
+from app.pipeline import RECENT, Pipeline
 from app.users.user import Medium
 from app.voice.call_events import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
@@ -329,7 +330,8 @@ class StateNotes:
 
     async def _note(self) -> str:
         user = await self._pipeline.user(self._phone)
-        stage = current_stage(user.slots) or ""
+        events = await self._pipeline.history(self._phone, limit=RECENT)
+        stage = guidance(user, events, Medium.VOICE)
         return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
 
 

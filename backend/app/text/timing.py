@@ -23,6 +23,7 @@ class Timing:
     hard_cap: float = 8.0  # from the first unanswered event
     max_messages: int = 6
     unfinished_extend: float = 4.0  # Jev may hold off this long past the last message
+    early_look: float = 0.4  # with Jev: first check this soon, to answer finished texts early
 
 
 def waiting(recent: list[Event]) -> list[Event]:

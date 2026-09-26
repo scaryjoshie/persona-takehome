@@ -56,14 +56,14 @@ async def test_handler_runs_tools_and_delivers_bubbles(
     assert (await pipeline.user(PHONE)).slots.user_name == "Sam"
     kinds = [e.kind for e in await pipeline.history(PHONE)]
     assert kinds == ["user_message", "slot_changed", "tool_call", "agent_message", "agent_message"]
-    assert messenger.typing == [True, True, False] and sleeps[0] < sleeps[1]
+    assert messenger.typing == [True, True, True, False] and sleeps[0] < sleeps[1]
 
 
 async def test_zero_bubbles_is_a_hold(pipeline: Pipeline, messenger: CapturingMessenger) -> None:
     await run_text(
         pipeline, messenger, scripted([ToolCallPart("final_result", {"bubbles": []})]), []
     )
-    assert messenger.sent == [] and messenger.typing == [False]
+    assert messenger.sent == [] and messenger.typing == [True, False]  # dots while thinking
     assert [e.kind for e in await pipeline.history(PHONE)] == ["user_message"]
 
 

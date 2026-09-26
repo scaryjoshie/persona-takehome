@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.agent.objectives import parse
+
 _DIR = Path(__file__).parent / "prompts"
 
 
@@ -18,8 +20,8 @@ CALL = read_md("call")  # the voice on a call
 LISTENER = read_md("listener")  # the back office during a call
 VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
 
-# One small guidance block per onboarding step, shown only while that step is open.
-STAGES = {
-    name: read_md(f"stages/{name}")
+# One file per onboarding objective, split into sections (see app/agent/objectives.py).
+OBJECTIVE_TEXTS = {
+    name: parse(read_md(f"objectives/{name}"))
     for name in ("opener", "agent_name", "user_name", "help_need", "gmail", "wrap_up")
 }

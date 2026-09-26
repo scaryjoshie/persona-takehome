@@ -13,11 +13,13 @@ from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
-from app.agent.context import current_stage, what_you_know
+from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
+from app.agent.objectives import guidance
 from app.events.payload import Channel, Origin, Payload
 from app.gmail.events import GmailEvent, GmailPhase
+from app.pipeline import RECENT
 from app.text.events import AgentMessage
 from app.users.user import Medium
 from app.voice.call_events import CallEvent, CallTransition, Initiator
@@ -49,7 +51,8 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     user = await d.pipeline.user(d.phone)
     known = what_you_know(user.slots, user.call)
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    stage = current_stage(user.slots, first_reply=d.first_reply) or ""
+    events = await d.pipeline.history(d.phone, limit=RECENT)
+    stage = guidance(user, events, d.medium, first_reply=d.first_reply)
     return f"# What you know\n\n{known}\n\n{stage}\n\n{tail}"
 
 
