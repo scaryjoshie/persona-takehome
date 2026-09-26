@@ -9,6 +9,7 @@ ask Jev, with fixed defaults if Jev is unavailable.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -79,6 +80,9 @@ class LiveCall:
     last_agent_line: str = ""
     hang_up_asked: asyncio.Event = field(default_factory=asyncio.Event)  # by end_call
     hang_up_after: int = 0  # agent_lines when end_call asked
+    hang_up_reason: str = "agent_hangup"
+    last_sound: float = field(default_factory=time.monotonic)  # anyone speaking, for silence
+    check_ins: int = 0  # times the voice checked in on a silent line since they last spoke
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
     async def send(self, text: str, *, speak: bool) -> None:
@@ -103,6 +107,7 @@ class LiveCall:
         """They started talking, so the voice stopped. Held background goes in now, and
         anything deferred to the end of its sentence goes in silently rather than being lost
         with the cut-off turn."""
+        self.last_sound, self.check_ins = time.monotonic(), 0
         self.speaking, self.voice_owes_reply = False, True
         waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
         if waiting:  # one append: several at once each drew their own reply
@@ -143,6 +148,8 @@ class VoiceResponder:
 
     async def handle(self, event: Event, user: User, ctx: Context) -> Decision | None:
         call = self.calls.get(ctx.phone)
+        if call is not None:
+            call.last_sound = time.monotonic()  # a text or typing counts as them being there
         note = call_note(event)
         if note is None:
             return None

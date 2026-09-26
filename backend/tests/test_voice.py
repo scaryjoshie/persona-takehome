@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import httpx
+import pytest
 
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailEvent, GmailPhase
@@ -147,3 +148,16 @@ async def test_on_the_voices_turn_background_goes_straight_in(app: App) -> None:
     await call.user_started()  # they spoke; the voice owes a reply
     await call.whisper("Their need is saved: taxes.")
     assert session.sent == [("Their need is saved: taxes.", False)]
+
+
+async def test_silence_gets_a_check_in_then_a_graceful_hang_up(
+    app: App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.voice import call as call_module
+
+    _, call, session = await on_a_call(app, VoiceResponder())
+    monkeypatch.setattr(call_module, "SILENCE", 0.0)
+    await call_module._silence(call)  # pyright: ignore[reportPrivateUsage]
+    spoken = [text for text, speak in session.sent if speak]
+    assert "Check in" in spoken[0] and "text" in spoken[1]
+    assert call.hang_up_asked.is_set() and call.hang_up_reason == "silence"

@@ -131,6 +131,7 @@ async def run_call(
                 asyncio.create_task(_turns(session, transcript)),
                 asyncio.create_task(_signals(session, call)),
                 asyncio.create_task(_hang_up_when_done(call, end)),
+                asyncio.create_task(_silence(call)),
             ]
             await ended.wait()
             unsubscribe()
@@ -184,10 +185,13 @@ async def _microphone(
             while True:
                 yield await websocket.receive_bytes()
         except (WebSocketDisconnect, RuntimeError):
-            end("user_hangup")
+            pass
 
     await session.send_audio(frames())
-    end("user_hangup")
+    # Hanging up in the app sends a hang-up message just before the audio closes; audio that
+    # closes on its own is a dropped connection (or a closed tab). Give the message a moment.
+    await asyncio.sleep(DROP_GRACE)
+    end("dropped")
 
 
 async def _speaker(websocket: WebSocket, session: RealtimeSession) -> None:
@@ -264,6 +268,8 @@ async def _turns(session: RealtimeSession, transcript: Transcript) -> None:
 
 
 GOODBYE = re.compile(r"\b(bye|goodbye|talk soon|see you|later)\b", re.I)
+SILENCE = 20.0  # seconds of nobody talking before the voice checks in
+DROP_GRACE = 0.6  # seconds for a hang-up message to beat the audio closing
 HANG_UP_WAIT = 10.0  # seconds: hang up anyway if no goodbye plays
 
 
@@ -278,7 +284,31 @@ async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None
             await asyncio.sleep(1.0)
             break
         await asyncio.sleep(0.2)
-    end("agent_hangup")
+    end(call.hang_up_reason)
+
+
+async def _silence(call: LiveCall) -> None:
+    """They've gone quiet (muted, walked away): check in once, then offer text and hang up."""
+    while True:
+        await asyncio.sleep(1.0)
+        if call.speaking:
+            call.last_sound = time.monotonic()
+        if time.monotonic() - call.last_sound < SILENCE:
+            continue
+        call.last_sound, call.check_ins = time.monotonic(), call.check_ins + 1
+        if call.check_ins == 1:
+            await call.send(
+                "They've gone quiet. Check in once, gently, in a few words.", speak=True
+            )
+        else:
+            await call.send(
+                "Still quiet. Say in a sentence that you'll keep going by text, and say bye.",
+                speak=True,
+            )
+            call.hang_up_reason = "silence"
+            call.hang_up_after = call.agent_lines
+            call.hang_up_asked.set()
+            return
 
 
 async def _signals(session: RealtimeSession, call: LiveCall) -> None:

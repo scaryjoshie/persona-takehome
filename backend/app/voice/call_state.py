@@ -58,6 +58,10 @@ class CallEvent(Payload):
                 return Turn(Role.NOTE, f"they didn't pick up your call {t}")
             case CallTransition.FAILED:
                 return Turn(Role.NOTE, f"call failed {t}, reason: {self.reason or 'unknown'}")
+            case CallTransition.ENDED if self.reason == "dropped":
+                return Turn(Role.NOTE, f"the call dropped (lost connection, not a hang-up) {t}")
+            case CallTransition.ENDED if self.reason == "silence":
+                return Turn(Role.NOTE, f"you ended the call {t} after they went quiet")
             case CallTransition.ENDED:
                 return Turn(Role.NOTE, f"call ended {t}, reason: {self.reason or 'unknown'}")
             case CallTransition.CONNECTING:
