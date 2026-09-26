@@ -1,4 +1,4 @@
-"""The voice driver for GPT-Live. There is no cancel: interrupt = say it now,
+"""The voice responder for GPT-Live. There is no cancel: interrupt = say it now,
 absorb = silent note, defer = wait for the inferred turn boundary, then say it.
 The run is inferred and fed by the voice handler. Note wording is injected
 (see app/agent/notes.py) so this module knows nothing about the domain."""
@@ -9,7 +9,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.events.envelope import Event
+from app.events.event import Event
+from app.routing.responder import Responder
 from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
 
@@ -27,7 +28,7 @@ class VoiceSink(Protocol):
     async def send(self, text: str, *, speak: bool) -> None: ...
 
 
-class VoiceDriver:
+class VoiceResponder(Responder):
     medium: Medium = Medium.VOICE
 
     def __init__(self, *, sink: VoiceSink, notes: NoteRenderer, clock: Clock) -> None:
@@ -64,7 +65,7 @@ class VoiceDriver:
         for event in deferred:
             await self._inject(event, speak=True)
 
-    # ---- driver protocol ---------------------------------------------------
+    # ---- responder protocol ---------------------------------------------------
 
     async def start(self, event: Event) -> None:
         await self._inject(event)
@@ -78,7 +79,7 @@ class VoiceDriver:
             case Verb.DEFER:
                 self._deferred.append(event)
             case Verb.START:
-                raise ValueError("START is not a verb a driver applies")
+                raise ValueError("START is not a verb a responder applies")
 
     async def _inject(self, event: Event, *, speak: bool | None = None) -> None:
         note = self._notes(event)

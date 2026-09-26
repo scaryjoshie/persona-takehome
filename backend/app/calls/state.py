@@ -1,13 +1,39 @@
-"""none → ringing → connecting → connected → ended, with declined and failed exits.
-See docs/proposed-design/09-protocol.md."""
+"""Where a call is, and how a call event moves it.
+
+none → ringing → connecting → connected → ended
+       └ declined ┘  └ failed ┘
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 
-from app.calls.types import CallEvent, CallPhase, CallState, CallTransition, Initiator
+from pydantic import BaseModel, ConfigDict
 
-_FROM: dict[CallTransition, frozenset[CallPhase]] = {
+from app.calls.events import CallEvent, CallTransition, Initiator
+
+
+class CallPhase(StrEnum):
+    NONE = "none"
+    RINGING = "ringing"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    ENDED = "ended"
+
+
+class CallState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    phase: CallPhase = CallPhase.NONE
+    reason: str | None = None
+    call_id: str | None = None
+    initiated_by: Initiator | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+
+
+ALLOWED_FROM: dict[CallTransition, frozenset[CallPhase]] = {
     CallTransition.RINGING: frozenset({CallPhase.NONE, CallPhase.ENDED}),
     CallTransition.CONNECTING: frozenset({CallPhase.NONE, CallPhase.ENDED, CallPhase.RINGING}),
     CallTransition.CONNECTED: frozenset({CallPhase.CONNECTING}),
@@ -17,9 +43,9 @@ _FROM: dict[CallTransition, frozenset[CallPhase]] = {
 }
 
 
-def transition(current: CallState, event: CallEvent, now: datetime) -> CallState | None:
-    """The next state, or None if the transition is not valid from `current`."""
-    if current.phase not in _FROM[event.transition]:
+def next_state(current: CallState, event: CallEvent, now: datetime) -> CallState | None:
+    """The state after `event`, or None if the event is not valid from `current`."""
+    if current.phase not in ALLOWED_FROM[event.transition]:
         return None
     match event.transition:
         case CallTransition.RINGING:

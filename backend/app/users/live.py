@@ -1,6 +1,6 @@
-"""Per-user runtime: only the things that can live nowhere but in a process.
+"""Per-user live: only the things that can live nowhere but in a process.
 
-A lock so a user's events are handled one at a time, the drivers (which hold the text
+A lock so a user's events are handled one at a time, the responders (which hold the text
 debounce timer and the running task), the live voice session, and the sockets to push to.
 No data. If the process restarts, all of this is gone, and that is correct.
 """
@@ -11,8 +11,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Protocol
 
-from app.events.envelope import Event
-from app.routing.router import Driver
+from app.events.event import Event
+from app.routing.responder import Responder
 from app.routing.types import Medium
 
 Subscriber = Callable[[Event], Awaitable[None] | None]
@@ -23,11 +23,11 @@ class VoiceSession(Protocol):
     async def close(self) -> None: ...
 
 
-class Runtime:
-    def __init__(self, phone: str, drivers: dict[Medium, Driver]) -> None:
+class LiveUser:
+    def __init__(self, phone: str, responders: dict[Medium, Responder]) -> None:
         self.phone = phone
         self.lock = asyncio.Lock()  # not reentrant: never submit while holding it
-        self.drivers = drivers
+        self.responders = responders
         self.voice: VoiceSession | None = None
         self._subs: list[tuple[frozenset[str] | None, Subscriber]] = []
 
@@ -51,14 +51,14 @@ class Runtime:
                     await result
 
 
-class Runtimes:
-    """Registry: one runtime per active user, built on first contact."""
+class LiveUsers:
+    """Registry: one live per active user, built on first contact."""
 
-    def __init__(self, factory: Callable[[str], Runtime]) -> None:
+    def __init__(self, factory: Callable[[str], LiveUser]) -> None:
         self._factory = factory
-        self._by_phone: dict[str, Runtime] = {}
+        self._by_phone: dict[str, LiveUser] = {}
 
-    def get(self, phone: str) -> Runtime:
+    def get(self, phone: str) -> LiveUser:
         rt = self._by_phone.get(phone)
         if rt is None:
             rt = self._by_phone[phone] = self._factory(phone)

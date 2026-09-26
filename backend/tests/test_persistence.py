@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from app.calls.types import CallPhase, CallState
+from app.calls.state import CallPhase, CallState
 from app.database import SessionFactory
 from app.events import service as events
-from app.events.base import Channel, Origin
-from app.gmail.types import GmailPhase
+from app.events.payload import Channel, Origin
+from app.gmail.events import GmailPhase
 from app.main import PAYLOADS
-from app.text.types import AgentMessage, UserMessage
+from app.text.events import AgentMessage, UserMessage
 from app.users import service as users
 from tests.conftest import PHONE, FakeClock
 

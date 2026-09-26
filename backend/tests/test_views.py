@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart
 
-from app.agent.types import Slots, ToolCall
-from app.agent.views import state_block, to_model_messages, trim_history, turns
-from app.calls.types import CallEvent, CallPhase, CallState, CallTransition
-from app.events.base import Channel, Origin, Role
-from app.events.envelope import Event
-from app.gmail.types import GmailEvent, GmailPhase
+from app.agent.context import state_block, to_model_messages, trim_history, turns
+from app.agent.events import ToolCall
+from app.agent.slots import Slots
+from app.calls.events import CallEvent, CallTransition
+from app.calls.state import CallPhase, CallState
+from app.events.event import Event
+from app.events.payload import Channel, Origin, Role
+from app.gmail.events import GmailEvent, GmailPhase
 from app.routing.types import DecidedBy, Decision, Verb
-from app.text.types import AgentMessage, UserMessage
-from app.voice.types import Speaker, VoiceUtterance
+from app.text.events import AgentMessage, UserMessage
+from app.voice.events import Speaker, VoiceUtterance
 from tests.conftest import ev
 
 C, S, V = Channel.SYSTEM, Origin.SYSTEM, Origin.VOICE_AGENT

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-from app.agent.types import Slots
-from app.calls.types import CallState
-from app.events.base import Role, Turn
-from app.events.envelope import Event
+from app.agent.slots import Slots
+from app.calls.state import CallState
+from app.events.event import Event
+from app.events.payload import Role, Turn
 from app.routing.types import RoutingContext
 
 
@@ -100,7 +100,7 @@ def decider_view(ctx: RoutingContext, *, max_chars: int = 1200) -> str:
             f"last_turn_question={ctx.run.last_agent_turn_was_question}, "
             f"inferred={ctx.run.inferred}"
         )
-    head = [
+    header = [
         f"floor: {ctx.floor.value}; call: {ctx.call.phase.value}",
         f"run: {run}",
         f"trigger: {ctx.trigger.payload.model_dump_json()}",
@@ -108,5 +108,5 @@ def decider_view(ctx: RoutingContext, *, max_chars: int = 1200) -> str:
         "recent:",
     ]
     body = "\n".join(f"  {t.role.value}: {t.text}" for t in turns(list(ctx.recent)))
-    text = "\n".join(head) + "\n" + body
+    text = "\n".join(header) + "\n" + body
     return text if len(text) <= max_chars else text[-max_chars:]

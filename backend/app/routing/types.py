@@ -6,9 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.calls.types import CallState
-from app.events.base import Payload
-from app.events.envelope import Event
+from app.calls.state import CallState
+from app.events.event import Event
+from app.events.payload import Payload
 
 
 class Medium(StrEnum):
@@ -17,7 +17,7 @@ class Medium(StrEnum):
 
 
 class Verb(StrEnum):
-    START = "start"  # no run existed; the driver started one (never returned by the filter)
+    START = "start"  # no run existed; the responder started one (never returned by the filter)
     INTERRUPT = "interrupt"
     ABSORB = "absorb"
     DEFER = "defer"

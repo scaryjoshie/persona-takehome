@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from app.calls.machine import transition
-from app.calls.types import CallEvent, CallPhase, CallState, CallTransition, Initiator
+from app.calls.events import CallEvent, CallTransition, Initiator
+from app.calls.state import CallPhase, CallState, next_state
 from tests.conftest import FakeClock
 
 
 def step(state: CallState, t: CallTransition, clock: FakeClock, **kw: object) -> CallState:
-    nxt = transition(state, CallEvent(transition=t, **kw), clock())  # pyright: ignore[reportArgumentType]
+    nxt = next_state(state, CallEvent(transition=t, **kw), clock())  # pyright: ignore[reportArgumentType]
     assert nxt is not None, f"{t} invalid from {state.phase}"
     return nxt
 
@@ -26,10 +26,10 @@ def test_happy_path(clock: FakeClock) -> None:
 
 def test_invalid_transitions_return_none(clock: FakeClock) -> None:
     now = clock()
-    assert transition(CallState(), CallEvent(transition=CallTransition.CONNECTED), now) is None
-    assert transition(CallState(), CallEvent(transition=CallTransition.ENDED), now) is None
+    assert next_state(CallState(), CallEvent(transition=CallTransition.CONNECTED), now) is None
+    assert next_state(CallState(), CallEvent(transition=CallTransition.ENDED), now) is None
     ringing = step(CallState(), CallTransition.RINGING, clock)
-    assert transition(ringing, CallEvent(transition=CallTransition.RINGING), now) is None
+    assert next_state(ringing, CallEvent(transition=CallTransition.RINGING), now) is None
     assert step(ringing, CallTransition.DECLINED, clock).phase is CallPhase.NONE
 
 

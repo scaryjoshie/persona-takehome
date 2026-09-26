@@ -7,10 +7,10 @@ from typing import Any
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.calls.types import CallPhase, CallState
+from app.calls.state import CallPhase, CallState
 from app.routing.types import Medium
 from app.users.models import UserRow
-from app.users.types import User
+from app.users.user import User
 
 
 async def ensure_user(session: AsyncSession, phone: str, *, now: datetime) -> User:

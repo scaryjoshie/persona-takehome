@@ -1,30 +1,18 @@
+"""What can happen to a call."""
+
 from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict
-
-from app.events.base import Payload, Role, Turn
+from app.events.payload import Payload, Role, Turn
 
 if TYPE_CHECKING:
     from app.routing.types import RoutingContext, Verb
 
 
-class CallPhase(StrEnum):
-    """Where a call is."""
-
-    NONE = "none"
-    RINGING = "ringing"
-    CONNECTING = "connecting"
-    CONNECTED = "connected"
-    ENDED = "ended"
-
-
 class CallTransition(StrEnum):
-    """What happened to a call. The event vocabulary."""
-
     RINGING = "ringing"
     CONNECTING = "connecting"
     CONNECTED = "connected"
@@ -36,17 +24,6 @@ class CallTransition(StrEnum):
 class Initiator(StrEnum):
     AGENT = "agent"
     USER = "user"
-
-
-class CallState(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    phase: CallPhase = CallPhase.NONE
-    reason: str | None = None
-    call_id: str | None = None
-    initiated_by: Initiator | None = None
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
 
 
 class CallEvent(Payload):

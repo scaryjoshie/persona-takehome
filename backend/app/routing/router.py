@@ -1,29 +1,18 @@
-"""Hand a routable event to the floor holder's driver, via the filter. No I/O:
+"""Hand a routable event to the floor holder's responder, via the filter. No I/O:
 the caller supplies the user and recent events and persists the decision."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Protocol
 
-from app.events.envelope import Event
+from app.events.event import Event
 from app.routing.filter import Filter
-from app.routing.types import DecidedBy, Decision, Medium, RoutingContext, Run, Verb
-from app.users.types import User
+from app.routing.responder import Responder
+from app.routing.types import DecidedBy, Decision, Medium, RoutingContext, Verb
+from app.users.user import User
 
 Clock = Callable[[], datetime]
-
-
-class Driver(Protocol):
-    """A per-medium run controller. Starts runs and applies verbs to them."""
-
-    medium: Medium
-
-    @property
-    def run(self) -> Run | None: ...
-    async def start(self, event: Event) -> None: ...
-    async def apply(self, verb: Verb, event: Event) -> None: ...
 
 
 class Router:
@@ -32,12 +21,12 @@ class Router:
         self._clock = clock
 
     async def route(
-        self, drivers: dict[Medium, Driver], user: User, event: Event, recent: list[Event]
+        self, responders: dict[Medium, Responder], user: User, event: Event, recent: list[Event]
     ) -> Decision:
-        driver = drivers[user.floor]
+        responder = responders[user.floor]
         t0 = self._clock()
-        if driver.run is None:
-            await driver.start(event)
+        if responder.run is None:
+            await responder.start(event)
             verb, by, confidence, note = (
                 Verb.START,
                 DecidedBy.FIXED,
@@ -47,7 +36,7 @@ class Router:
         else:
             ctx = RoutingContext(
                 trigger=event,
-                run=driver.run,
+                run=responder.run,
                 floor=user.floor,
                 call=user.call,
                 still_missing=user.slots.missing(),
@@ -55,7 +44,7 @@ class Router:
                 now=t0,
             )
             v = await self._filter.verdict(ctx)
-            await driver.apply(v.verb, event)
+            await responder.apply(v.verb, event)
             verb, by, confidence, note = v.verb, v.by, v.confidence, v.note
         return Decision(
             trigger_kind=event.kind,

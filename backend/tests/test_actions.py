@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from app.calls.types import CallEvent, CallTransition, Initiator
-from app.events.base import Channel, Origin
-from app.events.envelope import Event
-from app.gmail.types import GmailEvent, GmailPhase
+from app.calls.events import CallEvent, CallTransition, Initiator
+from app.events.event import Event
+from app.events.payload import Channel, Origin
+from app.gmail.events import GmailEvent, GmailPhase
 from app.main import App
 from app.routing.types import Medium
-from app.text.types import AgentMessage, Typing, UserMessage
-from tests.conftest import PHONE, FakeClock, FakeTimers, fake_drivers
+from app.text.events import AgentMessage, Typing, UserMessage
+from tests.conftest import PHONE, FakeClock, FakeTimers, fake_responders
 
 
-def swap_drivers(app: App, clock: FakeClock):  # type: ignore[no-untyped-def]
-    text, voice, drivers = fake_drivers(clock)
-    app.runtimes.get(PHONE).drivers = drivers
+def swap_responders(app: App, clock: FakeClock):  # type: ignore[no-untyped-def]
+    text, voice, responders = fake_responders(clock)
+    app.live_users.get(PHONE).responders = responders
     return text, voice
 
 
 async def test_submit_persists_routes_and_orders(app: App, clock: FakeClock) -> None:
-    text, voice = swap_drivers(app, clock)
+    text, voice = swap_responders(app, clock)
     a = app.actions
     await a.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="one"))
     await a.submit(PHONE, Origin.USER, Channel.TEXT, Typing(active=True, seconds=1))
@@ -63,7 +63,7 @@ async def test_submit_persists_routes_and_orders(app: App, clock: FakeClock) -> 
 async def test_publish_reaches_subscribers_with_kind_filter(app: App) -> None:
     seen: list[str] = []
     thread: list[str] = []
-    rt = app.runtimes.get(PHONE)
+    rt = app.live_users.get(PHONE)
     rt.subscribe(lambda e: seen.append(e.kind))
     rt.subscribe(lambda e: thread.append(e.kind), kinds={"user_message", "agent_message"})
     await app.actions.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="x"))
@@ -73,7 +73,7 @@ async def test_publish_reaches_subscribers_with_kind_filter(app: App) -> None:
 
 
 async def test_route_override_and_record_only_kinds(app: App, clock: FakeClock) -> None:
-    text, _ = swap_drivers(app, clock)
+    text, _ = swap_responders(app, clock)
     await app.actions.submit(
         PHONE, Origin.USER, Channel.TEXT, UserMessage(text="replayed"), route=False
     )
@@ -83,7 +83,7 @@ async def test_route_override_and_record_only_kinds(app: App, clock: FakeClock) 
 
 
 async def test_invalid_call_transition_is_dropped(app: App, clock: FakeClock) -> None:
-    text, _ = swap_drivers(app, clock)
+    text, _ = swap_responders(app, clock)
     result = await app.actions.submit(
         PHONE, Origin.CALL, Channel.SYSTEM, CallEvent(transition=CallTransition.ENDED)
     )
@@ -91,7 +91,7 @@ async def test_invalid_call_transition_is_dropped(app: App, clock: FakeClock) ->
 
 
 async def test_gmail_outcomes_route_but_link_sent_does_not(app: App, clock: FakeClock) -> None:
-    text, _ = swap_drivers(app, clock)
+    text, _ = swap_responders(app, clock)
     await app.actions.submit(
         PHONE, Origin.TEXT_AGENT, Channel.TEXT, GmailEvent(phase=GmailPhase.LINK_SENT)
     )

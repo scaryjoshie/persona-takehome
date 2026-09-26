@@ -1,5 +1,5 @@
 """Entry point. The only file that sees every section: assembles the payload union
-and wires one process's runtime, actions, and per-user drivers. The FastAPI app
+and wires one process's live, actions, and per-user responders. The FastAPI app
 will live here too. No logic."""
 
 from __future__ import annotations
@@ -14,23 +14,24 @@ from pydantic_ai.models import Model
 
 from app.actions import Actions
 from app.agent.agent import agent
-from app.agent.notes import note_for
-from app.agent.types import Graduated, SlotChanged, ToolCall
-from app.calls.types import CallEvent
+from app.agent.call_notes import call_note
+from app.agent.events import Graduated, SlotChanged, ToolCall
+from app.calls.events import CallEvent
 from app.database import SessionFactory, utc_now
-from app.events.base import Payload
-from app.gmail.types import GmailEvent
+from app.events.payload import Payload
+from app.gmail.events import GmailEvent
 from app.routing.filter import Decider, DefaultDecider, Filter
-from app.routing.router import Driver, Router
+from app.routing.responder import Responder
+from app.routing.router import Router
 from app.routing.types import Decision, Medium
-from app.runtime import Runtime, Runtimes
-from app.text.driver import TextDriver
-from app.text.handler import TextHandler
+from app.text.events import AgentMessage, Typing, UserMessage
 from app.text.messenger import Messenger
-from app.text.types import AgentMessage, Typing, UserMessage
+from app.text.reply import Reply
+from app.text.responder import TextResponder
 from app.timers import AsyncioTimers, Timers
-from app.voice.driver import VoiceDriver
-from app.voice.types import VoiceUtterance
+from app.users.live import LiveUser, LiveUsers
+from app.voice.events import VoiceUtterance
+from app.voice.responder import VoiceResponder
 
 AnyPayload = Annotated[
     UserMessage
@@ -48,11 +49,11 @@ AnyPayload = Annotated[
 PAYLOADS: TypeAdapter[Payload] = TypeAdapter(AnyPayload)  # pyright: ignore[reportArgumentType]
 
 
-class _RuntimeVoice:
-    """The voice driver's sink: forwards to the runtime's live session, if any."""
+class _LiveVoice:
+    """The voice responder's sink: forwards to the live's live session, if any."""
 
-    def __init__(self, runtime: Runtime) -> None:
-        self._runtime = runtime
+    def __init__(self, live: LiveUser) -> None:
+        self._runtime = live
 
     async def send(self, text: str, *, speak: bool) -> None:
         if self._runtime.voice is not None:
@@ -62,7 +63,7 @@ class _RuntimeVoice:
 @dataclass
 class App:
     actions: Actions
-    runtimes: Runtimes
+    live_users: LiveUsers
 
 
 def build_app(
@@ -78,8 +79,8 @@ def build_app(
     router = Router(Filter(decider or DefaultDecider()), clock=clock)
     holder: list[Actions] = []
 
-    def make_runtime(phone: str) -> Runtime:
-        handler = TextHandler(
+    def make_live_user(phone: str) -> LiveUser:
+        handler = Reply(
             agent,
             phone=phone,
             actions=holder[0],
@@ -87,16 +88,18 @@ def build_app(
             model=model,
             app_base_url=app_base_url,
         )
-        drivers: dict[Medium, Driver] = {
-            Medium.TEXT: TextDriver(runner=handler, timers=timers or AsyncioTimers(), clock=clock),
+        responders: dict[Medium, Responder] = {
+            Medium.TEXT: TextResponder(
+                runner=handler, timers=timers or AsyncioTimers(), clock=clock
+            ),
         }
-        runtime = Runtime(phone, drivers)
-        drivers[Medium.VOICE] = VoiceDriver(
-            sink=_RuntimeVoice(runtime), notes=note_for, clock=clock
+        live = LiveUser(phone, responders)
+        responders[Medium.VOICE] = VoiceResponder(
+            sink=_LiveVoice(live), notes=call_note, clock=clock
         )
-        return runtime
+        return live
 
-    runtimes = Runtimes(make_runtime)
-    actions = Actions(db, runtimes, router, payloads=PAYLOADS, clock=clock)
+    live_users = LiveUsers(make_live_user)
+    actions = Actions(db, live_users, router, payloads=PAYLOADS, clock=clock)
     holder.append(actions)
-    return App(actions=actions, runtimes=runtimes)
+    return App(actions=actions, live_users=live_users)

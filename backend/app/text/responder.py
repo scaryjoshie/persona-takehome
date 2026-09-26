@@ -1,4 +1,4 @@
-"""The text driver: buffers messages, waits for the user to finish, runs the agent.
+"""The text responder: buffers messages, waits for the user to finish, runs the agent.
 
 Timing only, no judgment (docs 06): a quiet window after the last message, extended
 while the user is typing, bounded by a hard cap on time and on message count.
@@ -11,10 +11,11 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.events.envelope import Event
+from app.events.event import Event
+from app.routing.responder import Responder
 from app.routing.router import Clock
 from app.routing.types import Medium, Run, Verb
-from app.text.types import Typing, UserMessage
+from app.text.events import Typing, UserMessage
 from app.timers import TimerHandle, Timers
 
 
@@ -40,7 +41,7 @@ class RunResult:
 Runner = Callable[[RunRequest], Awaitable[RunResult]]
 
 
-class TextDriver:
+class TextResponder(Responder):
     medium: Medium = Medium.TEXT
 
     def __init__(
@@ -72,7 +73,7 @@ class TextDriver:
         if self._run:
             self._run = self._run.model_copy(update={"side_effect_in_flight": in_flight})
 
-    # ---- driver protocol ---------------------------------------------------
+    # ---- responder protocol ---------------------------------------------------
 
     async def start(self, event: Event) -> None:
         match event.payload:
@@ -104,7 +105,7 @@ class TextDriver:
             case Verb.DEFER:
                 self._deferred = event
             case Verb.START:
-                raise ValueError("START is not a verb a driver applies")
+                raise ValueError("START is not a verb a responder applies")
 
     # ---- timing --------------------------------------------------------------
 

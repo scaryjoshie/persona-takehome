@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import ClassVar, Literal
 
-from app.events.base import Payload, Role, Turn
+from app.events.payload import Payload, Role, Turn
 
 
 class GmailPhase(StrEnum):

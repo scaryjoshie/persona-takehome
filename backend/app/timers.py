@@ -1,4 +1,4 @@
-"""Timer abstraction so drivers can be tested without sleeping."""
+"""Timer abstraction so responders can be tested without sleeping."""
 
 from __future__ import annotations
 

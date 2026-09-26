@@ -9,13 +9,13 @@ import pytest
 from pydantic_ai.models.test import TestModel
 
 from app.database import SessionFactory, create_schema, make_engine, make_sessions
-from app.events.base import Channel, Origin, Payload
-from app.events.envelope import Event
+from app.events.event import Event
+from app.events.payload import Channel, Origin, Payload
 from app.main import App, build_app
-from app.routing.router import Driver
-from app.routing.types import Medium, Run
-from app.text.driver import RunRequest, RunResult
-from app.text.types import Typing, UserMessage
+from app.routing.responder import Responder
+from app.routing.types import Medium, Run, Verb
+from app.text.events import Typing, UserMessage
+from app.text.responder import RunRequest, RunResult
 
 PHONE = "+15550001111"
 
@@ -91,7 +91,7 @@ class FakeRunner:
         return RunResult(asked_question=True)
 
 
-class FakeDriver:
+class FakeResponder(Responder):
     def __init__(self, medium: Medium, clock: FakeClock) -> None:
         self.medium = medium
         self._clock = clock
@@ -114,8 +114,8 @@ class FakeDriver:
         self.log.append(("start", event.kind))
         self.begin()
 
-    async def apply(self, verb: object, event: Event) -> None:
-        self.log.append((str(verb), event.kind))
+    async def apply(self, verb: Verb, event: Event) -> None:
+        self.log.append((verb.value, event.kind))
 
 
 class CapturingMessenger:
@@ -187,6 +187,8 @@ def app(
     )
 
 
-def fake_drivers(clock: FakeClock) -> tuple[FakeDriver, FakeDriver, dict[Medium, Driver]]:
-    text, voice = FakeDriver(Medium.TEXT, clock), FakeDriver(Medium.VOICE, clock)
+def fake_responders(
+    clock: FakeClock,
+) -> tuple[FakeResponder, FakeResponder, dict[Medium, Responder]]:
+    text, voice = FakeResponder(Medium.TEXT, clock), FakeResponder(Medium.VOICE, clock)
     return text, voice, {Medium.TEXT: text, Medium.VOICE: voice}

@@ -40,7 +40,7 @@ class Filter:
         else:
             verdict = await self._decider.decide(ctx)
         # Interrupt is only safe at a step boundary: with a side effect in flight it
-        # degrades to defer (the "steer" policy) and the driver re-asks afterwards.
+        # degrades to defer (the "steer" policy) and the responder re-asks afterwards.
         if verdict.verb is Verb.INTERRUPT and ctx.run and ctx.run.side_effect_in_flight:
             return verdict.model_copy(
                 update={"verb": Verb.DEFER, "note": "interrupt degraded: side effect in flight"}

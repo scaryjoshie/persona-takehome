@@ -11,20 +11,24 @@
 
 ```
 backend/app/
-  main.py               entry point: assembles the payload union, wires runtime + actions; FastAPI app (slice 2b)
+  main.py               entry point: assembles the payload union, wires live users + actions; FastAPI app (slice 2b)
   settings.py           pydantic-settings; nothing else reads the environment
   database.py           async engine, session factory, schema creation
   actions.py            transaction owners: submit (the one door for events), set_slot; composes sections
-  runtime.py            per-user live things only: lock, drivers, voice session, subscribers
-  timers.py             timer abstraction so drivers test without sleeping
-  events/   base.py (Payload, Origin, Channel, Role, Turn)  envelope.py (Event)  models.py  service.py
-  users/    models.py (user row: identity + state columns)  types.py (User frozen value)  service.py
-  calls/    types.py (phases, transitions, CallState, CallEvent)  machine.py
-  gmail/    types.py (GmailPhase, GmailEvent)   [+ models.py, oauth.py, inbox.py in slice 4]
-  text/     types.py  driver.py (debounce + run lifecycle)  handler.py (the runner)  messenger.py (Messenger port)
-  voice/    types.py  driver.py (notes, inferred run)   [+ session.py in slice 3]
-  routing/  types.py (Medium, Verb, DecidedBy, Run, RoutingContext, Verdict, Decision)  filter.py  router.py (pure)
-  agent/    agent.py (the shared pydantic-ai agent + tools)  deps.py  prompts.py + prompts/*.md  views.py  notes.py  types.py (Slots, SlotChanged, ToolCall, Graduated)
+  timers.py             timer abstraction so responders test without sleeping
+  events/   payload.py (Payload base, Origin, Channel, Role, Turn)  event.py (Event)  models.py  service.py
+  users/    models.py (user row: identity + state columns)  user.py (User frozen value)  service.py
+            live.py (LiveUser: the in-process part of a user — lock, responders, voice session, subscribers; LiveUsers registry)
+  calls/    events.py (CallEvent, CallTransition, Initiator)  state.py (CallPhase, CallState, next_state)
+  gmail/    events.py (GmailPhase, GmailEvent)   [+ models.py, oauth.py, inbox.py in slice 4]
+  text/     events.py (UserMessage, AgentMessage, Typing)  responder.py (waits for the user to finish, runs one reply, can cancel)
+            reply.py (one agent run + bubble delivery)  messenger.py (outbound port)
+  voice/    events.py (VoiceUtterance)  responder.py (forwards events into the call as notes)   [+ session.py in slice 3]
+  routing/  __init__.py (glossary: floor, responder, run, verb, filter, decision)  types.py  responder.py (abstract base)
+            filter.py (fixed verb or decider)  router.py (pure)
+  agent/    agent.py (the shared pydantic-ai agent + tools)  deps.py  prompts.py + prompts/*.md
+            context.py (renders the log for a model)  call_notes.py (how a text event is worded on a call)
+            slots.py (Slots)  events.py (SlotChanged, ToolCall, Graduated)
   ai/       models.py (model construction from settings)
   cli.py    talk to the agent from a terminal
 backend/tests/          one file per section; fakes in conftest; temp SQLite per test

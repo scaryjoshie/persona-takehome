@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from app.calls.types import CallEvent
-from app.events.envelope import Event
-from app.gmail.types import GmailEvent, GmailPhase
-from app.text.types import Typing, UserMessage
-from app.voice.driver import Note
+from app.calls.events import CallEvent
+from app.events.event import Event
+from app.gmail.events import GmailEvent, GmailPhase
+from app.text.events import Typing, UserMessage
+from app.voice.responder import Note
 
 
-def note_for(event: Event) -> Note | None:
+def call_note(event: Event) -> Note | None:
     match event.payload:
         case UserMessage(text=text):
             return Note(

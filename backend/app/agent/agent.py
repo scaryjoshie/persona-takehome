@@ -10,16 +10,16 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
+from app.agent.context import state_block
 from app.agent.deps import Deps
-from app.agent.types import Graduated, ToolCall
-from app.agent.views import state_block
-from app.calls.types import CallEvent, CallTransition, Initiator
-from app.gmail.types import GmailEvent, GmailPhase
+from app.agent.events import Graduated, ToolCall
+from app.calls.events import CallEvent, CallTransition, Initiator
+from app.gmail.events import GmailEvent, GmailPhase
 from app.routing.types import Medium
-from app.text.types import AgentMessage
+from app.text.events import AgentMessage
 
 
-class Reply(BaseModel):
+class Bubbles(BaseModel):
     """The text channel's output: zero to four bubbles."""
 
     bubbles: list[str] = Field(default_factory=list, max_length=4)

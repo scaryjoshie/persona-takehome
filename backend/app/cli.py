@@ -7,10 +7,10 @@ import sys
 
 from app.ai.models import agent_model
 from app.database import create_schema, make_engine, make_sessions
-from app.events.base import Channel, Origin
+from app.events.payload import Channel, Origin
 from app.main import build_app
 from app.settings import get_settings
-from app.text.types import UserMessage
+from app.text.events import UserMessage
 
 
 class ConsoleMessenger:

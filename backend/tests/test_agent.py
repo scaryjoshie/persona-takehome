@@ -6,14 +6,14 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent import prompts
-from app.agent.agent import Reply, agent
+from app.agent.agent import Bubbles, agent
 from app.agent.deps import Deps
-from app.events.base import Channel, Origin
+from app.events.payload import Channel, Origin
 from app.main import App
 from app.routing.types import Medium
-from app.text.driver import RunRequest
-from app.text.handler import TextHandler
-from app.text.types import UserMessage
+from app.text.events import UserMessage
+from app.text.reply import Reply
+from app.text.responder import RunRequest
 from tests.conftest import PHONE, CapturingMessenger
 
 
@@ -37,7 +37,7 @@ async def run_text(
     async def sleep(s: float) -> None:
         sleeps.append(s)
 
-    handler = TextHandler(
+    handler = Reply(
         agent,
         phone=PHONE,
         actions=app.actions,
@@ -92,7 +92,7 @@ async def test_tools_are_filtered_by_medium(app: App, messenger: CapturingMessen
             user=user, actions=app.actions, messenger=messenger, medium=medium, app_base_url=""
         )
         with agent.override(model=FunctionModel(fn)):
-            await agent.run("x", deps=deps, output_type=Reply)
+            await agent.run("x", deps=deps, output_type=Bubbles)
         assert present in seen["names"] and absent not in seen["names"]
 
 
@@ -116,7 +116,7 @@ async def test_instructions_include_state_and_text_tail(
         app_base_url="",
     )
     with agent.override(model=FunctionModel(fn)):
-        await agent.run("x", deps=deps, output_type=Reply)
+        await agent.run("x", deps=deps, output_type=Bubbles)
     text = captured["instructions"]
     assert "agent_name: Jarvis" in text and "still need: user_name, help_need, gmail" in text
     assert "zero to four" in text and prompts.PERSONA[:40] in text

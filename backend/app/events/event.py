@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, SerializeAsAny
 
-from app.events.base import Channel, Origin, Payload
+from app.events.payload import Channel, Origin, Payload
 
 
 class Event(BaseModel):

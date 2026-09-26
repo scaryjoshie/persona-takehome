@@ -10,9 +10,9 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import aware
-from app.events.base import Channel, Origin, Payload
-from app.events.envelope import Event
+from app.events.event import Event
 from app.events.models import EventRow
+from app.events.payload import Channel, Origin, Payload
 
 
 async def append(

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.agent.types import Slots
-from app.calls.types import CallPhase, CallState, Initiator
+from app.agent.slots import Slots
+from app.calls.events import Initiator
+from app.calls.state import CallPhase, CallState
 from app.database import aware
-from app.gmail.types import GmailPhase
+from app.gmail.events import GmailPhase
 from app.routing.types import Medium
 from app.users.models import UserRow
 

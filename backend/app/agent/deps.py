@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.actions import Actions
-from app.events.base import Channel, Origin
+from app.events.payload import Channel, Origin
 from app.routing.types import Medium
 from app.text.messenger import Messenger
-from app.users.types import User
+from app.users.user import User
 
 
 @dataclass

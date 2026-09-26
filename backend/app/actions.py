@@ -1,5 +1,5 @@
 """Actions own transactions. Each one: validate, one short transaction, then notify
-the runtime and route. This is the only place that composes sections."""
+the live and route. This is the only place that composes sections."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from app.agent.types import SlotChanged
-from app.calls.machine import transition
-from app.calls.types import CallEvent
+from app.agent.events import SlotChanged
+from app.calls.events import CallEvent
+from app.calls.state import next_state
 from app.database import SessionFactory
 from app.events import service as events
-from app.events.base import Channel, Origin, Payload
-from app.events.envelope import Event
+from app.events.event import Event
+from app.events.payload import Channel, Origin, Payload
 from app.routing.router import Router
-from app.runtime import Runtimes
 from app.users import service as users
-from app.users.types import User
+from app.users.live import LiveUsers
+from app.users.user import User
 
 log = logging.getLogger(__name__)
 
@@ -31,14 +31,14 @@ class Actions:
     def __init__(
         self,
         db: SessionFactory,
-        runtimes: Runtimes,
+        live_users: LiveUsers,
         router: Router,
         *,
         payloads: TypeAdapter[Payload],
         clock: Callable[[], datetime],
     ) -> None:
         self._db = db
-        self._runtimes = runtimes
+        self._live_users = live_users
         self._router = router
         self._payloads = payloads
         self._clock = clock
@@ -66,13 +66,13 @@ class Actions:
     ) -> Event | None:
         """Persist (if the kind persists), apply call transitions, publish, route.
         Returns None if a call transition was invalid and the event was dropped."""
-        rt = self._runtimes.get(phone)
+        rt = self._live_users.get(phone)
         async with rt.lock:
             now = self._clock()
             async with self._db() as s, s.begin():
                 user = await users.ensure_user(s, phone, now=now)
                 if isinstance(payload, CallEvent):
-                    nxt = transition(user.call, payload, now)
+                    nxt = next_state(user.call, payload, now)
                     if nxt is None:
                         log.info(
                             "%s: dropped call %s from %s",
@@ -90,7 +90,7 @@ class Actions:
             if payload.persists:
                 await rt.publish(event)
             if route if route is not None else payload.should_route():
-                decision = await self._router.route(rt.drivers, user, event, recent)
+                decision = await self._router.route(rt.responders, user, event, recent)
                 async with self._db() as s, s.begin():
                     logged = await events.append(
                         s, phone, Origin.SYSTEM, Channel.SYSTEM, decision, ts=self._clock()
@@ -104,7 +104,7 @@ class Actions:
         self, phone: str, slot: str, value: Any, *, origin: Origin, channel: Channel
     ) -> bool:
         """Idempotent. Logs a slot_changed event when the value actually changes."""
-        rt = self._runtimes.get(phone)
+        rt = self._live_users.get(phone)
         async with rt.lock:
             now = self._clock()
             async with self._db() as s, s.begin():

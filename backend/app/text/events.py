@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
-from app.events.base import Payload, Role, Turn
+from app.events.payload import Payload, Role, Turn
 
 if TYPE_CHECKING:
     from app.routing.types import RoutingContext, Verb
