@@ -50,7 +50,7 @@ SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
 
-class Partial(BaseModel):
+class TranscriptPartial(BaseModel):
     """A live caption: `text` is the turn's full transcript so far (replace, don't append).
     `final` closes the turn; the VoiceUtterance event with the same turn_id follows."""
 
@@ -155,11 +155,12 @@ async def run_call(
                 + (f" and say why you are calling ({reason_for_call})." if reason_for_call else ".")
             )
             listener = Listener(agent, deps, config.listener_model, session, pipeline, phone)
+            open_turns: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
-                asyncio.create_task(_captions(session, phone, push, voice)),
-                asyncio.create_task(_turns(session, phone, pipeline, push, listener)),
+                asyncio.create_task(_captions(session, phone, push, voice, open_turns)),
+                asyncio.create_task(_turns(session, phone, pipeline, push, listener, open_turns)),
                 asyncio.create_task(_signals(session, voice)),
             ]
             await ended.wait()
@@ -169,6 +170,9 @@ async def run_call(
             for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
+            for speaker, (turn_id, text) in open_turns.items():  # cut off mid-sentence
+                final = TranscriptPartial(speaker=speaker, turn_id=turn_id, text=text, final=True)
+                await push(phone, final)
     except Exception as exc:  # the Live session failed to open or died
         log.exception("%s: voice session failed", phone)
         end(f"session_error: {type(exc).__name__}")
@@ -210,30 +214,49 @@ def _speaker_of(raw: str) -> Speaker:
 
 
 async def _captions(
-    session: RealtimeSession, phone: str, push: Push, voice: VoiceResponder
+    session: RealtimeSession,
+    phone: str,
+    push: Push,
+    voice: VoiceResponder,
+    open_turns: dict[Speaker, tuple[str, str]],
 ) -> None:
     async for update in session.stream_transcripts(delta=True):
         speaker = _speaker_of(update.speaker)
         if speaker is Speaker.AGENT:
             voice.on_agent_speaking()
-        turn_id = f"{speaker.value}-{update.index}"
+        turn_id = f"{speaker.value}-{update.index}"  # Live numbers turns across both speakers
+        open_turns[speaker] = (turn_id, update.transcript)
         await push(
-            phone, Partial(speaker=speaker, turn_id=turn_id, text=update.transcript, final=False)
+            phone,
+            TranscriptPartial(
+                speaker=speaker, turn_id=turn_id, text=update.transcript, final=False
+            ),
         )
 
 
 async def _turns(
-    session: RealtimeSession, phone: str, pipeline: Pipeline, push: Push, listener: Listener
+    session: RealtimeSession,
+    phone: str,
+    pipeline: Pipeline,
+    push: Push,
+    listener: Listener,
+    open_turns: dict[Speaker, tuple[str, str]],
 ) -> None:
-    counts = {Speaker.USER: 0, Speaker.AGENT: 0}
+    """Close each finished turn under the same id its captions used, so the browser
+    replaces the caption instead of adding a second copy."""
+    closed = 0
     async for part in session.stream_transcripts():
         if not part.transcript:
             continue
         speaker = _speaker_of(part.speaker)
-        turn_id = f"{speaker.value}-{counts[speaker]}"
-        counts[speaker] += 1
+        opened = open_turns.pop(speaker, None)
+        turn_id = opened[0] if opened else None
+        if turn_id is None:  # a turn with no captions (rare); give it an id of its own
+            closed += 1
+            turn_id = f"{speaker.value}-final-{closed}"
         await push(
-            phone, Partial(speaker=speaker, turn_id=turn_id, text=part.transcript, final=True)
+            phone,
+            TranscriptPartial(speaker=speaker, turn_id=turn_id, text=part.transcript, final=True),
         )
         utterance = VoiceUtterance(speaker=speaker, text=part.transcript, turn_id=turn_id)
         await pipeline.submit(phone, Origin.VOICE_AGENT, Channel.VOICE, utterance)

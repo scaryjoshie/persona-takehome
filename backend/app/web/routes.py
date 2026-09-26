@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -70,12 +71,18 @@ def make_router(pipeline: Pipeline, sockets: Sockets, run_call: CallRunner) -> A
         sockets.add(phone, websocket)
         live = pipeline.live_users.get(phone)
 
+        async def send(message: BaseModel) -> None:
+            with contextlib.suppress(Exception):  # this socket closed; its finally cleans up
+                await websocket.send_text(message.model_dump_json())
+
         async def on_event(event: Event) -> None:
-            await sockets.push(phone, EventMessage(event=WireEvent.of(event)))
+            # Each socket has its own subscription, so it sends only to itself. (Broadcasting
+            # here sent every event once per open socket.)
+            await send(EventMessage(event=WireEvent.of(event)))
             if event.kind in STATE_KINDS:
                 user = await pipeline.user(phone)
-                await sockets.push(phone, SlotsMessage(slots=user.slots))
-                await sockets.push(phone, CallMessage(call=user.call))
+                await send(SlotsMessage(slots=user.slots))
+                await send(CallMessage(call=user.call))
 
         unsubscribe = live.subscribe(on_event)
         typing_since: float | None = None

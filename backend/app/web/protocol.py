@@ -15,7 +15,7 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.payloads import AnyPayload
 from app.routing.types import Medium
-from app.voice.call import Partial
+from app.voice.call import TranscriptPartial
 
 
 class Message(BaseModel):
@@ -108,6 +108,6 @@ class TypingMessage(Message):
 
 
 ServerMessage = Annotated[
-    Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | Partial,
+    Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial,
     Field(discriminator="type"),
 ]

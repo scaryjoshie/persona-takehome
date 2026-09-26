@@ -151,3 +151,18 @@ def test_partial_is_in_the_exported_schema() -> None:
 
     server = json.dumps(schema()["server_message"])
     assert '"partial"' in server and "turn_id" in server
+
+
+def test_two_sockets_each_get_every_event_once(client: TestClient) -> None:
+    with (
+        client.websocket_connect("/ws?phone=15550006666") as a,
+        client.websocket_connect("/ws?phone=15550006666") as b,
+    ):
+        receive(a)
+        receive(b)
+        a.send_text(json.dumps({"type": "call", "action": "start"}))
+        for ws in (a, b):
+            seen = receive_until(ws, "call")  # the call event, then slots and call state
+            seen += [receive(ws), receive(ws)]
+            kinds = [m["type"] for m in seen]
+            assert kinds.count("event") == 1 and kinds.count("call") == 1, kinds
