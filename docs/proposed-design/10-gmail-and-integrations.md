@@ -7,13 +7,20 @@
 - In **testing** status: max 100 listed test users, and authorizations expire seven days after consent. Exception: apps requesting only name/email/profile need no test-user list and do not expire. Also a 100-refresh-token cap per account per client.
 - Refresh tokens are only returned with offline access, and typically only on first consent; use `prompt=consent` to force one.
 
-## The decision
+## The decision (revised 2026-09-25 after [research/google-oauth-gmail.md](research/google-oauth-gmail.md))
 
-Real Google sign-in for the connection, with a clearly labeled mock inbox for the "first win" moment.
+One External Google Cloud project in **Testing** status. Two consents:
 
-- Sign-in proves a real connection and gives us the account email ("connected to you@gmail.com"), works for any reviewer, no warning screen.
-- The mock inbox is what the agent surfaces after connecting, tied to the stated help need. Labeled as mock in the UI and the write-up.
-- If the real inbox is wanted for reviewers: a separate testing-status project with the reviewers' emails added, which has to be requested from the company early.
+1. **Sign-in, anyone:** `openid email`. Basic scopes are exempt from the test-user list even in Testing, so every reviewer can connect and we get their address from the ID token. No warning screen.
+2. **Inbox, test users only:** an incremental consent for `gmail.readonly` (`include_granted_scopes=true`). Works with no verification for accounts we add as test users (up to 100, immediate). A non-test user gets `access_denied` on this step and we degrade to "connected, inbox unavailable" with the labeled mock inbox.
+
+Why not production status: an unverified app with a Gmail scope shows a danger screen, caps at 100 users, and needs restricted-scope verification plus a CASA assessment. Why not the metadata scope: also restricted, and it disables search.
+
+Operational rules: always request `access_type=offline&prompt=consent select_account` so a refresh token always comes back; refresh tokens expire after 7 days in Testing, and `invalid_grant` on refresh means delete the row and ask to reconnect; the client secret is shown once at creation; register localhost, 127.0.0.1, the tunnel host, and prod on one client at `/api/auth/google/callback`; pick one of localhost or 127.0.0.1 for both the texted link and the redirect (different cookie hosts); no logo (triggers brand verification).
+
+**Disconnect for testing** (debug panel): POST the refresh token to Google's revoke endpoint (ignore 400), delete the integration row, clear the slot. Deleting the row alone resets nothing on Google's side.
+
+**Ask reviewers for:** the Google address they will test with, and whether a Workspace admin blocks unverified apps (they would need a personal Gmail).
 
 ## The value moment (open)
 

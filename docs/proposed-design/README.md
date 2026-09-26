@@ -27,6 +27,7 @@ Design notes for the Persona take-home: a web simulation of Persona's onboarding
 | [14-frontend-contract.md](14-frontend-contract.md) | Wiring, endpoints, and type generation for the frontend |
 | [15-live-operating-model.md](15-live-operating-model.md) | How GPT-Live runs our agent: delegation mechanics, anti-stall principles, routing pass and prefires, spike metrics |
 | [research/arch-validation.md](research/arch-validation.md) | Research report: is this architecture standard, Realtime API facts, OAuth facts |
+| [research/google-oauth-gmail.md](research/google-oauth-gmail.md) | Research report: Google Auth Platform setup, scopes, the OAuth flow in code, reading Gmail, reset for testing |
 | [research/gpt-live-behavior.md](research/gpt-live-behavior.md) | Research report: GPT-Live 1 in practice, known bugs, top 8 things to design for |
 | [research/turn-taking.md](research/turn-taking.md) | Research report: how texting agents handle bursts and turn-taking |
 
