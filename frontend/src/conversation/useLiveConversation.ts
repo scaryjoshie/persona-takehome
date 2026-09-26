@@ -43,6 +43,13 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
     outputLevel: audio.getOutputLevel,
     send: actions.sendMessage,
     sendVoiceNote: voiceNotes.send,
+    react: (messageId, emoji) => {
+      const target_seq = Number(messageId);
+      if (!Number.isInteger(target_seq)) return; // not yet echoed back by the server
+      const current = messages.find((m) => m.id === messageId)?.reactions?.find((r) => r.by === "user");
+      if (emoji) transport.send({ type: "react", target_seq, emoji });
+      else if (current) transport.send({ type: "react", target_seq, emoji: current.emoji, remove: true });
+    },
     setTyping: actions.setTyping,
     startCall: audio.start,
     accept: audio.accept,

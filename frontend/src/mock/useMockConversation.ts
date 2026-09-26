@@ -47,8 +47,11 @@ export function useMockConversation(): Conversation {
       setMessages((m) => [...m, { id: nextId(), side: "received", text, ts: new Date().toISOString() }]);
     }, 1000);
   };
-  const userSays = (text = pick(RANDOM_USER_LINES)) =>
-    setMessages((m) => [...m, { id: nextId(), side: "sent", text, ts: new Date().toISOString() }]);
+  const userSays = (text = pick(RANDOM_USER_LINES)) => {
+    const id = nextId();
+    setMessages((m) => [...m, { id, side: "sent", text, ts: new Date().toISOString() }]);
+    return id;
+  };
 
   useEffect(() => {
     if (!autoplay) return;
@@ -124,6 +127,15 @@ export function useMockConversation(): Conversation {
     setTimeout(() => agentSays("ok, that was fun."), 800);
   };
   const toggleMute = () => setMuted((m) => !m);
+  // Tapbacks: the user's own, and the agent hearting the first thing the user sends.
+  const react = (messageId: string, emoji: string | null, by: "user" | "agent" = "user") =>
+    setMessages((all) =>
+      all.map((m) => {
+        if (m.id !== messageId) return m;
+        const others = (m.reactions ?? []).filter((r) => r.by !== by);
+        return { ...m, reactions: emoji ? [...others, { emoji, by }] : others };
+      }),
+    );
   const sendVoiceNote = ({ blob, durationMs }: Recording) => {
     const voice = { src: URL.createObjectURL(blob), durationMs };
     setMessages((m) => [...m, { id: nextId(), side: "sent", text: "", ts: new Date().toISOString(), voice }]);
@@ -134,8 +146,9 @@ export function useMockConversation(): Conversation {
   };
   const send = (text: string) => {
     const first = messages.length === 0;
-    userSays(text);
+    const id = userSays(text);
     if (!first) return void setTimeout(() => agentSays(), 600);
+    setTimeout(() => react(id, "❤️", "agent"), 900);
     INTRO.forEach((line, i) => setTimeout(() => agentSays(line), 600 + i * 1600));
   };
 
@@ -151,6 +164,7 @@ export function useMockConversation(): Conversation {
     outputLevel: () => (speakingRef.current ? speechLevel(performance.now() / 1000) : 0),
     send,
     sendVoiceNote,
+    react,
     setTyping: () => {},
     startCall,
     accept,

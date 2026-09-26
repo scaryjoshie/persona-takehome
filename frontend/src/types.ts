@@ -15,3 +15,20 @@ export interface VoiceNotePayload {
   duration_ms: number;
   transcript: string | null;
 }
+
+/** A tapback on a message. Announced by the backend, not in the schema yet. */
+export interface ReactionPayload {
+  kind: "reaction";
+  target_seq: number;
+  emoji: string;
+  by: "user" | "agent";
+  removed: boolean;
+}
+
+/** The user's tapback, sent on /ws. Announced by the backend, not in the schema yet. */
+export interface ReactMessage {
+  type: "react";
+  target_seq: number;
+  emoji: string;
+  remove?: boolean;
+}

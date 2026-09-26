@@ -18,6 +18,8 @@ import { IOSKeyboard, IOSStatusBar, KB_DARK, KB_H, STATUS_H, Scaled } from "./ve
 import { SCREEN } from "./IPhone17Pro";
 import { LinkPreview } from "./LinkPreview";
 import { VoiceNoteBubble, type VoiceNote } from "./VoiceNoteBubble";
+import { ReactionBadges, TapbackMenu, type Reaction } from "./Tapback";
+import { useLongPress } from "../../lib/useLongPress";
 import { LiveWaveform } from "../ui/live-waveform";
 import { firstLink, isOnlyLink, splitLinks } from "../../lib/links";
 import { useVoiceRecorder, type Recording } from "../../audio/useVoiceRecorder";
@@ -33,6 +35,8 @@ export interface ThreadMessage {
   voice?: VoiceNote;
   /** The server's id for an audio message, once uploaded. */
   audioId?: string;
+  /** Tapbacks on this message, oldest first. */
+  reactions?: Reaction[];
 }
 
 interface Props {
@@ -51,6 +55,8 @@ interface Props {
   onTyping?: (active: boolean) => void;
   /** Sends a recorded audio message. The mic button is inert without it. */
   onSendVoiceNote?: (recording: Recording) => void;
+  /** Sets (or with `null` removes) the user's tapback on a message. */
+  onReact?: (messageId: string, emoji: string | null) => void;
 }
 
 /** iOS 26 Messages, dark: Framework7's Navbar, Messages and Messagebar inside a status bar and home indicator. */
@@ -65,6 +71,7 @@ export function MessagesScreen({
   initialDraft = "",
   onTyping,
   onSendVoiceNote,
+  onReact,
 }: Props) {
   const [draft, setDraft] = useState(initialDraft);
   const typingSignal = useTypingSignal(onTyping);
@@ -92,6 +99,12 @@ export function MessagesScreen({
       if (clip && clip.durationMs > 300) onSendVoiceNote?.(clip);
     } else recorder.cancel();
     setRecording(false);
+  };
+  // Press-and-hold on a bubble opens tapbacks and actions for its message.
+  const [pressed, setPressed] = useState<{ message: ThreadMessage; target: HTMLElement } | null>(null);
+  const press = (message: ThreadMessage) => (el: HTMLElement) => {
+    const target = el.closest<HTMLElement>(".message");
+    if (target) setPressed({ message, target });
   };
   const lastSentId = messages.findLast((m) => m.side === "sent")?.id;
   const endsSent = messages.at(-1)?.side === "sent";
@@ -175,6 +188,7 @@ export function MessagesScreen({
               {threadDate(messages[0]?.ts)}
             </MessagesTitle>
             {bubblesFor(messages).map((b, i, all) => {
+              const message = messages.find((m) => m.id === b.messageId)!;
               const first = all[i - 1]?.side !== b.side;
               const last = all[i + 1]?.side !== b.side;
               const footer = endsSent && b.messageId === lastSentId && last ? receipt : undefined;
@@ -188,7 +202,10 @@ export function MessagesScreen({
                   footer={footer}
                   className={b.link ? "message-link" : b.voice ? "message-voice" : undefined}
                 >
-                  <span slot="text">
+                  {b.key === b.messageId && message.reactions && (
+                    <ReactionBadges slot="content-start" reactions={message.reactions} side={b.side} />
+                  )}
+                  <PressableText slot="text" onPress={press(message)}>
                     {b.voice ? (
                       <VoiceNoteBubble note={b.voice} />
                     ) : b.link ? (
@@ -196,7 +213,7 @@ export function MessagesScreen({
                     ) : (
                       <LinkedText text={b.text} />
                     )}
-                  </span>
+                  </PressableText>
                 </Message>
               );
             })}
@@ -211,8 +228,45 @@ export function MessagesScreen({
           </Scaled>
         </div>
       )}
+      {pressed && rootRef.current && (
+        <TapbackMenu
+          target={pressed.target}
+          root={rootRef.current}
+          side={pressed.message.side}
+          mine={pressed.message.reactions?.findLast((r) => r.by === "user")?.emoji ?? null}
+          onReact={(emoji) => {
+            onReact?.(pressed.message.id, emoji);
+            setPressed(null);
+          }}
+          onCopy={() => {
+            void navigator.clipboard?.writeText(pressed.message.text);
+            setPressed(null);
+          }}
+          onClose={() => setPressed(null)}
+        />
+      )}
       <div className="home-indicator" />
     </div>
+  );
+}
+
+/**
+ * A bubble's content, with press-and-hold (or right-click, double-click) wired to open tapbacks.
+ * `slot` is taken as a prop because Framework7 reads it from the element at the call site.
+ */
+function PressableText({
+  slot,
+  onPress,
+  children,
+}: {
+  slot: string;
+  onPress: (el: HTMLElement) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <span slot={slot} className="pressable" {...useLongPress(onPress)}>
+      {children}
+    </span>
   );
 }
 

@@ -1,9 +1,28 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import type { TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
+import type { ReactionPayload, TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
+import type { Reaction } from "../components/phone/Tapback";
 
-/** The texts in both directions, as the phone shows them. */
+/** The texts in both directions, as the phone shows them, with their tapbacks. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
+  const reactions = reactionsBySeq(events);
+  return messagesOf(events).map((m) => (reactions.has(m.id) ? { ...m, reactions: reactions.get(m.id) } : m));
+}
+
+/** Each message's current tapbacks: one per reactor, the latest winning, removals applied. */
+function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
+  const out = new Map<string, Reaction[]>();
+  for (const e of events) {
+    const p = e.payload as WireEvent["payload"] | ReactionPayload;
+    if (p.kind !== "reaction") continue;
+    const key = String(p.target_seq);
+    const others = (out.get(key) ?? []).filter((r) => r.by !== p.by);
+    out.set(key, p.removed ? others : [...others, { emoji: p.emoji, by: p.by }]);
+  }
+  return out;
+}
+
+function messagesOf(events: WireEvent[]): ThreadMessage[] {
   return events.flatMap((e): ThreadMessage[] => {
     const p = e.payload as WireEvent["payload"] | VoiceNotePayload;
     if (p.kind === "voice_note") {

@@ -21,6 +21,8 @@ export interface Conversation {
   outputLevel: () => number;
   send: (text: string) => void;
   sendVoiceNote: (recording: Recording) => void;
+  /** Sets, or with `null` removes, the user's tapback on a message. */
+  react: (messageId: string, emoji: string | null) => void;
   setTyping: (active: boolean) => void;
   startCall: () => void;
   accept: () => void;
@@ -44,6 +46,7 @@ export const IDLE_CONVERSATION: Conversation = {
   outputLevel: () => 0,
   send: noop,
   sendVoiceNote: noop,
+  react: noop,
   setTyping: noop,
   startCall: noop,
   accept: noop,

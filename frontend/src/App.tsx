@@ -153,6 +153,7 @@ function StageView({ conversation: c, isNew = false, entered = false }: StageVie
               typing={c.agentTyping}
               onSend={c.send}
               onSendVoiceNote={c.sendVoiceNote}
+              onReact={c.react}
               onTyping={c.setTyping}
               onCall={c.startCall}
               initialDraft={isNew ? FIRST_MESSAGE : ""}
