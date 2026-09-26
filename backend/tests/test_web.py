@@ -271,21 +271,14 @@ def test_voice_message_upload_transcribes_and_plays_back(client: TestClient) -> 
     assert bad.status_code == 415
 
 
-def test_the_gmail_link_offers_a_demo_inbox_and_real_gmail(client: TestClient) -> None:
-    page = client.get("/api/auth/google/start?phone=15550009999").text
-    assert "Use a demo account" in page and "/api/auth/google/real?phone=15550009999" in page
-
-
-def test_connecting_the_demo_inbox(client: TestClient) -> None:
-    phone = "15550009998"
-    assert "Connected" in client.post(f"/api/auth/google/demo?phone={phone}").text
-    connected = [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]
-    assert connected["phase"] == "connected" and connected["demo"] and connected["inbox"]
+def test_the_google_link_goes_straight_to_google(client: TestClient) -> None:
+    to_google = client.get("/api/auth/google/start?phone=15550009999", follow_redirects=False)
+    assert to_google.headers["location"].startswith(api.AUTH_URL)
 
 
 def test_real_google_connects_and_peeks_at_the_inbox(client: TestClient) -> None:
     phone = "15550009997"
-    to_google = client.get(f"/api/auth/google/real?phone={phone}", follow_redirects=False)
+    to_google = client.get(f"/api/auth/google/start?phone={phone}", follow_redirects=False)
     location = to_google.headers["location"]
     assert location.startswith(api.AUTH_URL) and "access_type=offline" in location
     state = parse_qs(urlparse(location).query)["state"][0]
@@ -299,7 +292,7 @@ def test_real_google_connects_and_peeks_at_the_inbox(client: TestClient) -> None
 
 def test_declining_on_googles_screen_is_a_failed_connection(client: TestClient) -> None:
     phone = "15550009996"
-    to_google = client.get(f"/api/auth/google/real?phone={phone}", follow_redirects=False)
+    to_google = client.get(f"/api/auth/google/start?phone={phone}", follow_redirects=False)
     state = parse_qs(urlparse(to_google.headers["location"]).query)["state"][0]
     client.get(f"/api/auth/google/callback?state={state}&error=access_denied")
     assert [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]["phase"] == "failed"

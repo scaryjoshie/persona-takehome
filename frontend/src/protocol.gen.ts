@@ -8,7 +8,7 @@ export type Channel = "text" | "voice" | "system";
 export type Speaker = "user" | "agent";
 export type CallTransition = "ringing" | "connecting" | "connected" | "declined" | "failed" | "ended";
 export type Initiator = "agent" | "user";
-export type GmailPhase = "link_sent" | "connected" | "failed" | "skipped";
+export type GmailPhase = "link_sent" | "connected" | "failed" | "skipped" | "disconnected";
 export type CallPhase = "none" | "ringing" | "connecting" | "connected" | "ended";
 /**
  * Which medium has the floor: voice while a call is connected, text otherwise.
@@ -225,13 +225,13 @@ export interface GmailEvent {
   kind: "gmail";
   phase: GmailPhase;
   email: string | null;
-  demo: boolean;
   inbox: InboxItem[];
 }
 /**
  * One inbox message as seen at connect time: headers and Gmail's snippet, no body.
  */
 export interface InboxItem {
+  id: string;
   sender: string;
   subject: string;
   snippet: string;

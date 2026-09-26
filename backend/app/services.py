@@ -32,7 +32,7 @@ class Services:
     transcribe: Transcribe  # voice messages
     voice_notes_dir: Path
     app_base_url: str
-    google: Google  # connected Google accounts (real or demo)
+    google: Google  # connected Google accounts
 
 
 def _services(connection: HTTPConnection) -> Services:

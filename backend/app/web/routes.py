@@ -108,6 +108,7 @@ async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
                 case CallCommand():
                     await pipeline.submit(phone, Origin.USER, Channel.SYSTEM, call_event(message))
                 case Reset():
+                    await svc.google.disconnect(phone)  # a fresh start reconnects Google too
                     await pipeline.reset(phone)
                     await send(await snapshot(pipeline, phone))
     except WebSocketDisconnect:

@@ -98,11 +98,6 @@ def what_you_know(slots: Slots, call: CallState) -> str:
             lines.append(
                 "You've texted the Gmail link; it isn't connected yet. Don't send it again."
             )
-        case GmailPhase.CONNECTED if slots.gmail_email == "demo inbox":
-            lines.append(
-                "Their Google account is connected, as a demo inbox and calendar with sample "
-                "data (say so when it matters). Your email and calendar tools work on it."
-            )
         case GmailPhase.CONNECTED:
             lines.append(
                 f"Their Google account is connected ({slots.gmail_email}): "

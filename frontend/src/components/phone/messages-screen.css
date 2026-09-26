@@ -189,6 +189,16 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+.messages-screen .link-preview-description {
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: rgba(235, 235, 245, 0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .messages-screen .link-preview-domain {
   overflow: hidden;
   font-size: 13px;

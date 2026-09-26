@@ -4,8 +4,8 @@
     uv run python -m evals.scenarios [scenario ...]    # all if none given
 
 Each user line is sent, then we wait until the agent goes quiet. A `+` prefix sends the line
-right after the previous one (rapid fire); `!demo` taps the Gmail link and picks the demo
-inbox. Transcripts: evals/out/scenarios/<name>.txt. Read them; there is no automatic grade.
+right after the previous one (rapid fire). Transcripts: evals/out/scenarios/<name>.txt.
+Read them; there is no automatic grade.
 """
 
 import asyncio
@@ -13,13 +13,12 @@ import json
 import os
 import sys
 import time
-import urllib.request
 import zlib
 
 import websockets
 
 PORT = 8765
-QUIET = 7.0  # seconds with no new bubble = the agent is done
+QUIET = float(os.environ.get("QUIET", "7"))  # seconds with no new bubble = done
 OUT = os.path.join(os.path.dirname(__file__), "out", "scenarios")
 
 SCENARIOS: dict[str, list[str]] = {
@@ -163,35 +162,6 @@ SCENARIOS: dict[str, list[str]] = {
     "call_other": ["Hey, what's a Persona?", "call this number instead: 555-867-5309"],
     "minor": ["Hey, what's a Persona?", "text", "im 14 is that ok"],
     "annoyed": ["Hey, what's a Persona?", "text", "this is annoying just let me use it"],
-    "payoff_bills": [
-        "Hey, what's a Persona?",
-        "text",
-        "call yourself nova",
-        "im sam",
-        "i keep forgetting to pay my bills",
-        "yes",
-        "!demo",
-        "yeah do that",
-    ],
-    "payoff_school": [
-        "Hey, what's a Persona?",
-        "text",
-        "you pick",
-        "sure",
-        "im maya",
-        "i keep missing stuff from my professors",
-        "ok send it",
-        "!demo",
-    ],
-    "payoff_nothing_fits": [
-        "Hey, what's a Persona?",
-        "text",
-        "call yourself nova",
-        "im sam",
-        "planning my sister's wedding",
-        "sure",
-        "!demo",
-    ],
     "tangent": [
         "Hey, what's a Persona?",
         "text",
@@ -238,11 +208,6 @@ async def run(name: str, lines: list[str]) -> str:
                 last[0] = time.time()
                 while time.time() - last[0] < QUIET:
                     await asyncio.sleep(0.3)
-            if text == "!demo":  # taps the Gmail link and picks the demo inbox
-                log.append(f"[{time.time() - t0:5.1f}] USER: connects the demo inbox")
-                demo = f"http://localhost:{PORT}/api/auth/google/demo?phone={phone}"
-                urllib.request.urlopen(urllib.request.Request(demo, method="POST"))
-                continue
             log.append(f"[{time.time() - t0:5.1f}] USER: {text[:200]}")
             await ws.send(json.dumps({"type": "message", "text": text}))
             if rapid:

@@ -33,7 +33,6 @@ class GmailEvent(Payload):
 
     phase: GmailPhase
     email: str | None = None
-    demo: bool = False  # the demo inbox, not their real one
     inbox: list[InboxItem] = []  # the latest messages, read once when it connected
 
     OUTCOMES: ClassVar[frozenset[GmailPhase]] = frozenset({GmailPhase.CONNECTED, GmailPhase.FAILED})
@@ -50,8 +49,7 @@ class GmailEvent(Payload):
     def turn(self, at: datetime) -> Turn | None:
         match self.phase:
             case GmailPhase.CONNECTED:
-                which = "a demo inbox (tell them it's sample mail)" if self.demo else self.email
-                text = f"Gmail connected: {which}."
+                text = f"Gmail connected: {self.email}."
                 if self.inbox:
                     text += f" Their latest inbox messages:\n{inbox_lines(self)}"
                 return Turn(Role.NOTE, text)

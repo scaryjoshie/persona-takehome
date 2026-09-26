@@ -593,11 +593,6 @@
             "default": null,
             "title": "Email"
           },
-          "demo": {
-            "default": false,
-            "title": "Demo",
-            "type": "boolean"
-          },
           "inbox": {
             "default": [],
             "items": {
@@ -611,7 +606,6 @@
           "kind",
           "phase",
           "email",
-          "demo",
           "inbox"
         ],
         "title": "GmailEvent",
@@ -622,7 +616,8 @@
           "link_sent",
           "connected",
           "failed",
-          "skipped"
+          "skipped",
+          "disconnected"
         ],
         "title": "GmailPhase",
         "type": "string"
@@ -646,6 +641,11 @@
       "InboxItem": {
         "description": "One inbox message as seen at connect time: headers and Gmail's snippet, no body.",
         "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -660,6 +660,7 @@
           }
         },
         "required": [
+          "id",
           "sender",
           "subject",
           "snippet"
@@ -1647,11 +1648,6 @@
             "default": null,
             "title": "Email"
           },
-          "demo": {
-            "default": false,
-            "title": "Demo",
-            "type": "boolean"
-          },
           "inbox": {
             "default": [],
             "items": {
@@ -1665,7 +1661,6 @@
           "kind",
           "phase",
           "email",
-          "demo",
           "inbox"
         ],
         "title": "GmailEvent",
@@ -1676,7 +1671,8 @@
           "link_sent",
           "connected",
           "failed",
-          "skipped"
+          "skipped",
+          "disconnected"
         ],
         "title": "GmailPhase",
         "type": "string"
@@ -1700,6 +1696,11 @@
       "InboxItem": {
         "description": "One inbox message as seen at connect time: headers and Gmail's snippet, no body.",
         "properties": {
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
+          },
           "sender": {
             "title": "Sender",
             "type": "string"
@@ -1714,6 +1715,7 @@
           }
         },
         "required": [
+          "id",
           "sender",
           "subject",
           "snippet"

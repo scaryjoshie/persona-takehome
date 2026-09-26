@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f1ea"/>
+      <stop offset="0.55" stop-color="#e9ece4"/>
+      <stop offset="1" stop-color="#dfe6dc"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+    <filter id="lift" x="-20%" y="-40%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#2d3a2e" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#sky)"/>
+  <!-- soft canopy shapes, low on the card -->
+  <g filter="url(#soft)" opacity="0.55">
+    <ellipse cx="180" cy="610" rx="260" ry="150" fill="#9fb09a"/>
+    <ellipse cx="520" cy="660" rx="300" ry="160" fill="#b7c3ae"/>
+    <ellipse cx="880" cy="560" rx="240" ry="170" fill="#a4b59f"/>
+    <ellipse cx="1120" cy="640" rx="220" ry="150" fill="#8fa38b"/>
+    <ellipse cx="760" cy="300" rx="180" ry="120" fill="#cfd6c6"/>
+  </g>
+
+  <!-- wordmark -->
+  <g transform="translate(96 96)" fill="#2f3431">
+    <circle cx="14" cy="18" r="11" fill="none" stroke="#2f3431" stroke-width="3.2"/>
+    <circle cx="28" cy="18" r="11" fill="none" stroke="#2f3431" stroke-width="3.2"/>
+    <text x="52" y="30" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="600" letter-spacing="-0.5">Persona</text>
+  </g>
+
+  <!-- headline -->
+  <text font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="78" font-weight="600" fill="#3a403b" letter-spacing="-2">
+    <tspan x="96" y="262">One tap and</tspan>
+    <tspan x="96" y="350">I've got it from here</tspan>
+  </text>
+
+  <!-- Connect with Google pill -->
+  <g transform="translate(690 468)" filter="url(#lift)">
+    <rect width="414" height="84" rx="42" fill="#ffffff"/>
+    <g transform="translate(34 22) scale(0.833)">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </g>
+    <text x="96" y="53" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="500" fill="#1f1f1f">Connect with Google</text>
+  </g>
+</svg>

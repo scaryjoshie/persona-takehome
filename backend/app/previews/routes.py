@@ -22,7 +22,9 @@ async def preview(url: str, svc: ServicesDep) -> Preview:
         return Preview(
             url=url,
             title="Connect your Google account",
-            description="Give your Persona access to Gmail and Calendar.",
+            description="Open this link to let your Persona read and manage your Gmail and "
+            "Calendar. It never sends or books anything without asking you.",
+            image="/link-cards/google.svg",  # served by the frontend
             site_name="Persona",
         )
     cached = _cache.get(url)

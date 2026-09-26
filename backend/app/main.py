@@ -69,7 +69,7 @@ def assemble(
         model=model,
         app_base_url=app_base_url,
         hang_up=voice.hang_up,
-        google=google or Google(db),  # demo-only unless real credentials are given
+        google=google or Google(db),  # unconfigured: the Google link says so
     )
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env), jev=jev)
     pipeline.responders[Medium.VOICE] = voice

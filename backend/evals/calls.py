@@ -3,9 +3,9 @@
     uv run uvicorn app.main:app --port 8765 &
     uv run python -m evals.calls [scenario ...]    # all if none given
 
-Steps: text:<msg>  accept  decline  start  say:<line>  silence:<s>  hangup  drop  demo
-wait:<s>. `drop` closes the audio without hanging up (a lost connection); `demo` connects
-the demo inbox. Transcripts: evals/out/calls/<name>.txt.
+Steps: text:<msg>  accept  decline  start  say:<line>  silence:<s>  hangup  drop  wait:<s>.
+`drop` closes the audio without hanging up (a lost connection).
+Transcripts: evals/out/calls/<name>.txt.
 """
 
 import asyncio
@@ -14,7 +14,6 @@ import os
 import subprocess
 import sys
 import time
-import urllib.request
 import wave
 import zlib
 
@@ -132,20 +131,6 @@ SCENARIOS: dict[str, list[str]] = {
         "say:bye",
         "wait:10",
     ],
-    "gmail_on_call": [
-        "text:Hey, what's a Persona?",
-        "text:sure call me",
-        "accept",
-        "say:pick",
-        "say:yes",
-        "say:siobhan",
-        "say:bills",
-        "say:link",
-        "demo",
-        "say:done",
-        "say:bye",
-        "wait:12",
-    ],
     "ignore_ring": ["text:Hey, what's a Persona?", "text:sure call me", "wait:45"],
     "decline": ["text:Hey, what's a Persona?", "text:sure call me", "decline", "wait:14"],
 }
@@ -259,11 +244,6 @@ async def run(name: str, steps: list[str]) -> str:
                 if state["audio"] is not None:
                     await state["audio"].close()
                     state["audio"] = None
-            elif kind == "demo":
-                log.append(f"{ts()} USER: connects the demo inbox")
-                demo = f"http://localhost:{PORT}/api/auth/google/demo?phone={phone}"
-                urllib.request.urlopen(urllib.request.Request(demo, method="POST"))
-                await quiet(2)
             elif kind == "wait":
                 await asyncio.sleep(float(arg))
         if state["audio"] is not None:

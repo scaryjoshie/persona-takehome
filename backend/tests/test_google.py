@@ -1,6 +1,9 @@
-"""Connected Google accounts: the stored token, the demo account, and the agent's tools."""
+"""Connected Google accounts: the stored token, and the agent's email and calendar tools
+against a fake Google."""
 
 from __future__ import annotations
+
+import json
 
 import httpx
 from cryptography.fernet import Fernet
@@ -10,74 +13,96 @@ from app.agent.agent import agent
 from app.agent.deps import AgentEnv, Deps
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
-from app.google.accounts import DEMO_EMAIL, DemoAccount, Google
+from app.google.accounts import Google
 from app.google.events import GmailEvent, GmailPhase
 from app.google.models import GoogleAccountRow
 from app.pipeline import Pipeline
 from app.text.reply import Replier
 from app.users.user import User
 from tests.conftest import PHONE, CapturingMessenger
-from tests.test_agent import scripted
+from tests.test_agent import scripted, tools_for
 
 
-async def connect_demo(pipeline: Pipeline) -> None:
-    demo = GmailEvent(phase=GmailPhase.CONNECTED, email=DEMO_EMAIL, demo=True)
-    await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, demo, route=False)
+class FakeGoogle:
+    """Just enough of Google's token, Gmail and Calendar APIs; records what was asked."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.sent: list[str] = []
+        self.events: list[str] = []
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        self.calls.append(f"{request.method} {path}")
+        if path == "/token":
+            return httpx.Response(200, json={"access_token": "fresh"})
+        if path.endswith("/messages"):
+            return httpx.Response(200, json={"messages": [{"id": "m1"}]})
+        if path.endswith("/messages/m1"):
+            headers = [{"name": "From", "value": "Maria"}, {"name": "Subject", "value": "heater"}]
+            return httpx.Response(
+                200, json={"snippet": "next week", "payload": {"headers": headers}}
+            )
+        if path.endswith("/drafts"):
+            return httpx.Response(200, json={"id": "d1"})
+        if path.endswith("/drafts/send"):
+            self.sent.append(json.loads(request.content)["id"])
+            return httpx.Response(200, json={})
+        if path.endswith("/events") and request.method == "POST":
+            self.events.append(json.loads(request.content)["summary"])
+            return httpx.Response(200, json={"htmlLink": "x"})
+        if path.endswith("/events"):
+            return httpx.Response(200, json={"items": []})
+        return httpx.Response(200, json={})
+
+
+async def connected(db: SessionFactory, pipeline: Pipeline, fake: FakeGoogle) -> Google:
+    google = Google(
+        db,
+        creds=("id", "secret"),
+        key=Fernet.generate_key().decode(),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(fake)),
+    )
+    await google.save(PHONE, "kate@gmail.com", "refresh-me")
+    event = GmailEvent(phase=GmailPhase.CONNECTED, email="kate@gmail.com")
+    await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, event, route=False)
+    return google
 
 
 async def reply(
     pipeline: Pipeline, messenger: CapturingMessenger, google: Google, *turns: list[ToolCallPart]
-) -> list[str]:
-    """Run one text reply whose model makes these tool calls; return the tool results."""
-    seen: list[str] = []
+) -> None:
+    """One text reply whose model makes these tool calls."""
     model = scripted(*turns, [ToolCallPart("final_result", {"bubbles": ["ok"]})])
     env = AgentEnv(pipeline, messenger, model, "http://x", google=google)
     with agent.override(model=model):
         await Replier(env).reply(PHONE, 0)
-    for e in await pipeline.history(PHONE):
-        if e.kind == "tool_call":
-            seen.append(e.payload.model_dump()["name"])
-    return seen
 
 
-async def test_the_demo_account_drafts_sends_and_schedules(
+async def test_search_draft_send_and_schedule(
     db: SessionFactory, pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:
-    google = Google(db)
-    await connect_demo(pipeline)
+    fake = FakeGoogle()
+    google = await connected(db, pipeline, fake)
+    draft = {"to": "maria@x.com", "subject": "heater", "body": "any update?"}
     await reply(
         pipeline,
         messenger,
         google,
-        [ToolCallPart("search_email", {"query": "landlord"})],
-        [
-            ToolCallPart(
-                "draft_email", {"to": "maria@x.com", "subject": "heater", "body": "any update?"}
-            )
-        ],
-    )
-    account = await google.account(PHONE, (await pipeline.user(PHONE)).slots)
-    assert isinstance(account, DemoAccount)
-    draft_id = next(iter(account.drafts))
-    await reply(
-        pipeline,
-        messenger,
-        google,
-        [ToolCallPart("send_draft", {"draft_id": draft_id})],
+        [ToolCallPart("search_email", {"query": "from:maria"})],
+        [ToolCallPart("draft_email", draft)],
+        [ToolCallPart("send_draft", {"draft_id": "d1"})],
         [ToolCallPart("create_event", {"title": "Dentist", "start": "2026-10-02 15:00"})],
     )
-    assert account.sent == [draft_id]
-    assert any(e["title"] == "Dentist" for e in await account.upcoming(7))
+    assert fake.sent == ["d1"] and fake.events == ["Dentist"]
+    assert fake.calls.count("POST /token") == 1  # the access token is reused
 
 
 async def test_the_tools_appear_only_once_google_is_connected(
     db: SessionFactory, pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:
-    from tests.test_agent import tools_for
-
-    google = Google(db)
     before = await tools_for(pipeline, messenger, lambda env, u: env.deps(u, u.floor))
-    await connect_demo(pipeline)
+    google = await connected(db, pipeline, FakeGoogle())
 
     def with_google(env: AgentEnv, u: User) -> Deps:
         return AgentEnv(env.pipeline, env.messenger, env.model, "", google=google).deps(u, u.floor)
@@ -86,26 +111,15 @@ async def test_the_tools_appear_only_once_google_is_connected(
     assert "send_draft" not in before and {"search_email", "send_draft", "create_event"} <= after
 
 
-async def test_real_tokens_are_stored_encrypted_and_refreshed(db: SessionFactory) -> None:
-    calls: list[str] = []
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        calls.append(request.url.path)
-        return httpx.Response(200, json={"access_token": "fresh"})
-
-    google = Google(
-        db,
-        creds=("id", "secret"),
-        key=Fernet.generate_key().decode(),
-        client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
-    )
-    await google.save(PHONE, "kate@gmail.com", "refresh-me")
+async def test_tokens_are_stored_encrypted_and_disconnect_revokes(
+    db: SessionFactory, pipeline: Pipeline
+) -> None:
+    fake = FakeGoogle()
+    google = await connected(db, pipeline, fake)
     async with db() as s:
         row = await s.get(GoogleAccountRow, PHONE)
     assert row is not None and "refresh-me" not in row.refresh_token
-    assert await google.access_token(PHONE) == "fresh"
-    assert await google.access_token(PHONE) == "fresh" and calls == ["/token"]  # cached
     await google.disconnect(PHONE)
     async with db() as s:
         assert await s.get(GoogleAccountRow, PHONE) is None
-    assert calls[-1] == "/revoke"
+    assert fake.calls[-1] == "POST /revoke"

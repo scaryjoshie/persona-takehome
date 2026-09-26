@@ -1,6 +1,6 @@
 # Persona onboarding take-home
 
-A web simulation of Persona's onboarding. It texts you first, gets you to name it, tries to hop on a voice call to learn your name and one thing you need, connects Gmail, and then shows it's useful by finding something in your inbox that matches what you said. Text is the fallback at every step: you can decline the call, hang up, drop, go quiet, or never pick up, and it carries on by text with full context.
+A web simulation of Persona's onboarding. It texts you first, gets you to name it, tries to hop on a voice call to learn your name and one thing you need, connects Gmail, and then shows it's useful by finding something in your inbox that matches what you said, and can keep working your email and calendar after that. Text is the fallback at every step: you can decline the call, hang up, drop, go quiet, or never pick up, and it carries on by text with full context.
 
 ## Run it
 
@@ -21,12 +21,11 @@ Enter any 10-digit number on the first screen; each number is its own user. Chro
 
 The iPhone bezel artwork in `frontend/public/bezels/` is not in git (Apple's assets); without it the phone falls back to a CSS frame.
 
-### Gmail
+### Google (Gmail + Calendar)
 
-The link the agent texts opens a small page with two options:
+The link the agent texts goes straight to Google's sign-in. It asks for Gmail (read, draft, send; never permanent delete) and Calendar events. The refresh token is stored encrypted (`CREDENTIALS_KEY`), so the agent can keep searching and reading email, drafting (and, after an explicit yes, sending) replies, and reading and adding calendar events. Tell the agent "disconnect my gmail" to revoke access.
 
-- **Use a demo inbox** — always available; a handful of realistic sample emails.
-- **Connect my real Gmail** — shown when `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are set. The Google project is in Testing mode, so only its test users can connect. It reads the latest ~15 inbox headers (sender, subject, snippet) once, keeps that snapshot, and discards the token. Nothing is sent, deleted, or read again.
+Setup: a Google Cloud OAuth "Web application" client in **Testing** mode with the redirect URI `{APP_BASE_URL}/api/auth/google/callback`, the Gmail and Calendar APIs enabled, and `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`CREDENTIALS_KEY` in `backend/.env`. In Testing mode only the project's test users can connect, so add the Google accounts you'll demo with.
 
 ## How it works (short version)
 

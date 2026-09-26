@@ -49,6 +49,9 @@ export function LinkPreview({ url }: { url: string }) {
         {!preview?.image && <img className="link-preview-icon" src={preview?.icon ?? faviconFor(url)} alt="" />}
         <span className="link-preview-text">
           <span className="link-preview-title">{title}</span>
+          {preview?.image && preview.description && (
+            <span className="link-preview-description">{preview.description}</span>
+          )}
           <span className="link-preview-domain">{domain}</span>
         </span>
       </span>
