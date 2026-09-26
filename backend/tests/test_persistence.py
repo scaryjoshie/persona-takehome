@@ -5,7 +5,7 @@ from app.database import SessionFactory
 from app.events import service as events
 from app.events.payload import Channel, Origin
 from app.gmail.events import GmailPhase
-from app.main import PAYLOADS
+from app.payloads import PAYLOADS
 from app.text.events import AgentMessage, UserMessage
 from app.users import service as users
 from tests.conftest import PHONE, FakeClock

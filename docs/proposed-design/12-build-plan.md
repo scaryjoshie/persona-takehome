@@ -38,7 +38,7 @@ frontend/               Vite + React phone UI (owned by the frontend agent)
 
 1. **Core with tests.** *Done 2026-09-25, restructured 2026-09-26 (44 tests): sections own their types and rendering; SQLite is the only data store; runtime holds live things only; actions own transactions.*
 2a. **Shared agent + text handler.** *Done 2026-09-26: markdown prompts, seven tools, bubble delivery, CLI; smoke-tested on the real model.* Deltas simulated in code, no keys. "Hangs up after giving name" is just a delta sequence, so these tests are the harness seed.
-2b. **Text-only onboarding end to end.** Phone UI, text handler, tools, slots, debug panel. Completes the whole flow by text, which is the fallback requirement on its own.
+2b. **Text-only onboarding end to end.** *Backend done 2026-09-26: session endpoint, browser WebSocket, web messenger, schema export, static serving; verified against the real model over a real socket. Remaining: point the frontend at it.* Phone UI, text handler, tools, slots, debug panel. Completes the whole flow by text, which is the fallback requirement on its own.
 3. **Voice.** One-day spike on GPT-Live first (connect, stream mic, see transcripts, `send()` a note, close). Then call screens, the audio relay socket, injection, hang-up handling. Fallback to Realtime if the spike fails.
 4. **Gmail.** OAuth, the connected event injected mid-call, the mock-inbox moment.
 5. **Polish.** Graduation path, prompt tuning, stress scripts, README and write-up, video.

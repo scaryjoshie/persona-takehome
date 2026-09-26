@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import TypeAdapter
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -63,3 +63,8 @@ async def list_events(
         )
         for r in rows
     ]
+
+
+async def delete_events(session: AsyncSession, phone: str) -> None:
+    """Debug reset: forget a user's whole log."""
+    await session.exec(delete(EventRow).where(col(EventRow.user_phone) == phone))  # pyright: ignore[reportArgumentType]

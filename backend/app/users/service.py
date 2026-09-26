@@ -53,3 +53,10 @@ async def _row(session: AsyncSession, phone: str) -> UserRow:
     if row is None:
         raise LookupError(f"no user {phone}")
     return row
+
+
+async def delete_user(session: AsyncSession, phone: str) -> None:
+    """Debug reset: remove the user row (their events must be deleted first)."""
+    row = await session.get(UserRow, phone)
+    if row is not None:
+        await session.delete(row)

@@ -9,6 +9,14 @@ The one page the frontend needs. Message shapes are in [09-protocol.md](09-proto
 - **Prod:** FastAPI serves `frontend/dist` as static files from the same origin.
 - Every backend HTTP route lives under `/api`. The WebSocket is at `/ws`.
 
+## Status (2026-09-26)
+
+Built and tested: `POST /api/session`, `WS /ws` (snapshot on connect, then `event`, `slots`, `call`, `typing`; accepts `message`, `typing`, `call`, `reset`), static serving of `frontend/dist`, and `uv run python -m app.web.schema` for the JSON Schema. Not yet built: `/ws/audio` and the voice session (slice 3), Google OAuth (slice 4), `partial` messages (come with voice). Until slice 3, a call that is accepted or started stays in `connecting`.
+
+Two details: the user id is the phone's **digits only** (a `+` in a query string decodes to a space, so the server strips everything but digits; send whatever the user typed). Decision events use verb `start` in addition to interrupt/absorb/defer (logged when nothing was in progress).
+
+Run: `cd backend && uv run uvicorn app.main:app --reload` (port 8000, which the Vite proxy expects).
+
 ## Endpoints
 
 | Method | Path | Body | Returns |

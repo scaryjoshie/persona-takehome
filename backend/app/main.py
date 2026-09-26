@@ -1,51 +1,37 @@
-"""Entry point: the one place that sees every section. Two jobs:
+"""Entry point. Two jobs:
 
-- PAYLOADS: every event kind in one union, so rows read back from SQLite become the
-  right class. Adding an event kind means adding it here.
-- build_app: wires the pieces for this process. The FastAPI app will live here too.
+- build_app: wires the pieces for this process (pipeline, live users, responders).
+- create_app / app: the FastAPI app. Run with `uv run uvicorn app.main:app --reload`.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from pathlib import Path
 
-from pydantic import Field, TypeAdapter
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
 
 from app.actions import Actions
 from app.agent.agent import agent
 from app.agent.call_notes import call_note
-from app.agent.events import Graduated, SlotChanged, ToolCall
-from app.calls.events import CallEvent
-from app.database import SessionFactory, utc_now
-from app.events.payload import Payload
-from app.gmail.events import GmailEvent
-from app.routing.types import Decision, Medium
+from app.agent.model import agent_model
+from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
+from app.payloads import PAYLOADS
+from app.routing.types import Medium
+from app.settings import get_settings
 from app.text.decider import text_decider
-from app.text.events import AgentMessage, Typing, UserMessage
 from app.text.messenger import Messenger
 from app.text.reply import Reply
 from app.text.responder import TextResponder
 from app.timers import AsyncioTimers, Clock, Timers
 from app.users.live import LiveUser, LiveUsers
 from app.voice.decider import voice_decider
-from app.voice.events import VoiceUtterance
 from app.voice.responder import VoiceResponder
-
-AnyPayload = Annotated[
-    UserMessage
-    | AgentMessage
-    | Typing
-    | VoiceUtterance
-    | ToolCall
-    | SlotChanged
-    | Graduated
-    | CallEvent
-    | GmailEvent
-    | Decision,
-    Field(discriminator="kind"),
-]
-PAYLOADS: TypeAdapter[Payload] = TypeAdapter(AnyPayload)  # pyright: ignore[reportArgumentType]
+from app.web.routes import make_router
+from app.web.sockets import Sockets, WebMessenger
 
 
 def build_app(
@@ -85,3 +71,38 @@ def build_app(
 
     actions = Actions(db, LiveUsers(new_live_user), payloads=PAYLOADS, clock=clock)
     return actions
+
+
+# ---- the web app: `uv run uvicorn app.main:app --reload` --------------------------
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    engine = make_engine(settings.database_url)
+    sockets = Sockets()
+    pipeline = build_app(
+        db=make_sessions(engine),
+        messenger=WebMessenger(sockets),
+        model=agent_model(settings),
+        app_base_url=settings.app_base_url,
+        openrouter_key=(
+            settings.openrouter_api_key.get_secret_value() if settings.openrouter_api_key else None
+        ),
+        jev_model=settings.jev_model,
+    )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        await create_schema(engine)
+        yield
+        await engine.dispose()
+
+    web = FastAPI(lifespan=lifespan)
+    web.include_router(make_router(pipeline, sockets))
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if dist.is_dir():
+        web.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
+    return web
+
+
+app = create_app()

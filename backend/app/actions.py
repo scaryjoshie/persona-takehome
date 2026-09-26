@@ -51,6 +51,12 @@ class Actions:
         async with self._db() as s:
             return await events.list_events(s, phone, payloads=self._payloads, limit=limit)
 
+    async def reset(self, phone: str) -> None:
+        """Debug: forget everything about a user. Live state (sockets, responders) is kept."""
+        async with self.live_users.get(phone).lock, self._db() as s, s.begin():
+            await events.delete_events(s, phone)
+            await users.delete_user(s, phone)
+
     # ---- writes ---------------------------------------------------------------
 
     async def submit(
