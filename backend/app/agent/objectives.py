@@ -31,7 +31,7 @@ from app.events.event import Event
 from app.gmail.events import GmailEvent
 from app.text.events import AgentMessage, ReplyStarted
 from app.users.user import Medium, User
-from app.voice.call_state import CallEvent, CallState, CallTransition
+from app.voice.call_state import CallEvent, CallTransition
 from app.voice.events import Speaker, VoiceUtterance
 
 PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
@@ -42,7 +42,6 @@ class Situation:
     """Everything an objective may look at."""
 
     slots: Slots
-    call: CallState
     medium: Medium
     first_reply: bool = False
     asks: int = 0  # agent turns since onboarding last moved forward
@@ -188,7 +187,6 @@ def guidance(
     """The open objective's guidance for this user, from their state and log."""
     s = Situation(
         slots=user.slots,
-        call=user.call,
         medium=medium,
         first_reply=first_reply,
         asks=asks_since_progress(events),
