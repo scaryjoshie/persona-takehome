@@ -34,6 +34,33 @@
         "title": "CallCommand",
         "type": "object"
       },
+      "React": {
+        "description": "A tapback on a bubble; `remove` takes it back.",
+        "properties": {
+          "type": {
+            "const": "react",
+            "default": "react",
+            "title": "Type",
+            "type": "string"
+          },
+          "target_seq": {
+            "title": "Target Seq",
+            "type": "integer"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string"
+          },
+          "remove": {
+            "default": false,
+            "title": "Remove",
+            "type": "boolean"
+          }
+        },
+        "required": ["type", "target_seq", "emoji", "remove"],
+        "title": "React",
+        "type": "object"
+      },
       "Reset": {
         "properties": {
           "type": {
@@ -47,6 +74,26 @@
         "title": "Reset",
         "type": "object"
       },
+      "SaveContact": {
+        "description": "The user tapped the agent's contact card to save it.",
+        "properties": {
+          "type": {
+            "const": "contact",
+            "default": "contact",
+            "title": "Type",
+            "type": "string"
+          },
+          "action": {
+            "const": "save",
+            "default": "save",
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": ["type", "action"],
+        "title": "SaveContact",
+        "type": "object"
+      },
       "SendMessage": {
         "properties": {
           "type": {
@@ -58,9 +105,21 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To"
           }
         },
-        "required": ["type", "text"],
+        "required": ["type", "text", "reply_to"],
         "title": "SendMessage",
         "type": "object"
       },
@@ -85,7 +144,9 @@
     "discriminator": {
       "mapping": {
         "call": "#/$defs/CallCommand",
+        "contact": "#/$defs/SaveContact",
         "message": "#/$defs/SendMessage",
+        "react": "#/$defs/React",
         "reset": "#/$defs/Reset",
         "typing": "#/$defs/SetTyping"
       },
@@ -100,6 +161,12 @@
       },
       {
         "$ref": "#/$defs/CallCommand"
+      },
+      {
+        "$ref": "#/$defs/React"
+      },
+      {
+        "$ref": "#/$defs/SaveContact"
       },
       {
         "$ref": "#/$defs/Reset"
@@ -126,9 +193,21 @@
             "default": false,
             "title": "From Call",
             "type": "boolean"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To"
           }
         },
-        "required": ["kind", "text", "from_call"],
+        "required": ["kind", "text", "from_call", "reply_to"],
         "title": "AgentMessage",
         "type": "object"
       },
@@ -287,6 +366,44 @@
         "title": "Channel",
         "type": "string"
       },
+      "ContactCard": {
+        "additionalProperties": false,
+        "description": "The agent's contact card (a .vcf), sent whenever its name is set or changed. The\nuser's phone only shows the new name once they tap to save it (ContactSaved).",
+        "properties": {
+          "kind": {
+            "const": "contact_card",
+            "default": "contact_card",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "name"],
+        "title": "ContactCard",
+        "type": "object"
+      },
+      "ContactSaved": {
+        "additionalProperties": false,
+        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.",
+        "properties": {
+          "kind": {
+            "const": "contact_saved",
+            "default": "contact_saved",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "name"],
+        "title": "ContactSaved",
+        "type": "object"
+      },
       "Decision": {
         "additionalProperties": false,
         "properties": {
@@ -417,6 +534,51 @@
         "enum": ["user", "text_agent", "voice_agent", "call", "google", "system"],
         "title": "Origin",
         "type": "string"
+      },
+      "Reaction": {
+        "additionalProperties": false,
+        "description": "A tapback (\u2764\ufe0f \ud83d\udc4d \ud83d\ude02 \u2026) on a bubble, by either side. The user's route: a \ud83d\udc4d on\n\"want me to call?\" is an answer. The agent's are recorded only.",
+        "properties": {
+          "kind": {
+            "const": "reaction",
+            "default": "reaction",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target_seq": {
+            "title": "Target Seq",
+            "type": "integer"
+          },
+          "target_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Text"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string"
+          },
+          "by": {
+            "enum": ["user", "agent"],
+            "title": "By",
+            "type": "string"
+          },
+          "removed": {
+            "default": false,
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "target_seq", "target_text", "emoji", "by", "removed"],
+        "title": "Reaction",
+        "type": "object"
       },
       "ReplyDue": {
         "additionalProperties": false,
@@ -553,9 +715,21 @@
             "default": false,
             "title": "Graduated",
             "type": "boolean"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Contact Name"
           }
         },
-        "required": ["agent_name", "user_name", "help_need", "gmail", "gmail_email", "graduated"],
+        "required": ["agent_name", "user_name", "help_need", "gmail", "gmail_email", "graduated", "contact_name"],
         "title": "Slots",
         "type": "object"
       },
@@ -727,10 +901,77 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To"
+          },
+          "reply_to_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To Text"
           }
         },
-        "required": ["kind", "text"],
+        "required": ["kind", "text", "reply_to", "reply_to_text"],
         "title": "UserMessage",
+        "type": "object"
+      },
+      "VoiceNote": {
+        "additionalProperties": false,
+        "description": "A voice message the user sent. Handled like a text: `transcript` is what they said.",
+        "properties": {
+          "kind": {
+            "const": "voice_note",
+            "default": "voice_note",
+            "title": "Kind",
+            "type": "string"
+          },
+          "audio_id": {
+            "title": "Audio Id",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Ms"
+          },
+          "transcript": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transcript"
+          }
+        },
+        "required": ["kind", "audio_id", "duration_ms", "transcript"],
+        "title": "VoiceNote",
         "type": "object"
       },
       "VoiceUtterance": {
@@ -794,15 +1035,19 @@
               "mapping": {
                 "agent_message": "#/$defs/AgentMessage",
                 "call": "#/$defs/CallEvent",
+                "contact_card": "#/$defs/ContactCard",
+                "contact_saved": "#/$defs/ContactSaved",
                 "decision": "#/$defs/Decision",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
+                "reaction": "#/$defs/Reaction",
                 "reply_due": "#/$defs/ReplyDue",
                 "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
                 "tool_call": "#/$defs/ToolCall",
                 "typing": "#/$defs/Typing",
                 "user_message": "#/$defs/UserMessage",
+                "voice_note": "#/$defs/VoiceNote",
                 "voice_utterance": "#/$defs/VoiceUtterance"
               },
               "propertyName": "kind"
@@ -822,6 +1067,18 @@
               },
               {
                 "$ref": "#/$defs/ReplyStarted"
+              },
+              {
+                "$ref": "#/$defs/VoiceNote"
+              },
+              {
+                "$ref": "#/$defs/Reaction"
+              },
+              {
+                "$ref": "#/$defs/ContactCard"
+              },
+              {
+                "$ref": "#/$defs/ContactSaved"
               },
               {
                 "$ref": "#/$defs/VoiceUtterance"
@@ -905,9 +1162,21 @@
             "default": false,
             "title": "From Call",
             "type": "boolean"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To"
           }
         },
-        "required": ["kind", "text", "from_call"],
+        "required": ["kind", "text", "from_call", "reply_to"],
         "title": "AgentMessage",
         "type": "object"
       },
@@ -967,6 +1236,44 @@
         "enum": ["ringing", "connecting", "connected", "declined", "failed", "ended"],
         "title": "CallTransition",
         "type": "string"
+      },
+      "ContactCard": {
+        "additionalProperties": false,
+        "description": "The agent's contact card (a .vcf), sent whenever its name is set or changed. The\nuser's phone only shows the new name once they tap to save it (ContactSaved).",
+        "properties": {
+          "kind": {
+            "const": "contact_card",
+            "default": "contact_card",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "name"],
+        "title": "ContactCard",
+        "type": "object"
+      },
+      "ContactSaved": {
+        "additionalProperties": false,
+        "description": "The user saved the agent's contact card. Sets what their phone calls the agent.",
+        "properties": {
+          "kind": {
+            "const": "contact_saved",
+            "default": "contact_saved",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": ["kind", "name"],
+        "title": "ContactSaved",
+        "type": "object"
       },
       "Decision": {
         "additionalProperties": false,
@@ -1071,6 +1378,51 @@
         "enum": ["agent", "user"],
         "title": "Initiator",
         "type": "string"
+      },
+      "Reaction": {
+        "additionalProperties": false,
+        "description": "A tapback (\u2764\ufe0f \ud83d\udc4d \ud83d\ude02 \u2026) on a bubble, by either side. The user's route: a \ud83d\udc4d on\n\"want me to call?\" is an answer. The agent's are recorded only.",
+        "properties": {
+          "kind": {
+            "const": "reaction",
+            "default": "reaction",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target_seq": {
+            "title": "Target Seq",
+            "type": "integer"
+          },
+          "target_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Text"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string"
+          },
+          "by": {
+            "enum": ["user", "agent"],
+            "title": "By",
+            "type": "string"
+          },
+          "removed": {
+            "default": false,
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "required": ["kind", "target_seq", "target_text", "emoji", "by", "removed"],
+        "title": "Reaction",
+        "type": "object"
       },
       "ReplyDue": {
         "additionalProperties": false,
@@ -1219,10 +1571,77 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To"
+          },
+          "reply_to_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reply To Text"
           }
         },
-        "required": ["kind", "text"],
+        "required": ["kind", "text", "reply_to", "reply_to_text"],
         "title": "UserMessage",
+        "type": "object"
+      },
+      "VoiceNote": {
+        "additionalProperties": false,
+        "description": "A voice message the user sent. Handled like a text: `transcript` is what they said.",
+        "properties": {
+          "kind": {
+            "const": "voice_note",
+            "default": "voice_note",
+            "title": "Kind",
+            "type": "string"
+          },
+          "audio_id": {
+            "title": "Audio Id",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Ms"
+          },
+          "transcript": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transcript"
+          }
+        },
+        "required": ["kind", "audio_id", "duration_ms", "transcript"],
+        "title": "VoiceNote",
         "type": "object"
       },
       "VoiceUtterance": {
@@ -1268,15 +1687,19 @@
       "mapping": {
         "agent_message": "#/$defs/AgentMessage",
         "call": "#/$defs/CallEvent",
+        "contact_card": "#/$defs/ContactCard",
+        "contact_saved": "#/$defs/ContactSaved",
         "decision": "#/$defs/Decision",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
+        "reaction": "#/$defs/Reaction",
         "reply_due": "#/$defs/ReplyDue",
         "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
         "tool_call": "#/$defs/ToolCall",
         "typing": "#/$defs/Typing",
         "user_message": "#/$defs/UserMessage",
+        "voice_note": "#/$defs/VoiceNote",
         "voice_utterance": "#/$defs/VoiceUtterance"
       },
       "propertyName": "kind"
@@ -1296,6 +1719,18 @@
       },
       {
         "$ref": "#/$defs/ReplyStarted"
+      },
+      {
+        "$ref": "#/$defs/VoiceNote"
+      },
+      {
+        "$ref": "#/$defs/Reaction"
+      },
+      {
+        "$ref": "#/$defs/ContactCard"
+      },
+      {
+        "$ref": "#/$defs/ContactSaved"
       },
       {
         "$ref": "#/$defs/VoiceUtterance"

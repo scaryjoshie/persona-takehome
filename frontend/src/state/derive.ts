@@ -1,20 +1,21 @@
 import type { ThreadMessage } from "../components/phone/MessagesScreen";
 import type { TranscriptLine } from "../components/orb/Transcript";
-import type { ContactCardPayload, ReactionPayload, TranscriptPartial, VoiceNotePayload, WireEvent } from "../types";
+import type { TranscriptPartial, WireEvent } from "../types";
 import type { Reaction } from "../components/phone/Tapback";
 
-/** The texts in both directions, as the phone shows them, with their tapbacks. */
+/** The texts in both directions, as the phone shows them, with their tapbacks and quoted replies. */
 export function threadMessages(events: WireEvent[]): ThreadMessage[] {
   const reactions = reactionsBySeq(events);
   const messages = messagesOf(events);
   const byId = new Map(messages.map((m) => [m.id, m]));
-  return messages.map(({ replyToId, ...m }) => {
+  return messages.map(({ replyToId, replyToText, ...m }) => {
     const original = replyToId ? byId.get(replyToId) : undefined;
-    return {
-      ...m,
-      ...(reactions.has(m.id) && { reactions: reactions.get(m.id) }),
-      ...(original && { replyTo: { id: original.id, side: original.side, text: original.text } }),
-    };
+    const replyTo = original
+      ? { id: original.id, side: original.side, text: original.text }
+      : replyToId && replyToText
+        ? { id: replyToId, side: "received" as const, text: replyToText }
+        : undefined;
+    return { ...m, ...(reactions.has(m.id) && { reactions: reactions.get(m.id) }), ...(replyTo && { replyTo }) };
   });
 }
 
@@ -22,7 +23,7 @@ export function threadMessages(events: WireEvent[]): ThreadMessage[] {
 function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
   const out = new Map<string, Reaction[]>();
   for (const e of events) {
-    const p = e.payload as WireEvent["payload"] | ReactionPayload;
+    const p = e.payload;
     if (p.kind !== "reaction") continue;
     const key = String(p.target_seq);
     const others = (out.get(key) ?? []).filter((r) => r.by !== p.by);
@@ -31,22 +32,32 @@ function reactionsBySeq(events: WireEvent[]): Map<string, Reaction[]> {
   return out;
 }
 
-/** Each thread message, with the id of the message it replies to (reply_to is not in the schema yet). */
-function messagesOf(events: WireEvent[]): Array<ThreadMessage & { replyToId?: string }> {
-  return events.flatMap((e): Array<ThreadMessage & { replyToId?: string }> => {
-    const p = e.payload as WireEvent["payload"] | VoiceNotePayload | ContactCardPayload;
-    if (p.kind === "voice_note") {
-      const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms, transcript: p.transcript };
-      return [{ id: String(e.seq), side: "sent", text: "", ts: e.ts, voice, audioId: p.audio_id }];
+type Unresolved = ThreadMessage & { replyToId?: string; replyToText?: string | null };
+
+/** Each thread message, with the id (and text) of the message it replies to, resolved afterwards. */
+function messagesOf(events: WireEvent[]): Unresolved[] {
+  return events.flatMap((e): Unresolved[] => {
+    const p = e.payload;
+    const base = { id: String(e.seq), ts: e.ts };
+    switch (p.kind) {
+      case "user_message":
+        return [{ ...base, side: "sent", text: p.text, replyToId: idOf(p.reply_to), replyToText: p.reply_to_text }];
+      case "agent_message":
+        return [{ ...base, side: "received", text: p.text, replyToId: idOf(p.reply_to) }];
+      case "voice_note": {
+        const voice = { src: voiceNoteUrl(p.audio_id), durationMs: p.duration_ms ?? 0, transcript: p.transcript };
+        return [{ ...base, side: "sent", text: "", voice, audioId: p.audio_id }];
+      }
+      case "contact_card":
+        return [{ ...base, side: "received", text: p.name, contact: { name: p.name } }];
+      default:
+        return [];
     }
-    if (p.kind === "contact_card")
-      return [{ id: String(e.seq), side: "received", text: p.name, ts: e.ts, contact: { name: p.name } }];
-    const reply = (p as { reply_to?: number | null }).reply_to;
-    const replyToId = reply == null ? undefined : String(reply);
-    if (p.kind === "user_message") return [{ id: String(e.seq), side: "sent", text: p.text, ts: e.ts, replyToId }];
-    if (p.kind === "agent_message") return [{ id: String(e.seq), side: "received", text: p.text, ts: e.ts, replyToId }];
-    return [];
   });
+}
+
+function idOf(seq: number | null): string | undefined {
+  return seq === null ? undefined : String(seq);
 }
 
 /**
@@ -118,7 +129,13 @@ export function voiceNoteUrl(audioId: string): string {
 
 /** The name on the agent's latest contact card, if the user has not saved that name yet. */
 export function contactOffer(events: WireEvent[], savedName: string | null): string | null {
-  const card = events.findLast((e) => (e.payload as { kind: string }).kind === "contact_card");
-  const name = card && (card.payload as unknown as ContactCardPayload).name;
+  const card = events.findLast((e) => e.payload.kind === "contact_card")?.payload;
+  const name = card?.kind === "contact_card" ? card.name : null;
   return name && name !== savedName ? name : null;
+}
+
+/** What the user saved the agent's contact as: the latest contact_saved event, else the slot. */
+export function savedContactName(events: WireEvent[], slot: string | null): string | null {
+  const saved = events.findLast((e) => e.payload.kind === "contact_saved")?.payload;
+  return saved?.kind === "contact_saved" ? saved.name : slot;
 }

@@ -1,4 +1,4 @@
-import type { ClientMessage, ContactMessage, ReactMessage, ReplyMessage, ServerMessage, Snapshot } from "../types";
+import type { ClientMessage, ServerMessage, Snapshot } from "../types";
 import { Emitter, type AudioLink, type ConnectionStatus, type Transport } from "./types";
 
 function wsUrl(path: string): string {
@@ -51,7 +51,7 @@ export class WsTransport implements Transport {
     };
   }
 
-  send(msg: ClientMessage | ReactMessage | ReplyMessage | ContactMessage): void {
+  send(msg: ClientMessage): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
     else console.warn("socket not open, dropped", msg);
   }
@@ -68,9 +68,10 @@ export class WsTransport implements Transport {
     return new WsAudioLink(wsUrl(`/ws/audio?phone=${encodeURIComponent(this.phone)}`));
   }
 
-  async uploadVoiceNote(audio: Blob): Promise<string> {
+  async uploadVoiceNote(audio: Blob, durationMs: number): Promise<string> {
     const form = new FormData();
     form.append("audio", audio, audio.type.includes("mp4") ? "voice.m4a" : "voice.webm");
+    form.append("duration_ms", String(Math.round(durationMs)));
     const res = await fetch(`/api/voice-note?phone=${encodeURIComponent(this.phone)}`, { method: "POST", body: form });
     if (!res.ok) throw new Error(`voice note upload failed: ${res.status}`);
     return ((await res.json()) as { audio_id: string }).audio_id;

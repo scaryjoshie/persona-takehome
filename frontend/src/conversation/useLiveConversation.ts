@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Snapshot } from "../types";
 import type { Transport } from "../transport/types";
 import { useSession } from "../state/session";
-import { contactOffer, receiptLabel, threadMessages, transcriptLines } from "../state/derive";
+import { contactOffer, receiptLabel, savedContactName, threadMessages, transcriptLines } from "../state/derive";
 import { useCallAudio } from "../audio/useCallAudio";
 import type { CallPhase } from "../components/phone/CallIsland";
 import type { Conversation } from "./types";
@@ -31,8 +31,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
   else if (call.phase === "connecting") callPhase = "calling";
   else if (call.phase === "connected") callPhase = "active";
 
-  // slots.contact_name is announced by the backend but not in the schema yet.
-  const contactName = (state.slots as { contact_name?: string | null }).contact_name ?? null;
+  const contactName = savedContactName(events, state.slots.contact_name);
 
   return {
     agentName: state.slots.agent_name,
@@ -56,7 +55,7 @@ export function useLiveConversation(transport: Transport, snapshot: Snapshot): C
       const target_seq = Number(messageId);
       if (!Number.isInteger(target_seq)) return; // not yet echoed back by the server
       const current = messages.find((m) => m.id === messageId)?.reactions?.find((r) => r.by === "user");
-      if (emoji) transport.send({ type: "react", target_seq, emoji });
+      if (emoji) transport.send({ type: "react", target_seq, emoji, remove: false });
       else if (current) transport.send({ type: "react", target_seq, emoji: current.emoji, remove: true });
     },
     setTyping: actions.setTyping,
@@ -79,7 +78,7 @@ function usePendingVoiceNotes(transport: Transport) {
     const voice = { src: URL.createObjectURL(blob), durationMs, transcript: null };
     setPending((all) => [...all, { id, side: "sent", text: "", ts: new Date().toISOString(), voice }]);
     try {
-      update(id, { audioId: await transport.uploadVoiceNote(blob) });
+      update(id, { audioId: await transport.uploadVoiceNote(blob, durationMs) });
     } catch {
       update(id, { voice: { ...voice, transcript: "Not delivered" } });
     }

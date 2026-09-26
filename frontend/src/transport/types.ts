@@ -1,4 +1,4 @@
-import type { ClientMessage, ContactMessage, ReactMessage, ReplyMessage, ServerMessage, Snapshot } from "../types";
+import type { ClientMessage, ServerMessage, Snapshot } from "../types";
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
@@ -16,12 +16,12 @@ export interface AudioLink {
 export interface Transport {
   /** Creates or resumes the user for `phone`, opens the socket, and returns the thread so far. */
   connect(phone: string): Promise<Snapshot>;
-  send(msg: ClientMessage | ReactMessage | ReplyMessage | ContactMessage): void;
+  send(msg: ClientMessage): void;
   onMessage(cb: (msg: ServerMessage) => void): () => void;
   onStatus(cb: (status: ConnectionStatus) => void): () => void;
   openAudio(): AudioLink;
   /** Uploads a recorded audio message; resolves with its id. Transcription follows as an event. */
-  uploadVoiceNote(audio: Blob): Promise<string>;
+  uploadVoiceNote(audio: Blob, durationMs: number): Promise<string>;
   close(): void;
 }
 

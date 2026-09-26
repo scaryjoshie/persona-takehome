@@ -86,10 +86,7 @@ export function useSession(transport: Transport, snapshot: Snapshot) {
 
   const actions = useMemo<SessionActions>(
     () => ({
-      sendMessage: (text, replyTo) =>
-        transport.send(
-          replyTo === undefined ? { type: "message", text } : { type: "message", text, reply_to: replyTo },
-        ),
+      sendMessage: (text, replyTo) => transport.send({ type: "message", text, reply_to: replyTo ?? null }),
       setTyping: (active) => transport.send({ type: "typing", active }),
       call: (action, reason) => transport.send({ type: "call", action, reason: reason ?? null }),
     }),

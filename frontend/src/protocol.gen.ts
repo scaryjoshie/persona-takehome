@@ -1,6 +1,6 @@
 // Generated from src/schema.json by scripts/gen-types.mjs. Do not edit.
 
-export type ClientMessage = SendMessage | SetTyping | CallCommand | Reset;
+export type ClientMessage = SendMessage | SetTyping | CallCommand | React | SaveContact | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
 export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
@@ -20,6 +20,10 @@ export type Payload =
   | Typing
   | ReplyDue
   | ReplyStarted
+  | VoiceNote
+  | Reaction
+  | ContactCard
+  | ContactSaved
   | VoiceUtterance
   | ToolCall
   | SlotChanged
@@ -31,6 +35,7 @@ export type Payload =
 export interface SendMessage {
   type: "message";
   text: string;
+  reply_to: number | null;
 }
 export interface SetTyping {
   type: "typing";
@@ -40,6 +45,22 @@ export interface CallCommand {
   type: "call";
   action: CallAction;
   reason: string | null;
+}
+/**
+ * A tapback on a bubble; `remove` takes it back.
+ */
+export interface React {
+  type: "react";
+  target_seq: number;
+  emoji: string;
+  remove: boolean;
+}
+/**
+ * The user tapped the agent's contact card to save it.
+ */
+export interface SaveContact {
+  type: "contact";
+  action: "save";
 }
 export interface Reset {
   type: "reset";
@@ -65,6 +86,10 @@ export interface WireEvent {
     | Typing
     | ReplyDue
     | ReplyStarted
+    | VoiceNote
+    | Reaction
+    | ContactCard
+    | ContactSaved
     | VoiceUtterance
     | ToolCall
     | SlotChanged
@@ -76,6 +101,8 @@ export interface WireEvent {
 export interface UserMessage {
   kind: "user_message";
   text: string;
+  reply_to: number | null;
+  reply_to_text: string | null;
 }
 /**
  * A bubble that was sent. Recorded, never routed.
@@ -84,6 +111,7 @@ export interface AgentMessage {
   kind: "agent_message";
   text: string;
   from_call: boolean;
+  reply_to: number | null;
 }
 /**
  * Coalesced client-side. Routed, never stored.
@@ -106,6 +134,42 @@ export interface ReplyDue {
 export interface ReplyStarted {
   kind: "reply_started";
   through_seq: number;
+}
+/**
+ * A voice message the user sent. Handled like a text: `transcript` is what they said.
+ */
+export interface VoiceNote {
+  kind: "voice_note";
+  audio_id: string;
+  duration_ms: number | null;
+  transcript: string | null;
+}
+/**
+ * A tapback (❤️ 👍 😂 …) on a bubble, by either side. The user's route: a 👍 on
+ * "want me to call?" is an answer. The agent's are recorded only.
+ */
+export interface Reaction {
+  kind: "reaction";
+  target_seq: number;
+  target_text: string | null;
+  emoji: string;
+  by: "user" | "agent";
+  removed: boolean;
+}
+/**
+ * The agent's contact card (a .vcf), sent whenever its name is set or changed. The
+ * user's phone only shows the new name once they tap to save it (ContactSaved).
+ */
+export interface ContactCard {
+  kind: "contact_card";
+  name: string;
+}
+/**
+ * The user saved the agent's contact card. Sets what their phone calls the agent.
+ */
+export interface ContactSaved {
+  kind: "contact_saved";
+  name: string;
 }
 /**
  * One turn of speech. Recorded, never routed. On GPT-Live the boundary is inferred.
@@ -167,6 +231,7 @@ export interface Slots {
   gmail: GmailPhase | null;
   gmail_email: string | null;
   graduated: boolean;
+  contact_name: string | null;
 }
 export interface CallState {
   phase: CallPhase;
