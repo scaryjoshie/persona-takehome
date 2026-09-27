@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
+from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import TzSource
 from app.events.payload import Payload, Role, Turn
 
@@ -130,3 +131,21 @@ class CallOptOut(Payload):
 
     def turn(self, at: datetime) -> Turn | None:
         return Turn(Role.NOTE, "they'd rather not do a call")
+
+
+class ObjectiveMoved(Payload):
+    """Onboarding moved on to its next objective: the one it was on got done or set aside.
+    Recorded by the pipeline when a fact moves it; a call says it out loud."""
+
+    kind: Literal["objective_moved"] = "objective_moved"
+    routes = False
+
+    left: str  # the objective it was on
+    now: str | None  # the one it's on now; None when onboarding is behind them
+    set_aside: bool = False  # they'd rather not do the one it left
+
+    def turn(self, at: datetime) -> Turn | None:
+        left = OBJECTIVE_TEXTS[self.left]["title"]
+        now = f"; now: {OBJECTIVE_TEXTS[self.now]['title']}" if self.now else ""
+        how = "set aside" if self.set_aside else "done"
+        return Turn(Role.NOTE, f"onboarding: {left} {how}{now}")

@@ -177,20 +177,18 @@ def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -
         case None:
             lines.append("Gmail isn't connected and you haven't sent the link.")
         case GmailPhase.LINK_SENT:
-            lines.append(
-                "You've texted the Gmail link; it isn't connected yet. Don't send it again."
-            )
+            lines.append("You've texted the Gmail link; it isn't connected yet.")
         case GmailPhase.CONNECTED:
             lines.append(
                 f"Their Google account is connected ({slots.gmail_email}): "
                 "your email and calendar tools work on their real Gmail and Calendar."
             )
         case GmailPhase.SKIPPED:
-            lines.append("They said no to Gmail. Don't bring it up again.")
+            lines.append("They said no to connecting Google.")
         case GmailPhase.FAILED:
-            lines.append("Connecting Gmail failed. Offer to try again once.")
+            lines.append("Connecting Gmail didn't go through.")
         case GmailPhase.DISCONNECTED:
-            lines.append("They disconnected Google. Don't bring it up unless they ask.")
+            lines.append("They disconnected Google.")
     if services:
         lines.append(f"Other services they connected: {'; '.join(services)}.")
     if slots.no_calls:

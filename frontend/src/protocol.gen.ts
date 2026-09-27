@@ -35,6 +35,7 @@ export type Payload =
   | VoiceUtterance
   | ToolCall
   | SlotChanged
+  | ObjectiveMoved
   | StepSetAside
   | Graduated
   | CallEvent
@@ -112,6 +113,7 @@ export interface WireEvent {
     | VoiceUtterance
     | ToolCall
     | SlotChanged
+    | ObjectiveMoved
     | StepSetAside
     | Graduated
     | CallEvent
@@ -248,6 +250,7 @@ export interface ToolCall {
   shown: string | null;
   app: string | null;
   ok: boolean;
+  job: string | null;
 }
 /**
  * The agent recorded a name or the help need. The pipeline fills in `old` and drops the
@@ -258,6 +261,16 @@ export interface SlotChanged {
   slot: "agent_name" | "user_name" | "help_need";
   new: string;
   old: string | null;
+}
+/**
+ * Onboarding moved on to its next objective: the one it was on got done or set aside.
+ * Recorded by the pipeline when a fact moves it; a call says it out loud.
+ */
+export interface ObjectiveMoved {
+  kind: "objective_moved";
+  left: string;
+  now: string | null;
+  set_aside: boolean;
 }
 /**
  * They'd rather not do a setup step (a name for you, theirs, what they need, Google). It

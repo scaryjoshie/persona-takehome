@@ -16,6 +16,8 @@ from pydantic_ai.exceptions import ModelHTTPError
 from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
 from app.agent.deps import AgentEnv
+from app.agent.prompts import OPENER
+from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.memory.summarize import summarize_if_due
 from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
@@ -27,6 +29,10 @@ log = logging.getLogger(__name__)
 Sleep = Callable[[float], Awaitable[None]]
 
 GAP = 0.4  # between bubbles
+JUST_HI = (
+    "Is this someone's first text only a greeting or a question about what this is, with nothing "
+    "else in it (no name, no request, no question about anything specific)?"
+)
 # When the model call fails, the user still gets an answer rather than silence.
 REFUSED = "that's not something i can help with"
 GLITCHED = "sorry, my brain glitched for a sec. can you say that again?"
@@ -53,10 +59,14 @@ class Replier:
         await env.messenger.set_typing(phone, True)  # the dots cover the thinking time
         started = time.monotonic()
         try:
-            result = await agent.run(
-                None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
-            )
-            output = result.output
+            scripted = await self._opener(events) if first else None
+            if scripted is not None:
+                output = scripted
+            else:
+                result = await agent.run(
+                    None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
+                )
+                output = result.output
         except ModelHTTPError as exc:  # the provider refused the request, or it failed
             log.warning("%s: reply failed: %s", phone, exc)
             refused = exc.status_code == 400
@@ -83,6 +93,18 @@ class Replier:
         finally:
             await self._env.messenger.set_typing(phone, False)
             pipeline.spawn(summarize_if_due(pipeline, env.model, phone))  # only when it's time
+
+    async def _opener(self, events: list[Event]) -> Bubbles | None:
+        """The first message, as written, when their first text is just hi or "what is this".
+        Anything more (a name, something they need) gets a reply written for it."""
+        if self._env.jev is None:
+            return None
+        said = " / ".join(e.payload.text for e in events if isinstance(e.payload, UserMessage))
+        just_hi = await self._env.jev.yes_probability(JUST_HI, {"first_texts": said})
+        if just_hi is None or just_hi < 0.5:
+            return None
+        line = OPENER["example"].removeprefix("- ")
+        return Bubbles(bubbles=[b.strip() for b in line.split(" / ")])
 
     async def _react(self, phone: str, through_seq: int, emoji: str) -> None:
         """Tapback on their latest message among those this reply answers."""

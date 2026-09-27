@@ -16,6 +16,7 @@ from app.agent.events import (
     ContactSaved,
     DeviceTimezone,
     Graduated,
+    ObjectiveMoved,
     SlotChanged,
     StepSetAside,
     TimezoneLearned,
@@ -54,6 +55,7 @@ AnyPayload = Annotated[
     | VoiceUtterance
     | ToolCall
     | SlotChanged
+    | ObjectiveMoved
     | StepSetAside
     | Graduated
     | CallEvent

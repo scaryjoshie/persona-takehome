@@ -31,6 +31,7 @@ from app.agent.events import (
     StepSetAside,
     TimezoneLearned,
 )
+from app.agent.objectives import ONBOARDING
 from app.agent.slots import TzSource
 from app.database import SessionFactory
 from app.events import service as events
@@ -51,6 +52,7 @@ from app.voice.call_state import CallEvent, CallPhase, CallTransition, next_stat
 
 log = logging.getLogger(__name__)
 
+ONBOARDING_FACTS = (SlotChanged, GmailEvent, StepSetAside, Graduated)  # what can move it
 RECENT = 40  # events a medium sees when handling one
 Subscriber = Callable[[Event], Awaitable[None] | None]
 
@@ -208,7 +210,10 @@ class Pipeline:
     async def record(
         self, phone: str, origin: Origin, channel: Channel, payload: Payload
     ) -> Event | None:
-        """Save and publish, without routing."""
+        """Save and publish, without routing. A fact that moves onboarding on to its next
+        objective is followed by the move (ObjectiveMoved)."""
+        moves = isinstance(payload, ONBOARDING_FACTS)
+        before = (await self.user(phone)).slots if moves else None
         event = await self._save(phone, origin, channel, payload)
         if event is not None and payload.persists:
             for kinds, fn in list(self._subscribers[phone]):
@@ -216,6 +221,10 @@ class Pipeline:
                     result = fn(event)
                     if asyncio.iscoroutine(result):
                         await result
+        if event is not None and before is not None:
+            moved = ONBOARDING.move(before, (await self.user(phone)).slots)
+            if moved is not None:
+                await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, moved)
         return event
 
     # ---- steps --------------------------------------------------------------------

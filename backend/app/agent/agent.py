@@ -66,11 +66,23 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     known = what_you_know(user.slots, user.call, await services(d))
     memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    stage = objectives.ONBOARDING.render(user.slots, d.medium, first_reply=d.first_reply)
+    onboarding = not user.slots.graduated
+    playbook = objectives.ONBOARDING.playbook(d.medium) if onboarding else ""
+    where = objectives.ONBOARDING.pointer(user.slots) if onboarding else ""
+    first = first_message() if d.first_reply else ""
     now = their_time(user.slots, d.pipeline.now())
     jobs = await job_lines(d)
-    parts = (f"# What you know\n\n{now}\n{known}", memory, jobs, stage, tail)
+    known_block = "\n".join(p for p in (f"# What you know\n\n{now}", known, where) if p)
+    parts = (playbook, known_block, memory, jobs, first, tail)
     return "\n\n".join(p for p in parts if p)
+
+
+def first_message() -> str:
+    """The opener, when it's written by the model (their first text said more than hi)."""
+    o = prompts.OPENER
+    line = o.get("example", "").removeprefix("- ")
+    use = f'When it fits, use this line, fitted naturally to what they said: "{line}"'
+    return f"## Right now: {o['title']}\n\n{o['']}\n\n{use}"
 
 
 async def job_lines(d: Deps) -> str:

@@ -95,4 +95,4 @@ def test_what_you_know_is_plain_sentences() -> None:
         Slots(agent_name="J", user_name="S", help_need="inbox", gmail=GmailPhase.SKIPPED),
         CallState(phase=CallPhase.CONNECTED),
     )
-    assert "They said no to Gmail." in done and "on a call with them right now" in done
+    assert "They said no to connecting Google." in done and "on a call with them right now" in done

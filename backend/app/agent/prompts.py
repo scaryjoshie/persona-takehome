@@ -36,8 +36,11 @@ VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
 JOBS = read_md("jobs")  # handing work to background tasks; once onboarding is done
 JOB = read_md("job")  # a background task itself
 
+# The first message, sent as written unless their first text says more than hi (text/reply.py).
+OPENER = parse(read_md("opener"))
+
 # One file per onboarding objective, split into sections (see app/agent/objectives.py).
 OBJECTIVE_TEXTS = {
     name: parse(read_md(f"objectives/{name}"))
-    for name in ("intro", "agent_name", "user_name", "google", "help_need", "wrap_up")
+    for name in ("agent_name", "user_name", "google", "help_need", "wrap_up")
 }

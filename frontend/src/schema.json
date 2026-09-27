@@ -914,6 +914,46 @@
         "title": "Medium",
         "type": "string"
       },
+      "ObjectiveMoved": {
+        "additionalProperties": false,
+        "description": "Onboarding moved on to its next objective: the one it was on got done or set aside.\nRecorded by the pipeline when a fact moves it; a call says it out loud.",
+        "properties": {
+          "kind": {
+            "const": "objective_moved",
+            "default": "objective_moved",
+            "title": "Kind",
+            "type": "string"
+          },
+          "left": {
+            "title": "Left",
+            "type": "string"
+          },
+          "now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          },
+          "set_aside": {
+            "default": false,
+            "title": "Set Aside",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "left",
+          "now",
+          "set_aside"
+        ],
+        "title": "ObjectiveMoved",
+        "type": "object"
+      },
       "Origin": {
         "enum": [
           "user",
@@ -1420,6 +1460,18 @@
             "default": true,
             "title": "Ok",
             "type": "boolean"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Job"
           }
         },
         "required": [
@@ -1429,7 +1481,8 @@
           "result",
           "shown",
           "app",
-          "ok"
+          "ok",
+          "job"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -1695,6 +1748,7 @@
                 "job_ended": "#/$defs/JobEnded",
                 "job_started": "#/$defs/JobStarted",
                 "job_told": "#/$defs/JobTold",
+                "objective_moved": "#/$defs/ObjectiveMoved",
                 "reaction": "#/$defs/Reaction",
                 "remembered": "#/$defs/Remembered",
                 "reply_due": "#/$defs/ReplyDue",
@@ -1755,6 +1809,9 @@
               },
               {
                 "$ref": "#/$defs/SlotChanged"
+              },
+              {
+                "$ref": "#/$defs/ObjectiveMoved"
               },
               {
                 "$ref": "#/$defs/StepSetAside"
@@ -2407,6 +2464,46 @@
         "title": "JobTold",
         "type": "object"
       },
+      "ObjectiveMoved": {
+        "additionalProperties": false,
+        "description": "Onboarding moved on to its next objective: the one it was on got done or set aside.\nRecorded by the pipeline when a fact moves it; a call says it out loud.",
+        "properties": {
+          "kind": {
+            "const": "objective_moved",
+            "default": "objective_moved",
+            "title": "Kind",
+            "type": "string"
+          },
+          "left": {
+            "title": "Left",
+            "type": "string"
+          },
+          "now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Now"
+          },
+          "set_aside": {
+            "default": false,
+            "title": "Set Aside",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "left",
+          "now",
+          "set_aside"
+        ],
+        "title": "ObjectiveMoved",
+        "type": "object"
+      },
       "Reaction": {
         "additionalProperties": false,
         "description": "A tapback (\u2764\ufe0f \ud83d\udc4d \ud83d\ude02 \u2026) on a bubble, by either side. The user's route: a \ud83d\udc4d on\n\"want me to call?\" is an answer. The agent's are recorded only.",
@@ -2715,6 +2812,18 @@
             "default": true,
             "title": "Ok",
             "type": "boolean"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Job"
           }
         },
         "required": [
@@ -2724,7 +2833,8 @@
           "result",
           "shown",
           "app",
-          "ok"
+          "ok",
+          "job"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -2917,6 +3027,7 @@
         "job_ended": "#/$defs/JobEnded",
         "job_started": "#/$defs/JobStarted",
         "job_told": "#/$defs/JobTold",
+        "objective_moved": "#/$defs/ObjectiveMoved",
         "reaction": "#/$defs/Reaction",
         "remembered": "#/$defs/Remembered",
         "reply_due": "#/$defs/ReplyDue",
@@ -2977,6 +3088,9 @@
       },
       {
         "$ref": "#/$defs/SlotChanged"
+      },
+      {
+        "$ref": "#/$defs/ObjectiveMoved"
       },
       {
         "$ref": "#/$defs/StepSetAside"
