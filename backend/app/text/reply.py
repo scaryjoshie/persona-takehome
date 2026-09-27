@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 
 from pydantic_ai.exceptions import ModelHTTPError
 
+from app.agent import objectives
 from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
 from app.agent.deps import AgentEnv
@@ -103,8 +104,9 @@ class Replier:
         just_hi = await self._env.jev.yes_probability(JUST_HI, {"first_texts": said})
         if just_hi is None or just_hi < 0.5:
             return None
-        line = OPENER["example"].removeprefix("- ")
-        return Bubbles(bubbles=[b.strip() for b in line.split(" / ")])
+        line = objectives.line(OPENER, Medium.TEXT)
+        assert line is not None
+        return Bubbles(bubbles=[b.strip() for b in line.split(" / ")])  # " / ": the next bubble
 
     async def _react(self, phone: str, through_seq: int, emoji: str) -> None:
         """Tapback on their latest message among those this reply answers."""

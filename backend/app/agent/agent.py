@@ -80,9 +80,7 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
 def first_message() -> str:
     """The opener, when it's written by the model (their first text said more than hi)."""
     o = prompts.OPENER
-    line = o.get("example", "").removeprefix("- ")
-    use = f'When it fits, use this line, fitted naturally to what they said: "{line}"'
-    return f"## Right now: {o['title']}\n\n{o['']}\n\n{use}"
+    return f"## Right now: {o['title']}\n\n{objectives.guide(o, Medium.TEXT)}"
 
 
 async def job_lines(d: Deps) -> str:

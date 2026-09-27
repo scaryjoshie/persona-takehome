@@ -184,6 +184,29 @@ def jev_says_finished(probability: float) -> Jev:
     return Jev(api_key="k", client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
 
 
+async def test_a_first_text_that_is_just_hi_gets_the_opener_as_written(
+    app: App, pipeline: Pipeline, timers: FakeTimers, messenger: CapturingMessenger
+) -> None:
+    from app.agent.prompts import OPENER
+
+    env = dataclasses.replace(app.env, jev=jev_says_finished(0.9))  # "yes, it's only a hi"
+    pipeline.responders[Medium.TEXT] = TextResponder(Replier(env, sleep=no_sleep))
+    await say(pipeline, "hey")
+    await fire(timers, pipeline)
+    assert len(messenger.sent) == 2 and messenger.sent[0].startswith("hey! 👋")
+    assert " / ".join(messenger.sent) == OPENER["example"].removeprefix("- ")
+
+
+async def test_a_first_text_that_says_more_gets_a_written_reply(
+    app: App, pipeline: Pipeline, timers: FakeTimers, messenger: CapturingMessenger
+) -> None:
+    env = dataclasses.replace(app.env, jev=jev_says_finished(0.1))  # "no, there's more in it"
+    pipeline.responders[Medium.TEXT] = TextResponder(Replier(env, sleep=no_sleep))
+    await say(pipeline, "hey, i'm Sam, can you sort out my inbox?")
+    await fire(timers, pipeline)
+    assert messenger.sent == ["hi"]  # the model's own (reply_hi)
+
+
 async def test_a_clearly_finished_text_is_answered_early(
     app: App, pipeline: Pipeline, timers: FakeTimers
 ) -> None:
