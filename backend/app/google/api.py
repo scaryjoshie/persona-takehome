@@ -263,7 +263,6 @@ async def move_event(
     response = await client.patch(
         url,
         headers=auth,
-        params={"sendUpdates": "all"},  # guests hear about it
         json={
             "start": {"dateTime": start.isoformat()},
             "end": {"dateTime": (start + length).isoformat()},
@@ -277,7 +276,6 @@ async def cancel_event(client: httpx.AsyncClient, token: str, event_id: str) -> 
     response = await client.delete(
         f"{CALENDAR}/{event_id}",
         headers={"Authorization": f"Bearer {token}"},
-        params={"sendUpdates": "all"},
     )
     response.raise_for_status()
 
