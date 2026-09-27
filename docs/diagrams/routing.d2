@@ -1,9 +1,9 @@
-# How an event is routed. Render: d2 routing.d2 routing.svg
+# Event routing. Render: d2 routing.d2 routing.svg
 # Styling follows cado's tools/depgraph/arch.d2: white leaves on tinted trays, slate edges.
 vars: {
   d2-config: { layout-engine: elk; theme-id: 0; pad: 40 }
 }
-direction: down
+direction: right
 
 classes: {
   leaf: { style: { fill: "#FFFFFF"; stroke: "#CBD5E1"; stroke-width: 1; border-radius: 6; font-color: "#475569" } }
@@ -12,42 +12,54 @@ classes: {
   jev: { style: { fill: "#F5F3FF"; stroke: "#8B5CF6"; stroke-width: 2; border-radius: 6; font-color: "#6D28D9"; italic: true } }
   store: { shape: cylinder; style: { fill: "#F1F5F9"; stroke: "#64748B"; stroke-width: 2; font-color: "#0F172A" } }
   domain: { style: { fill: "#FBFCFE"; stroke: "#64748B"; stroke-width: 2; border-radius: 16; font-color: "#0F172A"; bold: true; font-size: 20 } }
-  layer: { style: { fill: "#F1F5F9"; stroke: "#E2E8F0"; stroke-width: 1; border-radius: 10; font-color: "#64748B"; font-size: 14 } }
+  layer: { style: { fill: "#F1F5F9"; stroke: "#E2E8F0"; stroke-width: 1; border-radius: 10; font-color: "#64748B"; font-size: 16; bold: true } }
   wire: { style: { stroke: "#64748B"; stroke-width: 2 } }
+  passive: { style: { stroke: "#94A3B8"; stroke-width: 2; stroke-dash: 4 } }
 }
 
-events: "Every event" {
+external: "External" {
   class: layer
-  grid-columns: 5
-  texts: "A text\nfrom them" { class: leaf }
-  call: "A line said\non a call" { class: leaf }
-  tools: "Something the\nagent did" { class: leaf }
-  timers: "A timer\nfiring" { class: leaf }
-  google: "Google\nconnecting" { class: leaf }
+  event: "External Event" { class: leaf }
 }
 
-save: "Save it" { class: flow }
-log: "Event log" { class: store }
-route: "Who has the floor?" { class: flow }
+user: "User Side" {
+  class: layer
+  texts: "User texts" { class: leaf }
+  speaks: "User speaks" { class: leaf }
+}
 
-text: "No call: text" {
+backend: "Backend" {
   class: domain
-  check: "Jev: reply now,\nor wait?" { class: jev }
-  agent: "Text agent" { class: agent }
-  out: "Texts to them" { class: leaf }
-  check -> agent -> out: { class: wire }
+  delta: "Delta Created" { class: flow }
+  store: "Context Store" { class: store }
+  router: "Router" { class: flow }
+  jev_text: "Jev Text\nfiltration head" { class: jev }
+  jev_voice: "Jev Voice\nfiltration head" { class: jev }
+  text: "Text Handler" { class: agent }
+  voice: "Voice Handler" { class: agent }
+  agent_texts: "Agent Texts" { class: leaf }
+  note: "Dashed lines indicate passive store:\nthe event is saved, not routed to an agent" {
+    shape: text
+    style.font-color: "#64748B"
+    style.font-size: 14
+  }
+
+  delta -> store: { class: wire }
+  store -> router: { class: wire }
+  router -> jev_text: "text" { class: wire }
+  router -> jev_voice: "call" { class: wire }
+  jev_text -> text: { class: wire }
+  jev_voice -> voice: { class: wire }
+  text -> agent_texts: { class: wire }
+  agent_texts -> store: { class: passive }
 }
 
-voice: "On a call: voice" {
-  class: domain
-  verb: "Jev: interrupt,\nabsorb or defer?" { class: jev }
-  live: "GPT-Live" { class: agent }
-  out: "Speech" { class: leaf }
-  verb -> live -> out: { class: wire }
+openai: "OpenAI" {
+  class: layer
+  live: "GPT-Live Session" { class: agent }
 }
 
-events -> save: { class: wire }
-save -> log: { class: wire }
-save -> route: { class: wire }
-route -> text: { class: wire }
-route -> voice: { class: wire }
+external.event -> backend.delta: { class: wire }
+user.texts -> backend.delta: { class: wire }
+user.speaks <-> openai.live: "audio" { class: wire }
+backend.voice <-> openai.live: "We receive: transcripts\nWe send: instructions, notes" { class: wire }
