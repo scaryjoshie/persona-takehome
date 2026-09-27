@@ -159,8 +159,9 @@ async def only_call_agent(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDe
     return tool if ctx.deps.call_agent else None
 
 
-async def only_on_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    return tool if ctx.deps.medium is Medium.VOICE else None
+async def only_voice_backend(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    """The voice's own delegation, not the call agent."""
+    return tool if ctx.deps.medium is Medium.VOICE and not ctx.deps.call_agent else None
 
 
 def acting(inner: Prepare) -> Prepare:
@@ -370,7 +371,7 @@ async def send_text(ctx: RunContext[Deps], text: str) -> str:
 HANG_UP_AFTER = 3.0  # seconds, so the goodbye finishes playing before the line drops
 
 
-@agent.tool(prepare=only_on_call)
+@agent.tool(prepare=only_voice_backend)  # the call agent doesn't: Jev hears the goodbye
 async def end_call(ctx: RunContext[Deps]) -> str:
     """Hang up the call. Only after the voice has said goodbye."""
     d = ctx.deps

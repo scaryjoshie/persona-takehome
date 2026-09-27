@@ -412,3 +412,24 @@ def test_a_call_they_start_reads_as_theirs() -> None:
     assert turn is not None and turn.text.startswith("they called you")
     ours = ev(CallEvent(transition=CallTransition.CONNECTING))
     assert ours.payload.turn(ours.ts) is None  # "you started calling" came with the ringing
+
+
+@pytest.mark.parametrize(
+    ("choice", "p", "move"),
+    [
+        ("goodbye", 0.9, "goodbye"),
+        ("goodbye", 0.8, None),
+        ("doing", 0.7, "doing"),
+        ("neither", 0.9, None),
+    ],
+)
+async def test_a_sign_off_needs_jev_to_be_sure(choice: str, p: float, move: str | None) -> None:
+    from app.voice.intent import saying
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"answers": {"q": {"choice": choice, "probabilities": {choice: p}}}}
+        )
+
+    jev = Jev(api_key="k", client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+    assert await saying(jev, ["user: gotta go"], "alright, talk soon, bye!") == move

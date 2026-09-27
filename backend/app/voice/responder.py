@@ -162,6 +162,12 @@ class LiveCall:
         if text:
             await self.steer(text)
 
+    def hang_up_when_done(self, reason: str = "agent_hangup") -> None:
+        """Hang up once the voice's goodbye has played (call.py waits for it)."""
+        if not self.hang_up_asked.is_set():
+            self.hang_up_reason, self.hang_up_after = reason, self.agent_lines
+            self.hang_up_asked.set()
+
     def said(self, line: str) -> None:
         self.agent_lines += 1
         self.last_agent_line = line
@@ -275,9 +281,7 @@ class VoiceResponder:
         call = self.calls.get(phone)
         if call is None:
             return False
-        if not call.hang_up_asked.is_set():
-            call.hang_up_after = call.agent_lines
-            call.hang_up_asked.set()
+        call.hang_up_when_done()
         return True
 
     async def _verb(

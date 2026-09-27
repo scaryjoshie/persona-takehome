@@ -12,20 +12,37 @@ from app.jev import Jev
 
 SURE = 0.6  # Jev's probability needed to act on its answer
 
-COMMIT = (
-    "The assistant is mid-sentence on a phone call. Going by its words so far, is it saying "
-    "it's doing something for them right now or next (texting them a link or anything else, "
-    "drafting or sending an email, adding a calendar event)? Talking about something it could "
-    "do, asking whether to, or doing it later is not."
-)
+SIGN_OFF = 0.7  # measured on real goodbyes: 0.74-1.0; lines that weren't one never came close
+
+SAYING = "The assistant is mid-sentence on a phone call. Going by its words so far:"
+MOVES = {
+    "doing": (
+        "It's saying it's doing something for them right now or next: texting them a link or "
+        "anything else, drafting or sending an email, adding a calendar event, looking "
+        "something up."
+    ),
+    "goodbye": (
+        "It's signing off: saying goodbye to end the call now, because things are wrapped up "
+        "or they asked to go."
+    ),
+    "neither": (
+        "Anything else, including talking about something it could do, asking whether to, "
+        "doing it later, and a bye that doesn't end the call (\"i'll text you later\", "
+        '"talk soon" before carrying on).'
+    ),
+}
 
 
-async def commits(jev: Jev | None, conversation: list[str], saying: str) -> bool:
-    """The voice, still talking, has just said it's on something."""
+async def saying(jev: Jev | None, conversation: list[str], words: str) -> str | None:
+    """What the voice, still talking, has just done: "doing" (it's on something) or
+    "goodbye" (it's ending the call); None for anything else, or when Jev isn't sure."""
     if jev is None:
-        return False
-    p = await jev.yes_probability(COMMIT, {"conversation": conversation, "saying_now": saying})
-    return p is not None and p >= SURE
+        return None
+    answer = await jev.choice(SAYING, MOVES, {"conversation": conversation, "saying_now": words})
+    if answer is None or answer.choice == "neither":
+        return None
+    bar = SIGN_OFF if answer.choice == "goodbye" else SURE
+    return answer.choice if answer.probabilities.get(answer.choice, 0.0) >= bar else None
 
 
 ACCEPT = (

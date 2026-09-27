@@ -162,7 +162,8 @@ async def test_on_a_call_only_the_call_agent_records_and_sends(
     office = await tools_for(
         pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE, call_agent=True)
     )
-    assert {"set_user_name", "send_gmail_link", "send_text", "end_call"} <= office
+    assert {"set_user_name", "send_gmail_link", "send_text"} <= office
+    assert "end_call" not in office  # Jev hears the goodbye; the voice's backend can still
     assert "start_call" not in office
 
 

@@ -60,7 +60,7 @@ from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
-from app.voice.intent import accepts, commits, slip
+from app.voice.intent import accepts, saying, slip
 from app.voice.responder import LiveCall, VoiceResponder
 from app.web.protocol import TranscriptPartial
 
@@ -275,7 +275,7 @@ class Transcript:
 
     async def caption(self, speaker: Speaker, turn_id: str, text: str) -> None:
         self._open[speaker] = (turn_id, text)
-        if speaker is Speaker.AGENT and turn_id not in self._committed and _sentence_end(text):
+        if speaker is Speaker.AGENT and _sentence_end(text):
             asyncio.create_task(self._check_commit(turn_id, text))  # noqa: RUF006
         await self._show(speaker, turn_id, text, final=False)
 
@@ -293,9 +293,10 @@ class Transcript:
             await self._call.user_started()  # their speech counts even if no caption came
         self._call_agent.heard(voice=speaker is Speaker.AGENT)
 
-    async def _check_commit(self, turn_id: str, saying: str) -> None:
-        """At each sentence the voice finishes, ask Jev whether it just said it's on something;
-        if so, the call agent acts now rather than when the whole turn ends."""
+    async def _check_commit(self, turn_id: str, words: str) -> None:
+        """At each sentence the voice finishes, ask Jev what it just did. On something: the
+        call agent acts now rather than when the whole turn ends. Signing off: the call hangs
+        up once the goodbye has played."""
         if turn_id in self._checking:
             return
         self._checking.add(turn_id)
@@ -303,9 +304,12 @@ class Transcript:
             user = await self._pipeline.user(self._phone)
             events = await self._pipeline.history(self._phone, limit=RECENT)
             recent = last_lines(events, user.slots.zone())
-            if turn_id not in self._committed and await commits(self._jev, recent, saying):
+            move = await saying(self._jev, recent, words)
+            if move == "doing" and turn_id not in self._committed:
                 self._committed.add(turn_id)
-                self._call_agent.heard(voice=True, saying=saying)
+                self._call_agent.heard(voice=True, saying=words)
+            elif move == "goodbye":
+                self._call.hang_up_when_done()
         finally:
             self._checking.discard(turn_id)
 
