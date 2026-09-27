@@ -2,6 +2,14 @@
 
 > **Take with a grain of salt.** This folder captures a design discussion from 2026-09-25. Nothing here is final. Several choices may turn out to be wrong or not optimal once code exists and the flow has been stress-tested. Treat every file as a proposal to be argued with, not a spec.
 
+## Where the build ended up (2026-09-26)
+
+The code is the current truth; the README's "How it works" and `docs/diagrams/` describe it. Where the build departed from these notes:
+- **Voice** is GPT-Live (07b), not the Realtime API (07). A gpt-realtime one-brain spike was built and compared; GPT-Live was kept for how natural it sounds (the spike stays on the `realtime` branch).
+- **Actions on calls** come from a Call Agent (our text model with tools) on two keys: the user's ask or yes, then the voice saying it's on it. GPT-Live's own delegation (15) is not relied on.
+- **Steering the voice** uses Live's `instructions.append` for the state brief, only between turns.
+- **Gmail** uses real accounts (OAuth, encrypted refresh tokens), with Calendar; the mock inbox (10) was dropped.
+
 ## What this is
 
 Design notes for the Persona take-home: a web simulation of Persona's onboarding that collects an agent name (text, before the call), then the user's name, a connected Gmail, and something they need help with (attempted over a voice call, with text as the fallback). The onboarding must survive users who break the rules, must not feel like a form, and should let users who already know what they want graduate early.

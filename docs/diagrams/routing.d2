@@ -63,3 +63,36 @@ external.event -> backend.delta: { class: wire }
 user.texts -> backend.delta: { class: wire }
 user.speaks <-> openai.live: "audio" { class: wire }
 backend.voice <-> openai.live: "We receive: transcripts\nWe send: instructions, notes" { class: wire }
+
+why: |md
+  ### Why events
+
+  **Everything is event-driven and immediately persisted.** \
+  Events are the unit by which actions are handled. Context is \
+  mostly read in a stateless manner.
+
+  - **Probably scalable:** this should scale well on serverless, \
+    since any instance can handle an event: actions are a function \
+    of context + the most recent event + active processes (held \
+    statefully now, would move to Redis).
+  - **Easy routing:** events live in one stream, so routing to the \
+    text or call handler is simple control flow.
+  - **Efficient passing of event deltas:** filtering and \
+    categorizing events with Jev is an extremely cheap way to \
+    decide whether the expensive work of writing texts should be \
+    interrupted and restarted, or whether to prompt it after or \
+    just add to context.
+  - **Very extendable:** more than user texts and calls can come \
+    in. Calendar notifications, updates from background agents, or \
+    things the agent is monitoring can stream through the same \
+    pipeline; Gmail sign-ups already do.
+
+  At scale some tiered system may be needed, where events to the \
+  main stream are heavily summarized, but this design is \
+  reasonable for onboarding.
+
+  GPT-Live audio does not route through event deltas; its \
+  transcripts and actions do.
+| {
+  near: center-right
+}
