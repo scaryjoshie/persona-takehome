@@ -1,4 +1,4 @@
-# A call: GPT-Live talks, the Back Office acts. Render: d2 call-architecture.d2 call-architecture.svg
+# A call: the GPT-Live Session talks, the Call Agent acts. Render: d2 call-architecture.d2 call-architecture.svg
 # Styling follows cado's tools/depgraph/arch.d2: white leaves on tinted trays, slate edges.
 vars: {
   d2-config: { layout-engine: elk; theme-id: 0; pad: 40 }
@@ -20,7 +20,6 @@ classes: {
 user: "User Side" {
   class: layer
   speaks: "User speaks" { class: leaf }
-  texts: "User texts" { class: leaf }
 }
 
 openai: "OpenAI" {
@@ -30,31 +29,33 @@ openai: "OpenAI" {
 
 backend: "Backend" {
   class: domain
-  transcript: "Transcript\n(spoken order)" { class: flow }
-  commit: "Jev Commit\nhead" { class: jev }
-  office: "Back Office\n(two keys)" { class: agent }
+  transcript: "Call Transcript\n(in spoken order)" { class: flow }
+  commit: "Jev Commitment\nhead" { class: jev }
+  office: "Call Agent\n(text model + tools)" { class: agent }
   store: "Context Store" { class: store }
-  brief: "Brief" { class: flow }
-  timers: "Timers" { class: leaf }
+  brief: "Call Brief\n(what's known,\nnext step)" { class: flow }
+  timers: "Silence and\ntime-limit timers" { class: leaf }
+  note: "The Call Agent acts only when the user asked or agreed\nand the voice then said it's on it (\"texting you the link\").\nThe Jev Commitment head catches that moment mid-sentence.\nPurple lines are what we add to the live session: instructions\n(the brief), context (facts), commentary (say this now)." {
+    shape: text
+    style.font-color: "#64748B"
+    style.font-size: 14
+  }
 
-  transcript -> office: "turns" { class: wire }
-  transcript -> commit: { class: wire }
-  commit -> office: "act now" { class: wire }
+  transcript -> office: "user turns" { class: wire }
+  transcript -> commit: "voice turns" { class: wire }
+  commit -> office: "voice committed" { class: wire }
   office -> store: { class: wire }
   store -> brief: { class: wire }
 }
 
 out: "External" {
   class: layer
-  agent_texts: "Agent Texts" { class: leaf }
-  google: "Gmail + Calendar" { class: leaf }
+  sent: "Texts, links, Gmail\ndrafts and email,\ncalendar events" { class: leaf }
 }
 
 user.speaks <-> openai.live: "audio" { class: wire }
-user.texts -> backend.store: { class: wire }
 openai.live -> backend.transcript: "We receive: transcripts" { class: wire }
-backend.office -> out.agent_texts: { class: wire }
-backend.office -> out.google: { class: wire }
+backend.office -> out.sent: { class: wire }
 
 # written live <- source so the session stays between the user and the backend
 openai.live <- backend.brief: "instructions" { class: into }
