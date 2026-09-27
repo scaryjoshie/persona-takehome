@@ -348,8 +348,10 @@ def _app_tools(
         """Set up an app they sign in to, with the catalog actions you'll use (slugs from
         app_actions, including a read to check it with), and only for what the catalog lacks,
         `endpoints` of the app's own API (paths under it, like "/users/me"). Texts them the
-        sign-in link and waits until they're back. Call it again to change the actions; they
-        aren't asked to sign in again while they're signed in."""
+        sign-in link and waits until they're back. If it returns what they said instead (they
+        missed the link, or say they're done), call it again: it carries on if they're signed
+        in, and otherwise points them to the link they have or texts a fresh one once that's
+        expired. Call it again to change the actions too."""
         phone, app = ctx.deps.phone, app.lower()
         try:
             toolkit = await composio.toolkit(app)
@@ -397,6 +399,15 @@ def _app_tools(
                 return f"saved as {saved.id}; they're already signed in"
             if integrations.text is None or ctx.tool_call_id is None:
                 return f"saved as {saved.id}, but they can't be texted a link from here"
+            if integrations.rewait(saved.id, ctx.deps.job, ctx.tool_call_id):
+                raise CallDeferred(
+                    metadata={
+                        "kind": "connect",
+                        "question": f"The {toolkit.name} sign-in link they were texted a few "
+                        "minutes ago still works. Point them to it; it carries on once they've "
+                        "signed in.",
+                    }
+                )
             sign_in = SignIn(phone, saved.id, toolkit.name, ctx.deps.job, ctx.tool_call_id)
             link = await composio.link(
                 part.auth_config_id, part.user_id, integrations.callback_for(sign_in)

@@ -218,13 +218,10 @@ async def test_a_job_connects_slack_through_the_sign_in_link_then_sends_only_aft
     job = await jobs.start(PHONE, "connect their Slack")
     await settle(built.pipeline)
 
-    # The link came by text from code; the job waits for the sign-in, not for their words.
+    # The link came by text from code; the job waits for the sign-in.
     assert LINK in messenger.sent
     assert "sign in to Slack" in (await asked(built.pipeline))[-1]
     assert "sign-in link" in runner.lines(await jobs.open(PHONE))[0]
-    await jobs.tell(PHONE, job, "done!")
-    await settle(built.pipeline)
-    assert await ended(built.pipeline) == []
     # Composio runs only the chosen actions with this sign-in.
     assert api.calls("PATCH", "/auth_configs/ac_1") == [
         {"type": "default", "tool_access_config": {"tools_available_for_execution": chosen}}
@@ -288,6 +285,46 @@ async def test_a_job_connects_slack_through_the_sign_in_link_then_sends_only_aft
         ("SLACK_FIND_CHANNELS", "slack", job),
         ("SLACK_SEND_MESSAGE", "slack", job2),
     ]
+
+
+async def test_a_missed_sign_in_link_points_back_to_it_then_sends_a_fresh_one_once_expired(
+    db: SessionFactory, clock: FakeClock, timers: FakeTimers
+) -> None:
+    api = FakeComposio()
+    messenger = CapturingMessenger()
+
+    async def setup(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        result = returns(messages, "connect_app")
+        if not result or not result[-1].startswith("they signed in"):
+            return call("connect_app", app="slack", actions=["SLACK_FIND_CHANNELS"])
+        return done(result[-1])
+
+    built = built_with(db, clock, timers, api, FunctionModel(setup), messenger=messenger)
+    jobs, store = built.env.jobs, built.env.integrations
+    assert jobs is not None and store is not None
+    job = await jobs.start(PHONE, "connect their Slack")
+    await settle(built.pipeline)
+
+    # A few minutes on, the link still works: their words resume the job, and it points them
+    # back to that link rather than texting another.
+    clock.advance(120)
+    await jobs.tell(PHONE, job, "i missed the link")
+    await settle(built.pipeline)
+    assert len(api.calls("POST", "/connected_accounts/link")) == 1
+    assert messenger.sent.count(LINK) == 1
+    assert "still works" in (await asked(built.pipeline))[-1]
+
+    # Once it's expired, a fresh one; its callback carries the job on.
+    clock.advance(600)
+    await jobs.tell(PHONE, job, "it says expired")
+    await settle(built.pipeline)
+    links = api.calls("POST", "/connected_accounts/link")
+    assert len(links) == 2 and messenger.sent.count(LINK) == 2
+    api.status = "ACTIVE"
+    assert await store.signed_in(links[-1]["callback_url"].rsplit("/", 1)[1]) is not None
+    await settle(built.pipeline)
+    [finished] = await ended(built.pipeline)
+    assert finished.text.startswith("they signed in to Slack")
 
 
 async def test_a_sign_in_that_didn_t_go_through_tells_the_job(

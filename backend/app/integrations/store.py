@@ -11,7 +11,8 @@ import json
 import secrets as token_source
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 
 from cryptography.fernet import Fernet
 from sqlmodel import col, select
@@ -27,6 +28,7 @@ from app.timers import Clock
 Texter = Callable[[str, str], Awaitable[None]]
 # (job, question id, result): a secret they saved resumes the job that asked for it.
 Resolver = Callable[[str, str, str], Awaitable[bool]]
+LINK_LIFE = timedelta(minutes=9)  # a Composio sign-in link works for about 10
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ class SignIn:
     app: str
     job: str
     question: str
+    at: datetime | None = None  # when the link was made
 
 
 class Integrations:
@@ -195,8 +198,18 @@ class Integrations:
 
     def callback_for(self, sign_in: SignIn) -> str:
         token = token_source.token_urlsafe(24)
-        self._sign_ins[token] = sign_in
+        self._sign_ins[token] = replace(sign_in, at=self._clock())
         return f"{self._base_url}/api/signed-in/{token}"
+
+    def rewait(self, integration: str, job: str, question: str) -> bool:
+        """The link they got in the last few minutes still works: its callback resumes this
+        wait instead, so they aren't texted another."""
+        now = self._clock()
+        for token, sign_in in self._sign_ins.items():
+            if sign_in.integration == integration and sign_in.at and now - sign_in.at < LINK_LIFE:
+                self._sign_ins[token] = replace(sign_in, job=job, question=question)
+                return True
+        return False
 
     async def signed_in(self, token: str) -> tuple[SignIn, bool] | None:
         """Composio sent them back. It counts only if Composio itself says the account is

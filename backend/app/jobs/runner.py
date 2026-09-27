@@ -57,7 +57,7 @@ ONE_AT_A_TIME = "one question at a time: ask this again after they answer the fi
 CITATION = re.compile("[^]*")
 OPEN = ("running", "waiting")
 ONE_THING = "Ask them one thing at a time; ask this again after they've answered."
-# Waits on a link it texted (the secure form, an app's sign-in page), not on their words.
+# Waits on a link it texted (the secure form, an app's sign-in page).
 LINKS = {"secret": "secure link", "connect": "sign-in link"}
 
 
@@ -175,7 +175,9 @@ class Jobs:
                 "they said with approve set"
             )
         await self._submit(phone, JobTold(job=job, text=text))
-        if pending is not None and pending.kind not in LINKS:
+        # Only the form answers a secure link (saying they pasted it proves nothing); a sign-in
+        # can be checked, so their words resume it ("i missed it", "done").
+        if pending is not None and pending.kind != "secret":
             reply = pending.reply(text, approve)
             # Saved with the move, so a restart before the next run saves its messages resumes
             # with the reply rather than with a question nobody answered.
@@ -185,7 +187,7 @@ class Jobs:
                 self._launch(job, phone, reply=reply)
                 return f"passed on to background task {job}"
         if not self._slip_in(job, text):
-            # Between runs, waiting on a link, or the run just ended: the next run
+            # Between runs, waiting on the secure form, or the run just ended: the next run
             # picks it up, or the ending one runs once more.
             self._inbox.setdefault(job, []).append(text)
         return f"passed on to background task {job}"
