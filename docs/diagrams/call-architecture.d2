@@ -3,7 +3,7 @@
 vars: {
   d2-config: { layout-engine: elk; theme-id: 0; pad: 40 }
 }
-direction: right
+direction: down
 
 classes: {
   leaf: { style: { fill: "#FFFFFF"; stroke: "#CBD5E1"; stroke-width: 1; border-radius: 6; font-color: "#475569" } }
@@ -57,7 +57,7 @@ user.speaks <-> openai.live: "audio" { class: wire }
 openai.live -> backend.transcript: "We receive: transcripts" { class: wire }
 backend.office -> out.sent: { class: wire }
 
-# written live <- source so the session stays between the user and the backend
+# written live <- source so the session stays above the backend
 openai.live <- backend.brief: "instructions" { class: into }
 openai.live <- backend.office: "context" { class: into }
 openai.live <- backend.timers: "commentary" { class: into }
