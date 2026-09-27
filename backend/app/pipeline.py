@@ -27,6 +27,7 @@ from app.agent.events import (
     CallOptOut,
     ContactSaved,
     Graduated,
+    ObjectiveMoved,
     SlotChanged,
     StepSetAside,
     TimezoneLearned,
@@ -52,7 +53,6 @@ from app.voice.call_state import CallEvent, CallPhase, CallTransition, next_stat
 
 log = logging.getLogger(__name__)
 
-ONBOARDING_FACTS = (SlotChanged, GmailEvent, StepSetAside, Graduated)  # what can move it
 RECENT = 40  # events a medium sees when handling one
 Subscriber = Callable[[Event], Awaitable[None] | None]
 
@@ -211,37 +211,37 @@ class Pipeline:
         self, phone: str, origin: Origin, channel: Channel, payload: Payload
     ) -> Event | None:
         """Save and publish, without routing. A fact that moves onboarding on to its next
-        objective is followed by the move (ObjectiveMoved)."""
-        moves = isinstance(payload, ONBOARDING_FACTS)
-        before = (await self.user(phone)).slots if moves else None
-        event = await self._save(phone, origin, channel, payload)
+        objective is followed by the move (ObjectiveMoved), which moves nothing itself."""
+        event, moved = await self._save(phone, origin, channel, payload)
         if event is not None and payload.persists:
             for kinds, fn in list(self._subscribers[phone]):
                 if kinds is None or event.kind in kinds:
                     result = fn(event)
                     if asyncio.iscoroutine(result):
                         await result
-        if event is not None and before is not None:
-            moved = ONBOARDING.move(before, (await self.user(phone)).slots)
-            if moved is not None:
-                await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, moved)
+        if moved is not None:
+            await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, moved)
         return event
 
     # ---- steps --------------------------------------------------------------------
 
     async def _save(
         self, phone: str, origin: Origin, channel: Channel, payload: Payload
-    ) -> Event | None:
+    ) -> tuple[Event | None, ObjectiveMoved | None]:
+        """Apply and save the event, and say whether it moved onboarding on (read in the same
+        transaction, so no other event can slip in between)."""
         now = self._clock()
         async with self._db() as s, s.begin():
             user = await users.ensure_user(s, phone, now=now)
             applied = await _apply(s, user, payload, now)
             if applied is None:
                 log.info("%s: dropped %s (no change or invalid)", phone, payload.kind_name)
-                return None
+                return None, None
+            after = await users.ensure_user(s, phone, now=now)  # the same row, as it is now
+            moved = ONBOARDING.move(user.slots, after.slots)
             if not applied.persists:
-                return Event(seq=0, ts=now, origin=origin, channel=channel, payload=applied)
-            return await events.append(s, phone, origin, channel, applied, ts=now)
+                return Event(seq=0, ts=now, origin=origin, channel=channel, payload=applied), moved
+            return await events.append(s, phone, origin, channel, applied, ts=now), moved
 
     async def _route(self, phone: str, event: Event) -> None:
         async with self._db() as s:
