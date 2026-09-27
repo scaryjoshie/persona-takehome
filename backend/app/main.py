@@ -26,7 +26,7 @@ from app.google import routes as google_routes
 from app.google.accounts import Google
 from app.integrations import routes as integration_routes
 from app.integrations.store import Integrations
-from app.integrations.tools import job_toolsets
+from app.integrations.tools import job_extras
 from app.jev import Jev
 from app.jobs.runner import Jobs
 from app.pipeline import Pipeline
@@ -83,7 +83,7 @@ def assemble(
         timers=timers,
         google=google,
         web_search=web_search,
-        toolsets=job_toolsets(integrations, http or httpx.AsyncClient()),
+        extras=job_extras(integrations, http or httpx.AsyncClient()),
     )
 
     async def text(phone: str, body: str) -> None:  # a secure link, recorded like any bubble

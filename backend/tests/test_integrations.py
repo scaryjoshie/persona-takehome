@@ -329,3 +329,49 @@ async def test_the_secure_form_saves_once_and_never_shows_the_value(
         assert "Saved" in client.post(path, data={"value": WEBHOOK}).text
         assert "already used" in client.get(path).text  # a link works once
     assert await store.secrets(PHONE, saved.id) == {"webhook_url": WEBHOOK}
+
+
+async def test_a_job_knows_each_service_and_what_they_like_there_and_what_was_done(
+    db: SessionFactory, clock: FakeClock, timers: FakeTimers
+) -> None:
+    from app.agent.events import ToolCall
+    from app.events.payload import Channel, Origin
+    from app.memory.events import Remembered
+
+    net = Recorder()
+    seen: dict[str, str] = {}
+
+    async def post(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen["instructions"] = info.instructions or ""
+        if not returns(messages, "slack_post_message"):
+            return call("slack_post_message", args={"text": "hi"}, ask_them="Post 'hi'?")
+        if not returns(messages, "past_actions"):
+            return call("past_actions", app="slack")
+        seen["past"] = returns(messages, "past_actions")[-1]
+        return done("posted")
+
+    built = with_integrations(db, clock, timers, model=FunctionModel(post), http=net.client())
+    store, jobs, pipeline = built.env.integrations, built.env.jobs, built.pipeline
+    assert store is not None and jobs is not None
+    ready = {**SLACK, "status": "ready", "notes": "their #friends channel"}
+    saved = await store.save(PHONE, Integration.model_validate(ready))
+    await store.set_secret(PHONE, saved.id, "webhook_url", WEBHOOK)
+    for fact, app in (("sign off with -J", "slack"), ("usual is pad see ew", "doordash")):
+        await pipeline.submit(
+            PHONE, Origin.TEXT_AGENT, Channel.TEXT, Remembered(fact=fact, app=app)
+        )
+
+    job = await jobs.start(PHONE, "post hi")
+    await settle(pipeline)
+    await jobs.tell(PHONE, job, "yes", approve=True)
+    await settle(pipeline)
+
+    assert "slack: their #friends channel" in seen["instructions"]
+    assert "sign off with -J" in seen["instructions"]
+    assert "pad see ew" not in seen["instructions"]  # another app's preferences stay out
+    calls = [e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, ToolCall)]
+    assert [(c.name, c.app, c.job, c.ok) for c in calls] == [
+        ("slack_post_message", "slack", job, True)
+    ]
+    assert "XXXXsecretXXXX" not in (calls[0].shown or "")
+    assert seen["past"].startswith("slack_post_message({'text': 'hi'})")

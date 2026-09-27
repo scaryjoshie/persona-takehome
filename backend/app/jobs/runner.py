@@ -58,7 +58,16 @@ CITATION = re.compile("[^]*")
 OPEN = ("running", "waiting")
 ONE_THING = "Ask them one thing at a time; ask this again after they've answered."
 
-ToolsetsFor = Callable[[JobDeps], Awaitable[Sequence[AbstractToolset[JobDeps]]]]
+
+@dataclass(frozen=True)
+class Extras:
+    """More for one run, from outside the jobs package (integrations): tools and what to know."""
+
+    toolsets: Sequence[AbstractToolset[JobDeps]] = ()
+    instructions: str = ""
+
+
+ExtrasFor = Callable[[JobDeps], Awaitable[Extras]]
 # What resumes a paused job, as JSON: {"calls": {id: text}, "approvals": {id: true | "why not"}}
 Reply = dict[str, dict[str, Any]]
 
@@ -128,7 +137,7 @@ class Jobs:
         timers: Timers,
         google: Google | None = None,
         web_search: bool = True,
-        toolsets: ToolsetsFor | None = None,  # more tools per run (integrations)
+        extras: ExtrasFor | None = None,  # more tools and instructions per run (integrations)
     ) -> None:
         self._db = db
         self._pipeline = pipeline
@@ -136,7 +145,7 @@ class Jobs:
         self._timers = timers
         self._google = google
         self._web_search = web_search
-        self._toolsets = toolsets
+        self._extras = extras
         self._tasks: dict[str, asyncio.Future[object]] = {}
         self._runs: dict[str, AgentRun[JobDeps, Outcome | DeferredToolRequests]] = {}
         self._inbox: dict[str, list[str]] = {}  # said while no run could take it
@@ -266,14 +275,15 @@ class Jobs:
         history = ModelMessagesTypeAdapter.validate_json(row.messages)
         tz = (await self._pipeline.user(phone)).slots.zone()  # theirs, as the chat agent has it
         deps = JobDeps(self._pipeline, phone, job, tz, self._google)
-        toolsets = await self._toolsets(deps) if self._toolsets else None
+        extras = await self._extras(deps) if self._extras else Extras()
         try:
             async with asyncio.timeout(RUN_SECONDS):
                 async with job_agent.iter(
                     prompt,
                     message_history=history,
                     deferred_tool_results=results(reply) if reply else None,
-                    toolsets=toolsets,
+                    toolsets=list(extras.toolsets) or None,
+                    instructions=extras.instructions or None,
                     deps=deps,
                     model=self._model,
                     usage_limits=UsageLimits(request_limit=STEPS),

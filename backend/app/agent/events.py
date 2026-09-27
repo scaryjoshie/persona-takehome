@@ -37,13 +37,15 @@ class ToolCall(Payload):
     shown: str | None = None
     app: str | None = None  # the service it used ("google"), or None for the agent's own tools
     ok: bool = True
+    job: str | None = None  # a background task used it, not the agent itself
 
     def turn(self, at: datetime) -> Turn | None:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.items())
         result = "" if self.result is None else f" → {self.result}"
         failed = " (failed)" if not self.ok else ""
         shown = f", and saw:\n{self.shown}" if self.shown else ""
-        return Turn(Role.NOTE, f"you called {self.name}({args}){result}{failed}{shown}")
+        who = f"background task {self.job} used" if self.job else "you called"
+        return Turn(Role.NOTE, f"{who} {self.name}({args}){result}{failed}{shown}")
 
 
 class Graduated(Payload):

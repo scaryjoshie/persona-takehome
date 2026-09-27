@@ -1,36 +1,49 @@
-"""The tools a background job gets for integrations, built fresh for each run.
+"""What a background job gets for integrations, built fresh for each run.
 
 - Setting one up: save_integration, request_secret (they get a secure link; the job waits),
   try_endpoint (reads only), mark_ready.
 - Using one: a tool per endpoint of each ready integration. Reads run; acts pause the job for
-  their yes (pydantic-ai approval), with the question the job wrote.
+  their yes (pydantic-ai approval), with the question the job wrote. Every call is recorded
+  as a compact ToolCall event with its app; past_actions reads them back.
+- What to know: each connected service's notes, and what they like there (remembered facts
+  about that app), so preferences load only when that service is in play.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import httpx
 from pydantic_ai import ApprovalRequired, CallDeferred, RunContext
-from pydantic_ai.toolsets import AbstractToolset, FunctionToolset
+from pydantic_ai.toolsets import FunctionToolset
 
+from app.agent.events import ToolCall
+from app.events.payload import Channel, Origin
 from app.integrations import http
 from app.integrations.integration import Endpoint, Integration
 from app.integrations.store import Integrations, SecretRequest
 from app.jobs.agent import JobDeps
+from app.jobs.runner import Extras, ExtrasFor
 
-ToolsetsFor = Callable[[JobDeps], Awaitable[Sequence[AbstractToolset[JobDeps]]]]
+SHOWN = 300  # characters of a result kept in the log
 
 
-def job_toolsets(integrations: Integrations, client: httpx.AsyncClient) -> ToolsetsFor:
-    async def build(deps: JobDeps) -> Sequence[AbstractToolset[JobDeps]]:
+def job_extras(integrations: Integrations, client: httpx.AsyncClient) -> ExtrasFor:
+    async def build(deps: JobDeps) -> Extras:
         tools = _setup_tools(integrations, client)
+        known: list[str] = []
         for integration in await integrations.all(deps.phone):
-            if integration.status == "ready" and integration.api is not None:
-                for endpoint in integration.api.endpoints:
-                    _add_endpoint(tools, integrations, client, integration, endpoint)
-        return [tools]
+            if integration.status != "ready" or integration.api is None:
+                continue
+            for endpoint in integration.api.endpoints:
+                _add_endpoint(tools, integrations, client, integration, endpoint)
+            likes = [f.text for f in await deps.pipeline.facts(deps.phone, app=integration.app)]
+            known.append(
+                f"- {integration.app}: {integration.notes or 'no notes yet'}"
+                + (f" What they like there: {'; '.join(likes)}" if likes else "")
+            )
+        about = "Services they connected:\n" + "\n".join(known) if known else ""
+        return Extras(toolsets=[tools], instructions=about)
 
     return build
 
@@ -114,7 +127,22 @@ def _setup_tools(integrations: Integrations, client: httpx.AsyncClient) -> Funct
             return f"no endpoint {endpoint} on {integration_id}"
         if not target.reads:
             return f"{endpoint} changes something; it can't be tried, only used once they say yes"
-        return await _call(integrations, client, found, target, args, ctx.deps.phone)
+        return await _call(integrations, client, found, target, args, ctx.deps)
+
+    @tools.tool
+    async def past_actions(ctx: RunContext[JobDeps], app: str, n: int = 10) -> str:
+        """What was done in a connected service before (by any background task), newest last."""
+        done = [
+            e.payload
+            for e in await ctx.deps.pipeline.history(ctx.deps.phone)
+            if isinstance(e.payload, ToolCall) and e.payload.app == app
+        ][-n:]
+        return (
+            "\n".join(
+                f"{c.name}({c.args}){'' if c.ok else ' (failed)'}: {c.shown or ''}" for c in done
+            )
+            or "nothing yet"
+        )
 
     @tools.tool
     async def mark_ready(ctx: RunContext[JobDeps], integration_id: str, notes: str) -> str:
@@ -151,7 +179,7 @@ def _add_endpoint(
     if endpoint.reads:
 
         async def read(ctx: RunContext[JobDeps], args: dict[str, Any]) -> str:
-            return await _call(integrations, client, integration, endpoint, args, ctx.deps.phone)
+            return await _call(integrations, client, integration, endpoint, args, ctx.deps)
 
         tools.add_function(read, name=name, description=about + notes)
         return
@@ -159,7 +187,7 @@ def _add_endpoint(
     async def act(ctx: RunContext[JobDeps], args: dict[str, Any], ask_them: str) -> str:
         if not ctx.tool_call_approved:
             raise ApprovalRequired(metadata={"question": ask_them})
-        return await _call(integrations, client, integration, endpoint, args, ctx.deps.phone)
+        return await _call(integrations, client, integration, endpoint, args, ctx.deps)
 
     tools.add_function(
         act,
@@ -181,13 +209,26 @@ async def _call(
     integration: Integration,
     endpoint: Endpoint,
     args: dict[str, Any],
-    phone: str,
+    deps: JobDeps,
 ) -> str:
+    """Call it, and record what happened as a compact event (their args, a short result; the
+    secrets were filled in by us and blanked out of the result)."""
     assert integration.api is not None
-    secrets = await integrations.secrets(phone, integration.id)
+    secrets = await integrations.secrets(deps.phone, integration.id)
     try:
-        return await http.call(client, integration.api, endpoint, args, secrets)
+        out = await http.call(client, integration.api, endpoint, args, secrets)
+        ok = out.startswith("HTTP 2")
     except http.Refused as exc:
         return f"not called: {exc}"
     except httpx.HTTPError as exc:
-        return http.scrub(f"the request failed: {type(exc).__name__}: {exc}", secrets)
+        out, ok = http.scrub(f"the request failed: {type(exc).__name__}: {exc}", secrets), False
+    call = ToolCall(
+        name=f"{integration.app}_{endpoint.name}",
+        args=args,
+        shown=out[:SHOWN],
+        app=integration.app,
+        ok=ok,
+        job=deps.job,
+    )
+    await deps.pipeline.submit(deps.phone, Origin.JOB, Channel.SYSTEM, call)
+    return out
