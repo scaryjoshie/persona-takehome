@@ -28,6 +28,7 @@ OUT = os.path.join(
 WAV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "wav")
 LINES = {
     "pick": "Honestly, you pick a name for yourself.",
+    "nova": "Hmm, let's go with Nova.",
     "yes": "Yeah, that works for me.",
     "siobhan": "I'm Siobhan.",
     "myname": "Wait, what's my name again?",
@@ -81,6 +82,15 @@ def wav(line: str) -> str:
 FRAME = 960
 
 SCENARIOS: dict[str, list[str]] = {
+    "name_it": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:nova",
+        "say:siobhan",
+        "say:bye",
+        "wait:12",
+    ],
     "memory_on_call": [
         "text:Hey, what's a Persona?",
         "text:sure call me",
