@@ -15,6 +15,7 @@ from fastapi import Depends, WebSocket
 from starlette.requests import HTTPConnection
 
 from app.google.accounts import Google
+from app.integrations.store import Integrations
 from app.pipeline import Pipeline
 from app.voice.responder import VoiceResponder
 from app.web.sockets import Sockets
@@ -33,6 +34,7 @@ class Services:
     voice_notes_dir: Path
     app_base_url: str
     google: Google  # connected Google accounts
+    integrations: Integrations | None = None  # other services they connected
     calls_per_ip_per_day: int = 100  # a guard against a runaway script
 
 

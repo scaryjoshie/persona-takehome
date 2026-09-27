@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from pydantic_ai.models import Model
@@ -20,8 +21,12 @@ from pydantic_ai.realtime.openai_live import OpenAILiveModel
 from app.agent.deps import AgentEnv, Messenger
 from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
+from app.events.payload import Channel, Origin
 from app.google import routes as google_routes
 from app.google.accounts import Google
+from app.integrations import routes as integration_routes
+from app.integrations.store import Integrations
+from app.integrations.tools import job_toolsets
 from app.jev import Jev
 from app.jobs.runner import Jobs
 from app.pipeline import Pipeline
@@ -29,6 +34,7 @@ from app.previews import routes as preview_routes
 from app.services import Services
 from app.settings import Settings, get_settings
 from app.text import voice_notes as voice_note_routes
+from app.text.events import AgentMessage
 from app.text.reply import Replier
 from app.text.responder import TextResponder
 from app.text.voice_notes import Transcriber
@@ -62,12 +68,30 @@ def assemble(
     clock: Clock = utc_now,
     google: Google | None = None,
     web_search: bool = True,
+    credentials_key: str | None = None,  # encrypts integrations' secrets
+    http: httpx.AsyncClient | None = None,  # integrations' outbound calls
 ) -> App:
     timers = timers or AsyncioTimers()
     pipeline = Pipeline(db, clock=clock, timers=timers)
     voice = VoiceResponder(jev=jev)
     google = google or Google(db)  # unconfigured: the Google link says so
-    jobs = Jobs(db, pipeline, model=model, timers=timers, google=google, web_search=web_search)
+    integrations = Integrations(db, clock=clock, key=credentials_key, base_url=app_base_url)
+    jobs = Jobs(
+        db,
+        pipeline,
+        model=model,
+        timers=timers,
+        google=google,
+        web_search=web_search,
+        toolsets=job_toolsets(integrations, http or httpx.AsyncClient()),
+    )
+
+    async def text(phone: str, body: str) -> None:  # a secure link, recorded like any bubble
+        await pipeline.submit(phone, Origin.TEXT_AGENT, Channel.TEXT, AgentMessage(text=body))
+        await messenger.send(phone, body)
+
+    integrations.text = text
+    integrations.resolve = jobs.resolve
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,
@@ -77,6 +101,7 @@ def assemble(
         google=google,
         jev=jev,
         jobs=jobs,
+        integrations=integrations,
     )
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env), jev=jev)
     pipeline.responders[Medium.VOICE] = voice
@@ -95,6 +120,9 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
         model=text_model(settings),
         app_base_url=settings.app_base_url,
         jev=jev,
+        credentials_key=settings.credentials_key.get_secret_value()
+        if settings.credentials_key
+        else None,
         google=Google(
             db,
             creds=(settings.google_client_id, settings.google_client_secret.get_secret_value())
@@ -149,9 +177,11 @@ def create_app() -> FastAPI:
         voice_notes_dir=voice_notes_dir,
         app_base_url=settings.app_base_url,
         google=google,
+        integrations=built.env.integrations,
         calls_per_ip_per_day=settings.calls_per_ip_per_day,
     )
-    for module in (web_routes, voice_routes, voice_note_routes, preview_routes, google_routes):
+    routers = (web_routes, voice_routes, voice_note_routes, preview_routes, google_routes)
+    for module in (*routers, integration_routes):
         web.include_router(module.router)
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.is_dir():

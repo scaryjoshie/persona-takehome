@@ -22,15 +22,18 @@ import json
 import logging
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
-from pydantic_ai import DeferredToolRequests, DeferredToolResults
+from pydantic_ai import DeferredToolRequests, DeferredToolResults, ToolDenied
 from pydantic_ai.capabilities import WebSearch
 from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models import Model
 from pydantic_ai.run import AgentRun
+from pydantic_ai.tools import DeferredToolApprovalResult
+from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import UsageLimits
 from sqlalchemy import update
 from sqlmodel import col, select
@@ -53,6 +56,66 @@ ONE_AT_A_TIME = "one question at a time: ask this again after they answer the fi
 # Web search leaves citation markers in the text, in private-use characters: cite…
 CITATION = re.compile("[^]*")
 OPEN = ("running", "waiting")
+ONE_THING = "Ask them one thing at a time; ask this again after they've answered."
+
+ToolsetsFor = Callable[[JobDeps], Awaitable[Sequence[AbstractToolset[JobDeps]]]]
+# What resumes a paused job, as JSON: {"calls": {id: text}, "approvals": {id: true | "why not"}}
+Reply = dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class Pending:
+    """What a paused job is waiting on: the one thing it asked (`ask`), what kind of wait it
+    is, and every open call, so the reply answers them all (the rest get "one at a time")."""
+
+    ask: str
+    kind: str  # "answer", "approval" (their yes or no), or "secret" (the secure form)
+    calls: tuple[str, ...] = ()
+    approvals: tuple[str, ...] = ()
+
+    @classmethod
+    def of(cls, asked: DeferredToolRequests) -> tuple[Pending, str]:
+        calls = tuple(c.tool_call_id for c in asked.calls)
+        approvals = tuple(c.tool_call_id for c in asked.approvals)
+        first = (asked.approvals or asked.calls)[0]
+        meta = asked.metadata.get(first.tool_call_id, {})
+        if approvals:
+            kind = "approval"
+        else:
+            kind = "secret" if meta.get("kind") == "secret" else "answer"
+        question = str(meta.get("question", "")) or f"ok to go ahead with {first.tool_name}?"
+        return cls(first.tool_call_id, kind, calls, approvals), question
+
+    @classmethod
+    def parse(cls, stored: str | None) -> Pending:
+        if stored and stored.startswith("{"):
+            data = json.loads(stored)
+            return cls(data["ask"], data["kind"], tuple(data["calls"]), tuple(data["approvals"]))
+        ids = tuple((stored or "").split(","))  # written before approvals existed
+        return cls(ids[0], "answer", ids)
+
+    def dump(self) -> str:
+        return json.dumps(
+            {"ask": self.ask, "kind": self.kind, "calls": self.calls, "approvals": self.approvals}
+        )
+
+    def reply(self, text: str, approve: bool | None) -> Reply:
+        calls: dict[str, Any] = {i: ONE_AT_A_TIME for i in self.calls}
+        approvals: dict[str, Any] = {i: ONE_THING for i in self.approvals}
+        if self.kind == "approval":
+            approvals[self.ask] = True if approve else f"They said no: {text}"
+        else:
+            calls[self.ask] = text
+        return {"calls": calls, "approvals": approvals}
+
+
+def results(reply: Reply) -> DeferredToolResults:
+    if "calls" not in reply and "approvals" not in reply:  # written before approvals existed
+        return DeferredToolResults(calls=dict(reply))
+    approvals: dict[str, bool | DeferredToolApprovalResult] = {
+        i: True if v is True else ToolDenied(str(v)) for i, v in reply.get("approvals", {}).items()
+    }
+    return DeferredToolResults(calls=dict(reply.get("calls", {})), approvals=approvals)
 
 
 class Jobs:
@@ -65,6 +128,7 @@ class Jobs:
         timers: Timers,
         google: Google | None = None,
         web_search: bool = True,
+        toolsets: ToolsetsFor | None = None,  # more tools per run (integrations)
     ) -> None:
         self._db = db
         self._pipeline = pipeline
@@ -72,6 +136,7 @@ class Jobs:
         self._timers = timers
         self._google = google
         self._web_search = web_search
+        self._toolsets = toolsets
         self._tasks: dict[str, asyncio.Future[object]] = {}
         self._runs: dict[str, AgentRun[JobDeps, Outcome | DeferredToolRequests]] = {}
         self._inbox: dict[str, list[str]] = {}  # said while no run could take it
@@ -84,28 +149,51 @@ class Jobs:
         self._launch(job, phone, prompt=goal)
         return job
 
-    async def tell(self, phone: str, job: str, text: str) -> str:
-        """Their answer to its question, or anything else the job should know."""
+    async def tell(self, phone: str, job: str, text: str, *, approve: bool | None = None) -> str:
+        """Their answer to its question, their yes or no to something it wants to do, or
+        anything else the job should know."""
         row = await self._row(job)
         if row is None or row.phone != phone:
             return f"there's no background task {job}"
         if row.status not in OPEN:
             return f"background task {job} already {row.status}; start a new one if needed"
+        pending = Pending.parse(row.waiting_on) if row.status == "waiting" else None
+        if pending is not None and pending.kind == "approval" and approve is None:
+            return (
+                f"background task {job} asked for a yes or no ({row.question}); pass what "
+                "they said with approve set"
+            )
         await self._submit(phone, JobTold(job=job, text=text))
-        ids = (row.waiting_on or "").split(",")
-        answers = {i: text if n == 0 else ONE_AT_A_TIME for n, i in enumerate(ids)}
-        # Saved with the move, so a restart before the next run saves its messages resumes
-        # with the answer rather than with a question nobody answered.
-        resumed = row.status == "waiting" and await self._move(
-            job, ("waiting",), status="running", waiting_on=None, answer=json.dumps(answers)
-        )
-        if resumed:
-            self._launch(job, phone, answers=answers)
-        elif not self._slip_in(job, text):
-            # Between runs, or the run just ended: the next run picks it up, or the ending
-            # one runs once more.
+        if pending is not None and pending.kind != "secret":
+            reply = pending.reply(text, approve)
+            # Saved with the move, so a restart before the next run saves its messages resumes
+            # with the reply rather than with a question nobody answered.
+            if await self._move(
+                job, ("waiting",), status="running", waiting_on=None, answer=json.dumps(reply)
+            ):
+                self._launch(job, phone, reply=reply)
+                return f"passed on to background task {job}"
+        if not self._slip_in(job, text):
+            # Between runs, waiting on a secure link, or the run just ended: the next run
+            # picks it up, or the ending one runs once more.
             self._inbox.setdefault(job, []).append(text)
         return f"passed on to background task {job}"
+
+    async def resolve(self, job: str, question: str, result: str) -> bool:
+        """Something other than their words answered it (they saved a secret in the form)."""
+        row = await self._row(job)
+        if row is None or row.status != "waiting":
+            return False
+        pending = Pending.parse(row.waiting_on)
+        if pending.ask != question:
+            return False
+        reply = pending.reply(result, None)
+        if not await self._move(
+            job, ("waiting",), status="running", waiting_on=None, answer=json.dumps(reply)
+        ):
+            return False
+        self._launch(job, row.phone, reply=reply)
+        return True
 
     def _slip_in(self, job: str, text: str) -> bool:
         """Into the running conversation, if there is one still taking messages."""
@@ -147,7 +235,7 @@ class Jobs:
                 left = ANSWER_WAIT - (self._pipeline.now() - asked).total_seconds()
                 self._expire_later(row.phone, row.id, row.waiting_on or "", max(left, 0.0))
             elif row.answer:
-                self._launch(row.id, row.phone, answers=json.loads(row.answer))
+                self._launch(row.id, row.phone, reply=json.loads(row.answer))
             else:
                 fresh = row.messages == "[]"
                 self._launch(row.id, row.phone, prompt=row.goal if fresh else "Carry on.")
@@ -160,9 +248,9 @@ class Jobs:
         phone: str,
         *,
         prompt: str | None = None,
-        answers: dict[str, str] | None = None,
+        reply: Reply | None = None,
     ) -> None:
-        task = self._pipeline.spawn(self._run(job, phone, prompt=prompt, answers=answers))
+        task = self._pipeline.spawn(self._run(job, phone, prompt=prompt, reply=reply))
         self._tasks[job] = task
 
         def forget(done: asyncio.Future[object]) -> None:
@@ -171,21 +259,21 @@ class Jobs:
 
         task.add_done_callback(forget)
 
-    async def _run(
-        self, job: str, phone: str, *, prompt: str | None, answers: dict[str, str] | None
-    ) -> None:
+    async def _run(self, job: str, phone: str, *, prompt: str | None, reply: Reply | None) -> None:
         row = await self._row(job)
         if row is None:
             return  # forgotten (a reset)
         history = ModelMessagesTypeAdapter.validate_json(row.messages)
         tz = (await self._pipeline.user(phone)).slots.zone()  # theirs, as the chat agent has it
         deps = JobDeps(self._pipeline, phone, job, tz, self._google)
+        toolsets = await self._toolsets(deps) if self._toolsets else None
         try:
             async with asyncio.timeout(RUN_SECONDS):
                 async with job_agent.iter(
                     prompt,
                     message_history=history,
-                    deferred_tool_results=DeferredToolResults(calls=answers) if answers else None,
+                    deferred_tool_results=results(reply) if reply else None,
+                    toolsets=toolsets,
                     deps=deps,
                     model=self._model,
                     usage_limits=UsageLimits(request_limit=STEPS),
@@ -224,9 +312,8 @@ class Jobs:
     async def _wait(
         self, phone: str, job: str, asked: DeferredToolRequests, messages: list[ModelMessage]
     ) -> None:
-        ids = ",".join(call.tool_call_id for call in asked.calls)
-        first = asked.calls[0].tool_call_id
-        question = str(asked.metadata.get(first, {}).get("question", "")) or "(no question)"
+        pending, question = Pending.of(asked)
+        ids = pending.dump()
         waiting = await self._move(
             job,
             ("running",),
@@ -296,9 +383,18 @@ def lines(rows: Sequence[JobRow], *, speaking: bool = False) -> list[str]:
     out: list[str] = []
     for row in rows:
         name = f"a background task ({row.goal})" if speaking else f"Background task {row.id}"
-        if row.status == "waiting" and speaking:
-            out.append(f"{name} needs their answer: {row.question} Ask them when it fits.")
-        elif row.status == "waiting":
+        kind = Pending.parse(row.waiting_on).kind if row.status == "waiting" else None
+        if kind == "secret":
+            out.append(f"{name} is waiting for them to use the secure link it texted.")
+        elif kind is not None and speaking:
+            wants = "their yes or no" if kind == "approval" else "their answer"
+            out.append(f"{name} needs {wants}: {row.question} Ask them when it fits.")
+        elif kind == "approval":
+            out.append(
+                f"{name} ({row.goal}) is waiting on their yes or no: {row.question} Ask them "
+                "when it fits, and pass on what they said (tell_job, with approve set)."
+            )
+        elif kind == "answer":
             out.append(
                 f"{name} ({row.goal}) is waiting on their answer: {row.question} "
                 "Ask them when it fits, and pass the answer on (tell_job)."

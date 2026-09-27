@@ -10,6 +10,7 @@ from pydantic_ai.models import Model
 
 from app.events.payload import Channel, Origin
 from app.google.accounts import Google
+from app.integrations.store import Integrations
 from app.jev import Jev
 from app.jobs.runner import Jobs
 from app.pipeline import Pipeline
@@ -33,7 +34,8 @@ class AgentEnv:
     hang_up: Callable[[str], bool] | None = None
     google: Google | None = None  # connected Google accounts (email and calendar tools)
     jev: Jev | None = None  # fast yes/no and choice questions (on calls: what the voice means)
-    jobs: Jobs | None = None  # background tasks, once onboarding is done
+    jobs: Jobs | None = None  # background tasks
+    integrations: Integrations | None = None  # services they connected, used by tasks
 
     def deps(
         self,

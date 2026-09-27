@@ -82,7 +82,15 @@ async def job_lines(d: Deps) -> str:
     if d.env.jobs is None:
         return ""
     open_now = "\n".join(jobs.lines(await d.env.jobs.open(d.phone)))
-    return f"{open_now}\n\n{prompts.JOBS}" if open_now else ""
+    services = await d.env.integrations.all(d.phone) if d.env.integrations else []
+    connected = (
+        "Services they connected (a background task uses them): "
+        + "; ".join(i.describe() for i in services)
+        if services
+        else ""
+    )
+    handling = f"\n\n{prompts.JOBS}" if open_now else ""
+    return "\n".join(line for line in (connected, open_now) if line) + handling
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -377,7 +385,8 @@ async def with_jobs(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefiniti
 async def start_job(ctx: RunContext[Deps], goal: str) -> str:
     """Hand something they asked for (or agreed to) that takes looking up or time to a
     background task: finding options, checking facts, digging through their email. `goal`:
-    what to find out or get done, with what you know (who, when, what matters to them) and
+    what to find out or get done (including connecting a service they use), with what you
+    know (who, when, what matters to them) and
     anything you're unsure of, so it can ask them. It reports back on its own; meanwhile
     don't guess what it will find."""
     d = ctx.deps
@@ -387,12 +396,13 @@ async def start_job(ctx: RunContext[Deps], goal: str) -> str:
 
 
 @agent.tool(prepare=with_jobs)
-async def tell_job(ctx: RunContext[Deps], job: str, text: str) -> str:
+async def tell_job(ctx: RunContext[Deps], job: str, text: str, approve: bool | None = None) -> str:
     """Pass a background task something they said: their answer to its question, or a change
-    of plan. Only their words, never your own notes; the task already has its goal."""
+    of plan. Only their words, never your own notes; the task already has its goal. When it
+    asked for their yes or no to doing something, set `approve` to what they said."""
     d = ctx.deps
     assert d.env.jobs is not None
-    return await d.env.jobs.tell(d.phone, job, text)
+    return await d.env.jobs.tell(d.phone, job, text, approve=approve)
 
 
 @agent.tool(prepare=acting(with_jobs))

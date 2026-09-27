@@ -38,6 +38,7 @@ from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
+from app.integrations.models import IntegrationRow
 from app.jobs.models import JobRow
 from app.memory import service as memories
 from app.memory.events import Forgot, Remembered
@@ -201,6 +202,7 @@ class Pipeline:
             await events.delete_events(s, phone)
             await memories.delete_memory(s, phone)
             await s.exec(delete(JobRow).where(col(JobRow.phone) == phone))  # pyright: ignore[reportArgumentType]
+            await s.exec(delete(IntegrationRow).where(col(IntegrationRow.phone) == phone))  # pyright: ignore[reportArgumentType]
             await users.delete_user(s, phone)
 
     async def record(
