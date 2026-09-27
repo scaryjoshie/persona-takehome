@@ -40,6 +40,11 @@ Jobs exist only after graduation. `graduate(first_action)` starts the first job 
 - Full text loop (ask, job asks back, they answer, result): first reply in 6 s, the job's question relayed at 17 s, the result at 35 s.
 - Found and fixed: web search leaves citation markers in private-use characters in the summary; stripped before the chat agent sees it. The chat agent used `tell_job` for its own notes and chained a second job unasked; the tool descriptions and `jobs.md` now rule both out.
 
+## Known limits
+
+- **Restarts.** Fly runs one always-on machine (`auto_stop_machines = "off"`), so the process only restarts on a deploy or a crash. A job that was running goes again on startup, except one resumed after an answer: its answer isn't in its saved messages yet, so the rerun fails and the job ends as failed. The one-day expiry of an unanswered question is an in-process timer, so a restart forgets it and that job waits until someone answers or cancels it. Acceptable for the demo; the fix is saving the answer with the job before the resumed run starts.
+- **One run at a time per job is assumed, not enforced.** Two answers passed on at the same moment (a text and the call's back office) would start two runs.
+
 ## Next
 
 1. Browser: Kernel cloud browsers driven by browser-use as a `browse(task)` tool; per-user site notes (what login worked, quirks); logins through Kernel's hosted page or a code from their Gmail. Account changes only with a yes to that exact change.
