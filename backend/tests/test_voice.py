@@ -214,3 +214,16 @@ def test_call_lines_are_read_in_spoken_order() -> None:
     ordered = [e.seq for e in spoken_order(events)]
     assert ordered == [1, 2, 5, 3, 4, 6, 8, 7]  # the save stays after their yes
     assert "mila" in turns(events)[0].text  # the question comes before their yes
+
+
+def test_a_re_offer_after_it_is_done_gets_caught() -> None:
+    from app.agent.slots import Slots
+    from app.google.events import GmailPhase
+    from app.voice.call import contradiction
+
+    sent = Slots(gmail=GmailPhase.LINK_SENT, user_name="Siobhan")
+    assert contradiction("want me to text you a link to connect your google?", sent)
+    assert not contradiction("it's already in your texts, the google link", sent)
+    assert not contradiction("want me to text you the link?", Slots())
+    assert contradiction("wait, what's your name?", sent)
+    assert not contradiction("what's the thing you'd love help with?", sent)

@@ -124,10 +124,11 @@ class LiveCall:
                 return
 
     async def steer_when_quiet(self, text: str) -> None:
-        """Instructions that arrive mid-sentence make Live rewrite the sentence as it speaks
-        ("i just texted you my contact card, awesome, my contact card's..."). While it speaks,
-        keep only the latest; it goes in when its turn ends or they start talking."""
-        if self.speaking:
+        """Instructions go in only between turns: after the voice finishes, before they speak.
+        Mid-sentence, Live rewrites the sentence as it speaks ("i just texted you my contact
+        card, awesome, my contact card's..."); while they talk, it's already forming its reply.
+        Meanwhile keep only the latest; it goes in when the voice's next turn ends."""
+        if self.speaking or self.voice_owes_reply:
             self.steer_waiting = text
         else:
             await self.steer(text)
@@ -158,7 +159,6 @@ class LiveCall:
         self.last_sound = self.heard_at = time.monotonic()
         self.check_ins = 0
         self.speaking, self.voice_owes_reply = False, True
-        await self._steer_waiting()
         waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
         if waiting:  # one append: several at once each drew their own reply
             await self.send("\n\n".join(waiting), speak=False)

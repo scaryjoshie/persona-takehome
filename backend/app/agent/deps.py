@@ -32,10 +32,21 @@ class AgentEnv:
     google: Google | None = None  # connected Google accounts (email and calendar tools)
 
     def deps(
-        self, user: User, medium: Medium, *, first_reply: bool = False, back_office: bool = False
+        self,
+        user: User,
+        medium: Medium,
+        *,
+        first_reply: bool = False,
+        back_office: bool = False,
+        may_act: bool = True,
     ) -> Deps:
         return Deps(
-            user=user, medium=medium, env=self, first_reply=first_reply, back_office=back_office
+            user=user,
+            medium=medium,
+            env=self,
+            first_reply=first_reply,
+            back_office=back_office,
+            may_act=may_act,
         )
 
 
@@ -47,6 +58,9 @@ class Deps:
     # On a call two runs use the voice medium: the Live backend (the voice's own delegation)
     # and the back office. Only the back office records facts and sends things.
     back_office: bool = False
+    # Two keys for the back office's actions: it runs after a voice turn, so the voice has
+    # just said it's doing the thing. After their turn it only records facts.
+    may_act: bool = True
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
     first_reply: bool = False  # nothing has been said to them yet
     placed_call: bool = False  # set by start_call
