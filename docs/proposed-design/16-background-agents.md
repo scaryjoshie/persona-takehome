@@ -40,10 +40,18 @@ Jobs exist only after graduation. `graduate(first_action)` starts the first job 
 - Full text loop (ask, job asks back, they answer, result): first reply in 6 s, the job's question relayed at 17 s, the result at 35 s.
 - Found and fixed: web search leaves citation markers in private-use characters in the summary; stripped before the chat agent sees it. The chat agent used `tell_job` for its own notes and chained a second job unasked; the tool descriptions and `jobs.md` now rule both out.
 
-## Known limits
+## Races and restarts
 
-- **Restarts.** Fly runs one always-on machine (`auto_stop_machines = "off"`), so the process only restarts on a deploy or a crash. A job that was running goes again on startup, except one resumed after an answer: its answer isn't in its saved messages yet, so the rerun fails and the job ends as failed. The one-day expiry of an unanswered question is an in-process timer, so a restart forgets it and that job waits until someone answers or cancels it. Acceptable for the demo; the fix is saving the answer with the job before the resumed run starts.
-- **One run at a time per job is assumed, not enforced.** Two answers passed on at the same moment (a text and the call's back office) would start two runs.
+Every status change is one conditional update (`UPDATE job ... WHERE status IN (...)`): whoever's update took acts and records the event, everyone else backs off. No locks, so nothing ever waits on a job, and it holds across restarts.
+
+- Two answers at once resume the job once; the second goes into the running conversation.
+- A job ends once: a cancel racing a finish records one ending, and a job cancelled mid-run doesn't reopen as waiting.
+- The answer that resumes a job is saved with that update, so a restart before the next run saves its messages resumes with it.
+- Something said as a job finishes gets one more run instead of being dropped.
+- A reset mid-run ends quietly (the rows are gone, so nothing is recorded).
+- An open question's one-day expiry is re-armed at startup from when it was asked.
+
+Fly runs one always-on machine, so restarts only come from deploys and crashes anyway. Jobs share the OpenAI key with texts and calls; many heavy jobs at once could hit rate limits and slow replies. Not capped yet.
 
 ## Next
 
