@@ -11,6 +11,7 @@ from app.agent.agent import RING_SECONDS, Bubbles, agent, not_a_name
 from app.agent.deps import AgentEnv, Deps
 from app.agent.events import CallOptOut, Graduated, SlotChanged
 from app.events.payload import Channel, Origin
+from app.llm import Models
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
 from app.text.reply import REFUSED, Replier
@@ -34,7 +35,9 @@ async def run_text(
     async def sleep(s: float) -> None:
         sleeps.append(s)
 
-    env = AgentEnv(pipeline=pipeline, messenger=messenger, model=model, app_base_url="http://x")
+    env = AgentEnv(
+        pipeline=pipeline, messenger=messenger, models=Models.same(model), app_base_url="http://x"
+    )
     replier = Replier(env, sleep=sleep)
     trigger = await pipeline.submit(
         PHONE, Origin.USER, Channel.TEXT, UserMessage(text="hi, I'm Sam"), route=False
@@ -82,7 +85,7 @@ async def test_tools_are_filtered_by_medium(
         (Medium.TEXT, "start_call", "end_call"),
         (Medium.VOICE, "end_call", "start_call"),
     ):
-        deps = AgentEnv(pipeline, messenger, FunctionModel(fn), "").deps(user, medium)
+        deps = AgentEnv(pipeline, messenger, Models.same(FunctionModel(fn)), "").deps(user, medium)
         with agent.override(model=FunctionModel(fn)):
             await agent.run("x", deps=deps, output_type=Bubbles)
         assert present in seen["names"] and absent not in seen["names"]
@@ -100,7 +103,7 @@ async def test_instructions_include_state_and_text_tail(
     await pipeline.submit(
         PHONE, Origin.TEXT_AGENT, Channel.TEXT, SlotChanged(slot="agent_name", new="Jarvis")
     )
-    env = AgentEnv(pipeline, messenger, FunctionModel(fn), "")
+    env = AgentEnv(pipeline, messenger, Models.same(FunctionModel(fn)), "")
     deps = env.deps(await pipeline.user(PHONE), Medium.TEXT)
     with agent.override(model=FunctionModel(fn)):
         await agent.run("x", deps=deps, output_type=Bubbles)
@@ -145,7 +148,7 @@ async def tools_for(
         seen.update(t.name for t in info.function_tools)
         return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": []})])
 
-    env = AgentEnv(pipeline, messenger, FunctionModel(fn), "")
+    env = AgentEnv(pipeline, messenger, Models.same(FunctionModel(fn)), "")
     with agent.override(model=FunctionModel(fn)):
         await agent.run("ok", deps=deps_of(env, await pipeline.user(PHONE)), output_type=Bubbles)
     return seen
@@ -187,7 +190,7 @@ async def test_after_a_no_the_agent_calls_only_when_asked(
         seen.update(t.name for t in info.function_tools)
         return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": []})])
 
-    deps = AgentEnv(pipeline, messenger, FunctionModel(fn), "").deps(
+    deps = AgentEnv(pipeline, messenger, Models.same(FunctionModel(fn)), "").deps(
         await pipeline.user(PHONE), Medium.TEXT
     )
     with agent.override(model=FunctionModel(fn)):

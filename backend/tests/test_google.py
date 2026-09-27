@@ -20,6 +20,7 @@ from app.google import drafts, preview
 from app.google.accounts import Google
 from app.google.events import EmailDraft, GmailEvent, GmailPhase
 from app.google.models import GoogleAccountRow
+from app.llm import Models
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
 from app.text.reply import Replier
@@ -99,7 +100,7 @@ async def reply(
 ) -> None:
     """One text reply whose model makes these tool calls."""
     model = scripted(*turns, [ToolCallPart("final_result", {"bubbles": ["ok"]})])
-    env = AgentEnv(pipeline, messenger, model, "http://x", google=google)
+    env = AgentEnv(pipeline, messenger, Models.same(model), "http://x", google=google)
     with agent.override(model=model):
         await Replier(env).reply(PHONE, 0)
 
@@ -193,7 +194,7 @@ async def test_the_tools_appear_only_once_google_is_connected(
     google = await connected(db, pipeline, FakeGoogle())
 
     def with_google(env: AgentEnv, u: User) -> Deps:
-        return AgentEnv(env.pipeline, env.messenger, env.model, "", google=google).deps(u, u.floor)
+        return AgentEnv(env.pipeline, env.messenger, env.models, "", google=google).deps(u, u.floor)
 
     after = await tools_for(pipeline, messenger, with_google)
     assert "send_draft" not in before and {"search_email", "send_draft", "create_event"} <= after

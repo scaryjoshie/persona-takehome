@@ -28,6 +28,22 @@ async def commits(jev: Jev | None, conversation: list[str], saying: str) -> bool
     return p is not None and p >= SURE
 
 
+ACCEPT = (
+    "On a phone call, did the user's latest words say yes to something the assistant had just "
+    "offered to do for them (text them a link, send or draft something, look something up)? "
+    "Answering a question, agreeing with what it said, or okay to a piece of news is not."
+)
+
+
+async def accepts(jev: Jev | None, conversation: list[str]) -> bool:
+    """They just said yes to something the voice offered: that's both keys, so act now rather
+    than wait for the voice to also say it's on it."""
+    if jev is None:
+        return False
+    p = await jev.yes_probability(ACCEPT, {"conversation": conversation})
+    return p is not None and p >= SURE
+
+
 SLIP = (
     "The assistant just said its latest line on a phone call. Did it offer to do, or ask for, "
     "something the facts say is already done?"

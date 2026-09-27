@@ -60,7 +60,7 @@ from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
-from app.voice.intent import commits, slip
+from app.voice.intent import accepts, commits, slip
 from app.voice.responder import LiveCall, VoiceResponder
 from app.web.protocol import TranscriptPartial
 
@@ -522,6 +522,10 @@ THEIR_TURN = (
     "You were woken because they just finished a turn: record facts only. Anything to send "
     "or draft waits for the voice to say it's on it; you'll be woken again then."
 )
+THEIR_YES = (
+    "You were woken because they just said yes to something the voice offered to do for "
+    "them: do it now, and record any facts."
+)
 CALL_AGENT_STEPS = 4  # model requests per run: a runaway run must not block the next turn
 CALL_AGENT_SECONDS = 15.0
 
@@ -575,7 +579,11 @@ class CallAgent:
                 user = await pipeline.user(self._phone)
                 _, events = await pipeline.conversation(self._phone)
                 history = to_model_messages(events, user.slots.zone())
-                woke = VOICE_TURN if act else THEIR_TURN
+                said_yes = not act and await accepts(
+                    self._env.jev, last_lines(events[-RECENT:], user.slots.zone())
+                )
+                act = act or said_yes
+                woke = THEIR_YES if said_yes else VOICE_TURN if act else THEIR_TURN
                 if saying:  # not logged yet: the voice is still talking
                     woke = f'{VOICE_SAYING} "{saying}"'
                 run = agent.run(
@@ -583,7 +591,7 @@ class CallAgent:
                     message_history=history,
                     deps=self._env.deps(user, Medium.VOICE, call_agent=True, may_act=act),
                     output_type=str,  # plain text: a structured note got answered in prose
-                    model=self._env.model,
+                    model=self._env.models.call_agent,
                     instructions=f"{prompts.CALL_AGENT}\n\n{woke}",
                     usage_limits=UsageLimits(request_limit=CALL_AGENT_STEPS),
                 )

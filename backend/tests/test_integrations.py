@@ -23,6 +23,7 @@ from app.integrations import http, templates
 from app.integrations.integration import ApiKey, Endpoint, HttpApi, Integration, Param
 from app.integrations.models import IntegrationRow
 from app.jobs.events import JobAsked, JobEnded
+from app.llm import Models
 from app.main import App, assemble
 from app.pipeline import Pipeline
 from tests.conftest import (
@@ -170,7 +171,7 @@ def with_integrations(db: SessionFactory, clock: FakeClock, timers: FakeTimers, 
     return assemble(
         db=db,
         messenger=kw.pop("messenger", CapturingMessenger()),
-        model=kw.pop("model", FunctionModel(reply_hi)),
+        models=Models.same(kw.pop("model", FunctionModel(reply_hi))),
         app_base_url="http://x",
         timers=timers,
         clock=clock,

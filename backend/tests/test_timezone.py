@@ -16,6 +16,7 @@ from app.agent.events import TimezoneLearned
 from app.agent.slots import DEFAULT_TZ, Slots, TzSource
 from app.events.event import Event
 from app.events.payload import Channel, Origin
+from app.llm import Models
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
 from app.users.user import Medium
@@ -65,7 +66,7 @@ async def test_set_timezone_takes_only_real_zones(
         return ModelResponse(parts=next(steps))
 
     model = FunctionModel(fn)
-    env = AgentEnv(pipeline, messenger, model, "")
+    env = AgentEnv(pipeline, messenger, Models.same(model), "")
     deps = env.deps(await pipeline.user(PHONE), Medium.TEXT)
     with agent.override(model=model):
         await agent.run("im in denver", deps=deps, output_type=Bubbles)

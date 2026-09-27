@@ -25,6 +25,7 @@ from app.database import create_schema, make_engine, make_sessions
 from app.google import api
 from app.google import routes as google_routes
 from app.google.accounts import Google
+from app.llm import Models
 from app.main import assemble
 from app.services import Services
 from app.text import voice_notes as voice_note_routes
@@ -83,7 +84,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
         google=google,
         db=make_sessions(engine),
         messenger=WebMessenger(sockets),
-        model=FunctionModel(reply_hi),
+        models=Models.same(FunctionModel(reply_hi)),
         app_base_url="http://x",
     )
 

@@ -15,11 +15,9 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
-from pydantic_ai.models import Model
 from pydantic_ai.realtime.openai_live import OpenAILiveModel
 
 from app.agent.deps import AgentEnv, Messenger
-from app.agent.model import live_model, text_model
 from app.database import SessionFactory, create_schema, make_engine, make_sessions, utc_now
 from app.events.payload import Channel, Origin
 from app.google import routes as google_routes
@@ -29,6 +27,7 @@ from app.integrations.store import Integrations
 from app.integrations.tools import job_extras
 from app.jev import Jev
 from app.jobs.runner import Jobs
+from app.llm import Models, live_model
 from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
 from app.services import Services
@@ -61,7 +60,7 @@ def assemble(
     *,
     db: SessionFactory,
     messenger: Messenger,
-    model: Model,
+    models: Models,
     app_base_url: str,
     jev: Jev | None = None,
     timers: Timers | None = None,
@@ -79,7 +78,7 @@ def assemble(
     jobs = Jobs(
         db,
         pipeline,
-        model=model,
+        model=models.job,
         timers=timers,
         google=google,
         web_search=web_search,
@@ -95,7 +94,7 @@ def assemble(
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,
-        model=model,
+        models=models,
         app_base_url=app_base_url,
         hang_up=voice.hang_up,
         google=google,
@@ -117,7 +116,7 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
     built = assemble(
         db=db,
         messenger=messenger,
-        model=text_model(settings),
+        models=Models.from_settings(settings),
         app_base_url=settings.app_base_url,
         jev=jev,
         credentials_key=settings.credentials_key.get_secret_value()

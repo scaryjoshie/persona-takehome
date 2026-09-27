@@ -22,6 +22,7 @@ from app.agent.slots import DEFAULT_TZ
 from app.database import SessionFactory
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
+from app.llm import Models
 from app.memory import summarize
 from app.memory.events import Forgot, Remembered
 from app.memory.service import Summary
@@ -81,7 +82,7 @@ async def test_the_agent_remembers_and_sees_what_it_remembered(
     await text(pipeline, "my sister ana is visiting in october")
     model = FunctionModel(fn)
     with agent.override(model=model):
-        await Replier(AgentEnv(pipeline, messenger, model, "http://x")).reply(PHONE, 1)
+        await Replier(AgentEnv(pipeline, messenger, Models.same(model), "http://x")).reply(PHONE, 1)
     await settle(pipeline)
     fact = (await pipeline.memory(PHONE)).facts[0]
     assert fact.text == "their sister Ana is visiting in October"
@@ -172,7 +173,9 @@ async def test_a_summary_replaces_what_it_covers(
 
     reply_model = FunctionModel(fn)
     with agent.override(model=reply_model):
-        await Replier(AgentEnv(pipeline, messenger, reply_model, "http://x")).reply(PHONE, 1)
+        await Replier(AgentEnv(pipeline, messenger, Models.same(reply_model), "http://x")).reply(
+            PHONE, 1
+        )
     instructions, n = seen[0]
     assert "## Earlier with them" in instructions and notes in instructions
     assert n == len(

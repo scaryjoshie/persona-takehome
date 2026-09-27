@@ -20,7 +20,7 @@ import websockets
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from app.agent.model import text_model
+from app.llm import TEXT
 from app.settings import get_settings
 
 URL = "ws://localhost:8765/ws?phone={phone}"
@@ -80,7 +80,7 @@ judge: Agent[None, Verdict] = Agent(
 
 
 async def converse(name: str, phone: str) -> list[tuple[str, str]]:
-    model = text_model(get_settings())
+    model = TEXT.build(get_settings())
     player = user_agent(PERSONAS[name])
     transcript: list[tuple[str, str]] = []
     async with websockets.connect(URL.format(phone=phone)) as ws:
@@ -111,7 +111,7 @@ async def converse(name: str, phone: str) -> list[tuple[str, str]]:
 
 
 async def main(names: list[str]) -> None:
-    model = text_model(get_settings())
+    model = TEXT.build(get_settings())
     out = Path(__file__).parent / "out"
     out.mkdir(exist_ok=True)
     report = [f"# Simulated onboarding — {time.strftime('%Y-%m-%d %H:%M')}\n"]

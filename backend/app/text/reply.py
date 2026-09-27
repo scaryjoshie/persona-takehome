@@ -65,7 +65,11 @@ class Replier:
                 output = scripted
             else:
                 result = await agent.run(
-                    None, message_history=history, deps=deps, output_type=Bubbles, model=env.model
+                    None,
+                    message_history=history,
+                    deps=deps,
+                    output_type=Bubbles,
+                    model=env.models.text,
                 )
                 output = result.output
         except ModelHTTPError as exc:  # the provider refused the request, or it failed
@@ -93,7 +97,7 @@ class Replier:
                 await say(deps, text)
         finally:
             await self._env.messenger.set_typing(phone, False)
-            pipeline.spawn(summarize_if_due(pipeline, env.model, phone))  # only when it's time
+            pipeline.spawn(summarize_if_due(pipeline, env.models.text, phone))  # when it's time
 
     async def _opener(self, events: list[Event]) -> Bubbles | None:
         """The first message, as written, when their first text is just hi or "what is this".

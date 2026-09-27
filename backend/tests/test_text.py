@@ -13,6 +13,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from app.events.decision import Decision
 from app.events.payload import Channel, Origin
 from app.jev import Jev
+from app.llm import Models
 from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import ReplyStarted, Typing, UserMessage
@@ -149,7 +150,7 @@ async def test_a_newer_message_supersedes_a_reply_in_flight(
             await release.wait()  # the first reply is still thinking...
         return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": ["hi"]})])
 
-    env = dataclasses.replace(app.env, model=FunctionModel(slow_model))
+    env = dataclasses.replace(app.env, models=Models.same(FunctionModel(slow_model)))
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env, sleep=no_sleep))
     await say(pipeline, "book a dentist")
     timers.fire_next()

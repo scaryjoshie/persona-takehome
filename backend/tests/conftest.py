@@ -13,6 +13,7 @@ from app.database import SessionFactory, create_schema, make_engine, make_sessio
 from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
+from app.llm import Models
 from app.main import App, assemble
 from app.pipeline import Context, Pipeline
 from app.text.events import UserMessage
@@ -149,7 +150,7 @@ def app(
     built = assemble(
         db=db,
         messenger=messenger,
-        model=FunctionModel(reply_hi),
+        models=Models.same(FunctionModel(reply_hi)),
         app_base_url="http://x",
         timers=timers,
         clock=clock,

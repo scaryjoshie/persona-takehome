@@ -6,13 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic_ai.models import Model
-
 from app.events.payload import Channel, Origin
 from app.google.accounts import Google
 from app.integrations.store import Integrations
 from app.jev import Jev
 from app.jobs.runner import Jobs
+from app.llm import Models
 from app.pipeline import Pipeline
 from app.users.user import Medium, User
 
@@ -28,7 +27,7 @@ class Messenger(Protocol):
 class AgentEnv:
     pipeline: Pipeline
     messenger: Messenger
-    model: Model  # the text model; also runs the call agent
+    models: Models  # what texting, the call agent and background tasks run on
     app_base_url: str  # for links the agent sends, like the Gmail link
     # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
     hang_up: Callable[[str], bool] | None = None
