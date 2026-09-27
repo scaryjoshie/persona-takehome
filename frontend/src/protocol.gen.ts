@@ -263,15 +263,14 @@ export interface SlotChanged {
   old: string | null;
 }
 /**
- * Onboarding moved on to its next objective. Recorded by the pipeline when a fact moves
- * it; a call says it out loud in the objective's own words.
+ * Onboarding moved on to its next objective: the one it was on got done or set aside.
+ * Recorded by the pipeline when a fact moves it; a call says it out loud.
  */
 export interface ObjectiveMoved {
   kind: "objective_moved";
   left: string;
-  how: "done" | "skipped" | "declined";
-  got: string | null;
   now: string | null;
+  set_aside: boolean;
 }
 /**
  * They'd rather not do a setup step (a name for you, theirs, what they need, Google). It
