@@ -47,10 +47,15 @@ async def save(
     subject: str,
     body: str,
 ) -> EmailDraft:
-    """Create a draft, or update one (same ref, same Gmail draft), and text them a picture of it."""
+    """Create a draft, or update one (same ref, same Gmail draft), and text them a picture of it.
+    On an update, a field left blank keeps what the draft had: fixing the address alone must
+    not wipe the message (it once sent them a picture of an empty draft)."""
     previous = latest(await pipeline.history(phone), ref) if ref else None
     if previous and previous[1].status == "sent":
         raise ValueError(f"email {ref} was already sent; start a new draft")
+    if previous:
+        was = previous[1]
+        to, subject, body = to or was.to, subject or was.subject, body or was.body
     gmail_id = previous[1].gmail_id if previous else ""
     gmail_id = await account.draft(to=to, subject=subject, body=body, draft_id=gmail_id or None)
     draft = EmailDraft(

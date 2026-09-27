@@ -150,6 +150,19 @@ async def test_on_a_call_only_the_back_office_records_and_sends(
     assert "start_call" not in office
 
 
+async def test_the_back_office_acts_only_after_a_voice_turn(
+    pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    """Two keys: after their turn it records facts; sending waits for the voice to say so."""
+    theirs = await tools_for(
+        pipeline,
+        messenger,
+        lambda env, u: env.deps(u, Medium.VOICE, back_office=True, may_act=False),
+    )
+    assert {"set_user_name", "set_agent_name", "record_help_need", "skip_gmail"} <= theirs
+    assert not {"send_gmail_link", "send_text", "send_contact_card"} & theirs
+
+
 async def test_after_a_no_the_agent_calls_only_when_asked(
     pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:

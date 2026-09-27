@@ -20,6 +20,7 @@ class Slots(BaseModel):
     # Phone-only: what their phone has the agent saved as (None = not saved). Drives the
     # phone's header; the agent never sees it (not routed, not in any prompt).
     contact_name: str | None = None
+    timezone: str | None = None  # their device's (IANA); None = not known, use the default
 
     def missing(self) -> tuple[str, ...]:
         out: list[str] = []

@@ -21,6 +21,7 @@ class UserRow(SQLModel, table=True):
     graduated: bool = False
     no_calls: bool = False
     contact_name: str | None = None  # what the user saved the agent as
+    timezone: str | None = None  # their device's, from the browser
     # current call
     call_phase: str = "none"
     call_reason: str | None = None

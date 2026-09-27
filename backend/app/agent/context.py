@@ -8,13 +8,55 @@ from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.google.events import GmailPhase
-from app.voice.call_state import CallPhase, CallState
+from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
+from app.voice.events import VoiceUtterance
+
+
+def spoken_order(events: tuple[Event, ...] | list[Event]) -> list[Event]:
+    """A call's lines in the order they were said. Live finalizes a line when its speaker
+    finishes, so a long agent line is logged after the "yeah" said halfway through it; its
+    turn ids ("agent-3", "user-4") number both speakers in spoken order, per call. Anything
+    else (a saved name, a text) stays after every line that was logged before it."""
+    out: list[Event] = []
+    segment: list[Event] = []
+
+    def settle() -> None:
+        lines = sorted((e for e in segment if _turn_index(e) >= 0), key=_turn_index)
+        rank = {id(e): r for r, e in enumerate(lines)}
+        anchored: dict[int, list[Event]] = {}
+        latest = -1  # the highest-ranked line logged so far
+        for e in segment:
+            if id(e) in rank:
+                latest = max(latest, rank[id(e)])
+            else:
+                anchored.setdefault(latest, []).append(e)
+        out.extend(anchored.get(-1, []))
+        for r, line in enumerate(lines):
+            out.append(line)
+            out.extend(anchored.get(r, []))
+        segment.clear()
+
+    for event in events:
+        p = event.payload
+        if isinstance(p, CallEvent) and p.transition is CallTransition.CONNECTED:
+            settle()  # numbering starts over with each call
+        segment.append(event)
+    settle()
+    return out
+
+
+def _turn_index(event: Event) -> int:
+    """A call line's place in the call, or -1 (not a line, or no number: no captions came)."""
+    if not isinstance(event.payload, VoiceUtterance):
+        return -1
+    number = (event.payload.turn_id or "").rpartition("-")[2]
+    return int(number) if number.isdigit() else -1
 
 
 def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
     """Each event renders itself; adjacent turns with the same role merge."""
     out: list[Turn] = []
-    for event in events:
+    for event in spoken_order(events):
         turn = event.payload.turn(event.ts)
         if turn is None:
             continue
@@ -28,7 +70,7 @@ def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
 def last_lines(events: list[Event], n: int = 12) -> list[str]:
     """The last few events as "role: text" lines, for Jev's view of the conversation."""
     lines: list[str] = []
-    for event in events[-n:]:
+    for event in spoken_order(events)[-n:]:
         turn = event.payload.turn(event.ts)
         if turn is not None:
             lines.append(f"{turn.role.value}: {turn.text}")

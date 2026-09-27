@@ -14,6 +14,7 @@ from app.agent.events import (
     CallOptOut,
     ContactCard,
     ContactSaved,
+    DeviceTimezone,
     Graduated,
     SlotChanged,
     ToolCall,
@@ -43,6 +44,7 @@ AnyPayload = Annotated[
     | Reaction
     | ContactCard
     | ContactSaved
+    | DeviceTimezone
     | CallOptOut
     | VoiceUtterance
     | ToolCall

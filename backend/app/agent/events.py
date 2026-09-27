@@ -69,6 +69,16 @@ class ContactSaved(Payload):
     name: str
 
 
+class DeviceTimezone(Payload):
+    """Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.
+    Calendar times and "what time is it for them" use it; the agent never sees it as an event."""
+
+    kind: Literal["device_timezone"] = "device_timezone"
+    routes = False
+
+    tz: str
+
+
 class CallOptOut(Payload):
     """They'd rather not talk on the phone. The agent stops offering a call."""
 

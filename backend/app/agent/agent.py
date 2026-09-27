@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.agent.objectives import guidance
+from app.agent.slots import Slots
 from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
 from app.google.accounts import DEFAULT_TZ, Account
@@ -57,12 +59,19 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
-    tz = d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
+    tz = their_tz(d, user.slots)
     now = f"It's {datetime.now(tz):%A %B %-d, %-I:%M %p} where they are."
     return f"# What you know\n\n{now}\n{known}\n\n{stage}\n\n{tail}"
 
 
 # ---- helpers ----------------------------------------------------------------
+
+
+def their_tz(d: Deps, slots: Slots) -> ZoneInfo:
+    """Their device's timezone if their browser told us, else the configured default."""
+    if slots.timezone:
+        return ZoneInfo(slots.timezone)
+    return d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
 
 
 async def _record(
@@ -88,6 +97,9 @@ async def say(deps: Deps, text: str) -> None:
 # talks (and hangs up); the back office records what was said and sends what was promised.
 
 
+Prepare = Callable[[RunContext[Deps], ToolDefinition], Awaitable[ToolDefinition | None]]
+
+
 async def only_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
     return tool if ctx.deps.medium is Medium.TEXT else None
 
@@ -103,6 +115,19 @@ async def only_back_office(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolD
 
 async def only_on_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
     return tool if ctx.deps.medium is Medium.VOICE else None
+
+
+def acting(inner: Prepare) -> Prepare:
+    """A tool that does something (sends, drafts, texts). On a call, the back office only gets
+    it on a run after a voice turn: two keys, their ask or yes and then the voice saying it's
+    on it, so nothing happens that the voice doesn't know about."""
+
+    async def prepare(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+        if ctx.deps.back_office and not ctx.deps.may_act:
+            return None
+        return await inner(ctx, tool)
+
+    return prepare
 
 
 ASKS_FOR_CALL = re.compile(r"\b(call|ring|phone)\b", re.IGNORECASE)
@@ -159,7 +184,7 @@ async def set_agent_name(ctx: RunContext[Deps], name: str) -> str:
     return f"recorded: your name is {name}; your contact card went out, they can tap to save it"
 
 
-@agent.tool(prepare=not_the_voice)
+@agent.tool(prepare=acting(not_the_voice))
 async def send_contact_card(ctx: RunContext[Deps]) -> str:
     """Text your contact card again (they asked, or the last one got lost)."""
     name = (await ctx.deps.pipeline.user(ctx.deps.phone)).slots.agent_name
@@ -190,7 +215,7 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     return "recorded" if changed else "already recorded; nothing to do"
 
 
-@agent.tool(prepare=not_the_voice)
+@agent.tool(prepare=acting(not_the_voice))
 async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     """Text the user a link to connect their Gmail. Say in your own words that you sent it."""
     d = ctx.deps
@@ -245,7 +270,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     return "calling now; the user's phone is ringing"
 
 
-@agent.tool(prepare=only_back_office)
+@agent.tool(prepare=acting(only_back_office))
 async def send_text(ctx: RunContext[Deps], text: str) -> str:
     """Text the user during the call. Only what the voice said out loud it would text."""
     await say(ctx.deps, text)
@@ -310,12 +335,13 @@ async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
     return await (await _account(ctx)).read(message_id)
 
 
-@agent.tool(prepare=google_connected)
+@agent.tool(prepare=acting(google_connected))
 async def draft_email(
     ctx: RunContext[Deps], to: str = "", subject: str = "", body: str = "", ref: str = ""
 ) -> str:
     """Draft an email in their Gmail; they get a picture of it (exactly what's saved, gaps
-    included; nothing is sent). To change a draft, call again with its ref."""
+    included; nothing is sent). To change a draft, call again with its ref and only the fields
+    that change; the rest stay as they were."""
     d = ctx.deps
     try:
         draft = await drafts.save(
@@ -337,7 +363,7 @@ async def draft_email(
     )
 
 
-@agent.tool(prepare=google_connected)
+@agent.tool(prepare=acting(google_connected))
 async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
     """Send a draft you showed them, by its ref, once they've said yes to it."""
     d = ctx.deps
@@ -357,13 +383,14 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     return "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events) or "nothing"
 
 
-@agent.tool(prepare=google_connected)
+@agent.tool(prepare=acting(google_connected))
 async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
     """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
     Only after they said yes to this exact event."""
     d = ctx.deps
     assert d.env.google is not None
-    begins = datetime.fromisoformat(start).replace(tzinfo=d.env.google.tz)
+    tz = their_tz(d, (await d.pipeline.user(d.phone)).slots)
+    begins = datetime.fromisoformat(start).replace(tzinfo=tz)
     await (await _account(ctx)).create_event(
         title=title, start=begins, end=begins + timedelta(minutes=minutes)
     )
@@ -371,7 +398,7 @@ async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: i
     return f"added {title} at {begins:%a %b %-d %-I:%M %p}"
 
 
-@agent.tool(prepare=google_connected)
+@agent.tool(prepare=acting(google_connected))
 async def disconnect_google(ctx: RunContext[Deps]) -> str:
     """They asked to disconnect their Google account. Revokes access for good."""
     d = ctx.deps

@@ -42,6 +42,7 @@ class User(BaseModel):
                 gmail_email=row.gmail_email,
                 graduated=row.graduated,
                 contact_name=row.contact_name,
+                timezone=row.timezone,
                 no_calls=row.no_calls,
             ),
             call=CallState(

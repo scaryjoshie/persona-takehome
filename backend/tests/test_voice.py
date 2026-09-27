@@ -173,3 +173,72 @@ async def test_long_notes_go_to_the_voice_in_pieces(app: App) -> None:
     assert len(session.sent) > 1 and all(len(text) <= 1200 for text, _ in session.sent)
     assert [speak for _, speak in session.sent] == [False] * (len(session.sent) - 1) + [True]
     assert "\n".join(text for text, _ in session.sent) == note
+
+
+def test_call_lines_are_read_in_spoken_order() -> None:
+    """Live logs a long agent line when it ends, after the "yeah" said halfway through it;
+    the turn ids say the real order, per call, and other events stay put."""
+    from datetime import UTC, datetime
+
+    from app.agent.context import spoken_order, turns
+    from app.agent.events import SlotChanged
+    from app.events.event import Event
+    from app.events.payload import Channel, Origin
+    from app.voice.call_state import CallEvent, CallTransition
+    from app.voice.events import Speaker, VoiceUtterance
+
+    def ev(seq: int, payload: object) -> Event:
+        return Event(
+            seq=seq,
+            ts=datetime.now(UTC),
+            origin=Origin.CALL,
+            channel=Channel.VOICE,
+            payload=payload,  # pyright: ignore[reportArgumentType]
+        )
+
+    def line(seq: int, turn_id: str, text: str) -> Event:
+        speaker = Speaker.AGENT if turn_id.startswith("agent") else Speaker.USER
+        return ev(seq, VoiceUtterance(speaker=speaker, text=text, turn_id=turn_id))
+
+    connected = CallEvent(transition=CallTransition.CONNECTED)
+    events = [
+        ev(1, connected),
+        line(2, "agent-0", "what should i call you?"),
+        line(3, "user-2", "yeah, sure"),  # said while the voice was still on its line
+        ev(4, SlotChanged(slot="agent_name", new="Mila")),
+        line(5, "agent-1", "how about mila? you good with that?"),
+        ev(6, connected),  # a second call numbers from 0 again
+        line(7, "user-1", "hi again"),
+        line(8, "agent-0", "hey!"),
+    ]
+    ordered = [e.seq for e in spoken_order(events)]
+    assert ordered == [1, 2, 5, 3, 4, 6, 8, 7]  # the save stays after their yes
+    assert "mila" in turns(events)[0].text  # the question comes before their yes
+
+
+async def test_a_re_offer_after_it_is_done_gets_caught() -> None:
+    """Jev judges the line; its answer becomes a note naming what's already done."""
+    from typing import cast
+
+    from app.agent.slots import Slots
+    from app.google.events import GmailPhase
+    from app.jev import Choice, Jev
+    from app.voice.intent import slip
+
+    class FakeJev:
+        def __init__(self, choice: str, p: float) -> None:
+            self.answer = Choice(choice=choice, probabilities={choice: p})
+            self.seen: dict[str, Any] = {}
+
+        async def choice(self, question: str, criteria: object, state: dict[str, Any]) -> Choice:
+            self.seen = state
+            return self.answer
+
+    sent = Slots(gmail=GmailPhase.LINK_SENT, user_name="Siobhan")
+    jev = FakeJev("link", 0.9)
+    note = await slip(cast(Jev, jev), sent, "want me to text you the link?")
+    assert note and "already went out" in note
+    assert jev.seen["facts"]["google_link"] == "sent"
+    assert await slip(cast(Jev, FakeJev("link", 0.4)), sent, "the link?") is None  # unsure
+    assert await slip(cast(Jev, FakeJev("none", 0.9)), sent, "what's up?") is None
+    assert await slip(None, sent, "want the link?") is None  # no Jev: no check
