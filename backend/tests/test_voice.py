@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 import pytest
 
+from app.agent.events import ObjectiveMoved
+from app.agent.objectives import ONBOARDING
 from app.events.payload import Channel, Origin
 from app.google.events import GmailEvent, GmailPhase, InboxItem
 from app.jev import Jev
@@ -368,3 +370,13 @@ async def test_a_passing_line_is_dropped_once_they_speak() -> None:
     await call.user_started()
     sent = session.sent[-1][0]
     assert "The email is sent." in sent and "gone quiet" not in sent  # owed stays, passing goes
+
+
+def test_during_onboarding_a_connection_goes_in_silently_and_the_chain_moves_on() -> None:
+    connected = ev(GmailEvent(phase=GmailPhase.CONNECTED, email="s@x.com"))
+    during, after = call_note(connected, onboarding=True), call_note(connected)
+    assert during is not None and not during.speak and "Say so" not in during.text
+    assert after is not None and after.speak
+    moved = ObjectiveMoved(left="google", how="done", got="s@x.com", now="help_need")
+    said = ONBOARDING.announcement(moved)
+    assert said is not None and "what they'd like help with" in said

@@ -34,8 +34,10 @@ class Note:
     speak: bool
 
 
-def call_note(event: Event) -> Note | None:
-    """How a routed event is worded for the voice. None: the voice needn't hear of it."""
+def call_note(event: Event, *, onboarding: bool = False) -> Note | None:
+    """How a routed event is worded for the voice. None: the voice needn't hear of it.
+    `onboarding`: the objective chain says what comes next, so a connection goes in silently
+    (said twice, the voice lingered on the inbox instead of moving on)."""
     match event.payload:
         case UserMessage(text=text):
             return Note(f"They just texted you: {text!r}. Work it in naturally.", False)
@@ -49,10 +51,11 @@ def call_note(event: Event) -> Note | None:
             )
         case GmailEvent(phase=GmailPhase.CONNECTED) as connected:
             return Note(
-                "Their Gmail just connected. Say so in a few words. "
-                "Go through it once they want you to; their latest messages, for then:\n"
+                "Their Gmail just connected."
+                + ("" if onboarding else " Say so in a few words.")
+                + " Go through it once they want you to; their latest messages, for then:\n"
                 f"{inbox_lines(connected)}",
-                True,
+                not onboarding,
             )
         case GmailEvent(phase=GmailPhase.LINK_SENT):
             return Note("The Gmail link is in their texts now.", False)
@@ -244,7 +247,7 @@ class VoiceResponder:
             call.last_sound = time.monotonic()  # a text or typing counts as them being there
             if isinstance(event.payload, UserMessage):
                 call.wake()  # the call agent acts on texts too ("yes send it")
-        note = call_note(event)
+        note = call_note(event, onboarding=not user.slots.graduated)
         if note is None:
             return None
         if call is None:
