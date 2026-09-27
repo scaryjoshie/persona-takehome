@@ -174,14 +174,10 @@ async def run_call(
 def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
-    if user.slots.agent_name is None:  # the first call: say what it's for, once
-        next_step = (
-            "set up the call in one easy line: it's a quick setup, a name for you, theirs, "
-            "and hooking up their google so you can actually do stuff, then you'll find "
-            "something you can help them with. Then ease into naming you: to be a helpful "
-            "assistant you need a name, so suggest coming up with one together. Warm, never a "
-            "cold question"
-        )
+    if user.slots.agent_name is None:  # the first call: only the step at hand, no agenda
+        # Spelling out the plan here got recited clause by clause ("a name for me, yours,
+        # and your google, so i can actually do stuff...").
+        next_step = "get into the first thing, a name for you, the way a friend would"
     elif user.slots.user_name is None:
         next_step = "ask their name"
     elif user.call.initiated_by is Initiator.AGENT and user.call.reason:
