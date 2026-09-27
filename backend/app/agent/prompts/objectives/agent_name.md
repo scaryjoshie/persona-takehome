@@ -8,4 +8,4 @@ Spell it back unless it's obvious ("M-I-L-A?"); it goes on your contact card.
 - you should give me a name, so you'll know it's me when i text you. what do you want to name me?
 
 ## example: on a call
-- hey, first things first, you should give me a name, so you'll know it's me when i call you! what do you wanna call me?
+- first things first, i need a name, so... what do you wanna call me?

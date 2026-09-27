@@ -46,7 +46,7 @@ def test_the_log_shows_where_you_are_and_only_the_current_one_in_full() -> None:
 def test_each_channel_gets_its_own_part_and_example() -> None:
     assert "Spell it back" in ONBOARDING.render(Slots(), Medium.VOICE)
     assert "Spell it back" not in ONBOARDING.render(Slots(), Medium.TEXT)
-    assert "what do you wanna call me?" in ONBOARDING.render(Slots(), Medium.VOICE)
+    assert "i need a name, so... what do you wanna call me?" in ONBOARDING.render(Slots(), Medium.VOICE)
     assert "what do you want to name me?" in ONBOARDING.render(Slots(), Medium.TEXT)
 
 
