@@ -172,9 +172,10 @@ def _opener(user: User) -> str:
     if user.slots.agent_name is None:  # the first call: say what it's for, once
         next_step = (
             "set up the call in one easy line: it's a quick setup, a name for you, theirs, "
-            "and hooking up their google so you can actually do stuff, then they tell you what "
-            "to tackle. Then ease into naming you: to be a helpful assistant you need a name, "
-            "so suggest coming up with one together. Warm, never a cold question"
+            "and hooking up their google so you can actually do stuff, then you'll find "
+            "something you can help them with. Then ease into naming you: to be a helpful "
+            "assistant you need a name, so suggest coming up with one together. Warm, never a "
+            "cold question"
         )
     elif user.slots.user_name is None:
         next_step = "ask their name"
