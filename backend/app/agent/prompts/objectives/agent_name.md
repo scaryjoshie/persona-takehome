@@ -11,4 +11,4 @@ Once they've given you a name, check the spelling unless it's completely obvious
 - all good, texting works. you should give me a name, so you'll know it's me when i text you. what do you want to name me?
 
 ## script: on a call
-- hey, you should give me a name, so you'll know it's me when i call you! anything come to mind?
+- hey, first things first, you should give me a name, so you'll know it's me when i call you! what do you wanna call me?
