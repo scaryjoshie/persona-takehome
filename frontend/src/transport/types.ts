@@ -9,6 +9,8 @@ export interface AudioLink {
   send(frame: ArrayBuffer): void;
   onFrame(cb: (frame: ArrayBuffer) => void): () => void;
   onClose(cb: (code: number) => void): () => void;
+  /** The user started talking over the agent: drop the agent's audio that is still queued. */
+  onFlush(cb: () => void): () => void;
   close(): void;
 }
 

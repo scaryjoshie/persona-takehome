@@ -115,11 +115,14 @@ export async function startAudioCall(link: AudioLink): Promise<AudioCall> {
     if (typeof e.data?.level === "number") outputLevel.current = toLevel(e.data.level);
   };
   const offFrame = link.onFrame((f) => playback.port.postMessage(f, [f]));
+  // Barge-in: the server truncated the agent's reply, so drop what is still queued to play.
+  const offFlush = link.onFlush(() => playback.port.postMessage("flush"));
 
   try {
     await link.ready;
   } catch {
     offFrame();
+    offFlush();
     cleanupMedia();
     throw new AudioSocketError();
   }
@@ -128,6 +131,7 @@ export async function startAudioCall(link: AudioLink): Promise<AudioCall> {
     if (stopped) return;
     stopped = true;
     offFrame();
+    offFlush();
     cleanupMedia();
     link.close();
   };

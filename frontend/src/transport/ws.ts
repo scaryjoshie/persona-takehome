@@ -95,6 +95,7 @@ class WsAudioLink implements AudioLink {
   private ws: WebSocket;
   private frames = new Emitter<ArrayBuffer>();
   private closes = new Emitter<number>();
+  private flushes = new Emitter<void>();
 
   constructor(url: string) {
     this.ws = new WebSocket(url);
@@ -110,6 +111,8 @@ class WsAudioLink implements AudioLink {
     this.ready.catch(() => undefined);
     this.ws.onmessage = (e) => {
       if (e.data instanceof ArrayBuffer) this.frames.emit(e.data);
+      // The only text frame: the user barged in, so queued agent audio is stale.
+      else if (e.data === "flush") this.flushes.emit();
     };
   }
 
@@ -118,6 +121,9 @@ class WsAudioLink implements AudioLink {
   }
   onFrame(cb: (f: ArrayBuffer) => void): () => void {
     return this.frames.on(cb);
+  }
+  onFlush(cb: () => void): () => void {
+    return this.flushes.on(cb);
   }
   onClose(cb: (code: number) => void): () => void {
     return this.closes.on(cb);
