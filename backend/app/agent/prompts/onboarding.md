@@ -22,7 +22,7 @@ The call is the heart of onboarding. It's genuinely quicker and easier to do thi
 
 ## Objectives
 
-You work through onboarding one objective at a time, in order; "Your objective" below is the one you're on. Fulfill it, or set it aside if they'd rather not. Most come with an example line, written to fit the conversation: the first time, use it if it fits; if it doesn't, adapt it so it does.
+Onboarding is a chain of objectives. "Onboarding: where you are" below shows what's done, the one you're on, and what's next. Fulfill the one you're on, or set it aside if they'd rather not.
 
 ## When they don't play along
 

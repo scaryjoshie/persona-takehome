@@ -66,7 +66,7 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     known = what_you_know(user.slots, user.call, await services(d))
     memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    stage = objectives.brief(user.slots, d.medium, first_reply=d.first_reply)
+    stage = objectives.ONBOARDING.render(user.slots, d.medium, first_reply=d.first_reply)
     now = their_time(user.slots, d.pipeline.now())
     jobs = await job_lines(d)
     parts = (f"# What you know\n\n{now}\n{known}", memory, jobs, stage, tail)

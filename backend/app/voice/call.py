@@ -460,7 +460,7 @@ async def where_things_stand(env: AgentEnv, phone: str) -> str:
     """For the voice: the time, what's known, open tasks, what it remembers, its objective."""
     pipeline = env.pipeline
     user = await pipeline.user(phone)
-    stage = objectives.brief(user.slots, Medium.VOICE)
+    stage = objectives.ONBOARDING.render(user.slots, Medium.VOICE)
     facts = remembered(await pipeline.memory(phone), summary=False, numbered=False)
     open_jobs = job_lines(await env.jobs.open(phone), speaking=True) if env.jobs else []
     now = their_time(user.slots, pipeline.now())

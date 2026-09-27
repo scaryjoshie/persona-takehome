@@ -1,7 +1,5 @@
-Goal: what they'd like to be called.
-
-## by text
-They typed it, so just use it; no spelling check.
+# their name
+What they'd like to be called.
 
 ## on a call
-You only heard it, so check the spelling unless it's completely obvious (Sam, Mike): for a common name, spell it back and ask ("J-O-N, right?"); for anything unusual, say you're texting how you spelled it so they can fix it (something like: texting you how i spelled that, fix it if i butchered it).
+You only heard it: spell it back unless it's obvious ("J-O-N, right?"), or for an unusual one, say you're texting how you spelled it.

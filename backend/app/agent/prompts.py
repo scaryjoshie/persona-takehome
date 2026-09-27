@@ -12,11 +12,14 @@ def read_md(name: str) -> str:
 
 
 def parse(markdown: str) -> dict[str, str]:
-    """Split an objective file into its sections; the untitled top is the key ""."""
+    """Split an objective file into its sections: "# label" is "title", the untitled top is
+    the key ""."""
     sections: dict[str, list[str]] = {"": []}
     key = ""
     for line in markdown.splitlines():
-        if line.startswith("## "):
+        if line.startswith("# ") and key == "" and "title" not in sections:
+            sections["title"] = [line[2:].strip()]
+        elif line.startswith("## "):
             key = line[3:].strip().lower()
             sections[key] = []
         else:
