@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
 
-from sqlalchemy import MetaData
+from sqlalchemy import Connection, MetaData, inspect
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -40,6 +40,28 @@ async def create_schema(engine: AsyncEngine) -> None:
         import_module(module)  # register each section's tables on the metadata
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        await conn.run_sync(_add_new_columns)
+
+
+def _add_new_columns(conn: Connection) -> None:
+    """create_all makes missing tables but never touches existing ones: add columns that
+    models gained since (all new ones are nullable or have a default), so a deploy needs no
+    migration step."""
+    existing = inspect(conn)
+    for table in SQLModel.metadata.sorted_tables:
+        if not existing.has_table(table.name):
+            continue
+        have = {c["name"] for c in existing.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in have:
+                continue
+            kind = column.type.compile(conn.dialect)
+            default: object = getattr(column.default, "arg", None)
+            default = int(default) if isinstance(default, bool) else default
+            clause = f" DEFAULT {default!r}" if isinstance(default, (str, int, float)) else ""
+            conn.exec_driver_sql(
+                f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}{clause}'
+            )
 
 
 def utc_now() -> datetime:

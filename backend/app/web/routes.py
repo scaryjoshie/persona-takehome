@@ -6,11 +6,12 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ValidationError
 
-from app.agent.events import ContactSaved
+from app.agent.events import ContactSaved, DeviceTimezone
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
@@ -50,10 +51,12 @@ async def session(body: SessionRequest, svc: ServicesDep) -> Snapshot:
 
 
 @router.websocket("/ws")
-async def ws(websocket: WebSocket, phone: str, svc: ServicesDep) -> None:
+async def ws(websocket: WebSocket, phone: str, svc: ServicesDep, tz: str = "") -> None:
     phone, pipeline = normalize(phone), svc.pipeline
     await websocket.accept()
     svc.sockets.add(phone, websocket)
+    if _real_timezone(tz):  # the browser's own, for calendar times
+        await pipeline.submit(phone, Origin.USER, Channel.SYSTEM, DeviceTimezone(tz=tz))
 
     async def send(message: BaseModel) -> None:
         with contextlib.suppress(Exception):  # this socket closed; its finally cleans up
@@ -128,6 +131,14 @@ async def text_of(pipeline: Pipeline, phone: str, seq: int | None) -> str | None
                 event.payload, "transcript", None
             )
     return None
+
+
+def _real_timezone(tz: str) -> bool:
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    return bool(tz)
 
 
 async def snapshot(pipeline: Pipeline, phone: str) -> Snapshot:

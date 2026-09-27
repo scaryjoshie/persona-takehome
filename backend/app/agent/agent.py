@@ -20,6 +20,7 @@ from app.agent.context import what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.agent.objectives import guidance
+from app.agent.slots import Slots
 from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
 from app.google.accounts import DEFAULT_TZ, Account
@@ -58,12 +59,19 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
-    tz = d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
+    tz = their_tz(d, user.slots)
     now = f"It's {datetime.now(tz):%A %B %-d, %-I:%M %p} where they are."
     return f"# What you know\n\n{now}\n{known}\n\n{stage}\n\n{tail}"
 
 
 # ---- helpers ----------------------------------------------------------------
+
+
+def their_tz(d: Deps, slots: Slots) -> ZoneInfo:
+    """Their device's timezone if their browser told us, else the configured default."""
+    if slots.timezone:
+        return ZoneInfo(slots.timezone)
+    return d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
 
 
 async def _record(
@@ -381,7 +389,8 @@ async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: i
     Only after they said yes to this exact event."""
     d = ctx.deps
     assert d.env.google is not None
-    begins = datetime.fromisoformat(start).replace(tzinfo=d.env.google.tz)
+    tz = their_tz(d, (await d.pipeline.user(d.phone)).slots)
+    begins = datetime.fromisoformat(start).replace(tzinfo=tz)
     await (await _account(ctx)).create_event(
         title=title, start=begins, end=begins + timedelta(minutes=minutes)
     )

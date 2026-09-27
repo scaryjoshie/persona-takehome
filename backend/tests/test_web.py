@@ -303,3 +303,13 @@ def test_calls_per_ip_limit() -> None:
 
     assert [over_call_limit("10.0.0.9", 2) for _ in range(3)] == [False, False, True]
     assert over_call_limit("10.0.0.10", 2) is False  # another IP has its own count
+
+
+def test_the_browser_timezone_is_kept(client: TestClient) -> None:
+    """Calendar times use their device's timezone; nonsense is ignored."""
+    with client.websocket_connect("/ws?phone=+15550004444&tz=Nowhere/Atlantis") as ws:
+        assert ws.receive_json()["slots"]["timezone"] is None
+    with client.websocket_connect("/ws?phone=+15550004444&tz=America/Los_Angeles") as ws:
+        ws.receive_json()
+    with client.websocket_connect("/ws?phone=+15550004444") as ws:
+        assert ws.receive_json()["slots"]["timezone"] == "America/Los_Angeles"

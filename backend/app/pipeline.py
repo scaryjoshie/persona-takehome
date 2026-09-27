@@ -21,7 +21,7 @@ from typing import Protocol
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged
+from app.agent.events import CallOptOut, ContactSaved, DeviceTimezone, Graduated, SlotChanged
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -237,6 +237,10 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.contact_name == name:
                 return None
             await users.set_slots(s, user.phone, contact_name=name)
+        case DeviceTimezone(tz=tz):
+            if user.slots.timezone == tz:
+                return None
+            await users.set_slots(s, user.phone, timezone=tz)
         case Graduated():
             if user.slots.graduated:
                 return None
