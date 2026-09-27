@@ -9,7 +9,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from app.agent import prompts
 from app.agent.agent import RING_SECONDS, Bubbles, agent, not_a_name
 from app.agent.deps import AgentEnv, Deps
-from app.agent.events import CallOptOut, SlotChanged
+from app.agent.events import CallOptOut, Graduated, SlotChanged
 from app.events.payload import Channel, Origin
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
@@ -105,9 +105,21 @@ async def test_instructions_include_state_and_text_tail(
     with agent.override(model=FunctionModel(fn)):
         await agent.run("x", deps=deps, output_type=Bubbles)
     text = captured["instructions"]
-    assert "Your name is Jarvis." in text and "Onboarding: where you are" in text
+    assert (
+        "Your name is Jarvis." in text and "zero to four" in text and prompts.PERSONA[:40] in text
+    )
+    assert prompts.ONBOARDING[:40] in text and "# Onboarding: the objectives" in text
+    assert (
+        "Where you are in onboarding: you're on their name. Done: a name for you (Jarvis)." in text
+    )
     assert "Still missing" not in text  # what's next is the objective's business
-    assert "zero to four" in text and prompts.PERSONA[:40] in text
+    await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, Graduated())
+    deps = env.deps(await pipeline.user(PHONE), Medium.TEXT)
+    with agent.override(model=FunctionModel(fn)):
+        await agent.run("x", deps=deps, output_type=Bubbles)
+    graduated = captured["instructions"]
+    assert "Onboarding" not in graduated and "Where you are" not in graduated  # behind them
+    assert "Your name is Jarvis." in graduated and prompts.PERSONA[:40] in graduated
 
 
 async def test_naming_the_agent_sends_its_contact_card(

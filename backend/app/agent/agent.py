@@ -50,7 +50,7 @@ class Bubbles(BaseModel):
 
 agent: Agent[Deps, str] = Agent(
     deps_type=Deps,
-    instructions=[prompts.PERSONA, prompts.ONBOARDING],
+    instructions=[prompts.PERSONA],
     defer_model_check=True,
     name="onboarding",
 )
@@ -67,13 +67,14 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     onboarding = not user.slots.graduated
+    job = prompts.ONBOARDING if onboarding else ""
     playbook = objectives.ONBOARDING.playbook(d.medium) if onboarding else ""
     where = objectives.ONBOARDING.pointer(user.slots) if onboarding else ""
     first = first_message() if d.first_reply else ""
     now = their_time(user.slots, d.pipeline.now())
     jobs = await job_lines(d)
     known_block = "\n".join(p for p in (f"# What you know\n\n{now}", known, where) if p)
-    parts = (playbook, known_block, memory, jobs, first, tail)
+    parts = (job, playbook, known_block, memory, jobs, first, tail)
     return "\n\n".join(p for p in parts if p)
 
 
