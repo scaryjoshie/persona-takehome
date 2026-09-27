@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic_ai.messages import (
@@ -24,9 +25,10 @@ from app.jobs.models import JobRow
 from app.jobs.runner import Jobs, lines
 from app.main import App
 from app.pipeline import Pipeline
+from app.text.events import UserMessage
 from app.users.user import Medium
 from app.voice.responder import VoiceResponder
-from tests.conftest import PHONE, CapturingMessenger, FakeTimers, settle
+from tests.conftest import PHONE, CapturingMessenger, FakeClock, FakeTimers, reply_hi, settle
 
 TZ = ZoneInfo("America/Chicago")
 
@@ -310,3 +312,183 @@ def test_citation_markers_are_stripped() -> None:
     assert _clean(
         "from $16 (ordering page \ue200cite\ue202x\ue201). $17 (\ue200cite\ue202y\ue201)."
     ) == ("from $16 (ordering page). $17.")
+
+
+def answers_in(messages: list[ModelMessage]) -> list[str]:
+    """What ask_user's calls returned: the answers the job got."""
+    return [
+        str(p.content)
+        for m in messages
+        if isinstance(m, ModelRequest)
+        for p in m.parts
+        if isinstance(p, ToolReturnPart) and p.tool_name == "ask_user"
+    ]
+
+
+async def endings(pipeline: Pipeline) -> list[JobEnded]:
+    return [e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, JobEnded)]
+
+
+async def test_a_restart_after_an_answer_resumes_with_that_answer(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers
+) -> None:
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        got = answers_in(messages)
+        return done(f"booked for {got[-1]}") if got else asks("7 or 8?")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    job = await jobs.start(PHONE, "dinner")
+    await settle(pipeline)
+    blocked, started = asyncio.Event(), asyncio.Event()
+
+    async def hang(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        started.set()
+        await blocked.wait()  # the process dies during the resumed run
+        raise AssertionError("never reached")
+
+    dying = jobs_with(pipeline, db, timers, FunctionModel(hang))
+    await dying.tell(PHONE, job, "8")
+    await started.wait()  # the resumed run is under way
+    for task in list(dying._tasks.values()):  # pyright: ignore[reportPrivateUsage]
+        task.cancel()
+    await settle(pipeline)
+
+    restarted = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    await restarted.resume()
+    await settle(pipeline)
+    assert await endings(pipeline) == [JobEnded(job=job, outcome="done", text="booked for 8")]
+
+
+async def test_two_answers_at_once_resume_the_job_once(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers
+) -> None:
+    runs: list[list[str]] = []
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        got = answers_in(messages)
+        if not got:
+            return asks("7 or 8?")
+        runs.append(got)
+        return done("ok")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    job = await jobs.start(PHONE, "dinner")
+    await settle(pipeline)
+    await asyncio.gather(jobs.tell(PHONE, job, "8"), jobs.tell(PHONE, job, "8pm please"))
+    await settle(pipeline)
+
+    assert all(len(got) == 1 for got in runs)  # one answer to the question, never two runs of it
+    assert [e.outcome for e in await endings(pipeline)] == ["done"]
+
+
+async def test_a_cancel_mid_run_is_the_only_ending(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers
+) -> None:
+    release = asyncio.Event()
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        await release.wait()
+        return done("found it")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    job = await jobs.start(PHONE, "anything")
+    await asyncio.sleep(0)
+    assert await jobs.cancel(PHONE, job)
+    release.set()
+    await settle(pipeline)
+    assert await endings(pipeline) == [JobEnded(job=job, outcome="cancelled")]
+    assert not await jobs.cancel(PHONE, job)
+
+
+async def test_something_said_as_it_finishes_gets_one_more_run(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers
+) -> None:
+    prompts: list[str] = []
+    jobs: Jobs
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        said = [
+            str(p.content)
+            for m in messages
+            if isinstance(m, ModelRequest)
+            for p in m.parts
+            if isinstance(p, UserPromptPart)
+        ]
+        prompts.extend(said)
+        if not any("They said" in s for s in said):
+            jobs._inbox.setdefault(job, []).append("actually 8")  # pyright: ignore[reportPrivateUsage]
+            return done("booked 7")
+        return done("booked 8")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    job = await jobs.start(PHONE, "dinner at 7")
+    await settle(pipeline)
+    assert "They said: actually 8" in prompts
+    assert await endings(pipeline) == [JobEnded(job=job, outcome="done", text="booked 8")]
+
+
+async def test_a_reset_mid_run_ends_quietly(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers
+) -> None:
+    release = asyncio.Event()
+
+    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        await release.wait()
+        return done("found it")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(fn))
+    await jobs.start(PHONE, "anything")
+    await asyncio.sleep(0)
+    await pipeline.reset(PHONE)
+    release.set()
+    await settle(pipeline)
+    assert await pipeline.history(PHONE) == []
+
+
+async def test_a_restart_keeps_the_rest_of_the_day_for_an_open_question(
+    pipeline: Pipeline, db: SessionFactory, timers: FakeTimers, clock: FakeClock
+) -> None:
+    async with db() as s, s.begin():
+        s.add(
+            JobRow(
+                id="abc123",
+                phone=PHONE,
+                goal="dinner",
+                status="waiting",
+                question="7 or 8?",
+                waiting_on="call1",
+                asked_at=clock() - timedelta(hours=23),
+                created_at=clock(),
+            )
+        )
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(reply_hi))
+    await jobs.resume()
+    assert timers.pending == [3600.0]
+
+
+async def test_a_job_that_hangs_never_holds_up_their_texts(
+    app: App, db: SessionFactory, timers: FakeTimers, messenger: CapturingMessenger
+) -> None:
+    pipeline = app.pipeline
+    never = asyncio.Event()
+
+    async def hang(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        await never.wait()
+        raise AssertionError("never reached")
+
+    jobs = jobs_with(pipeline, db, timers, FunctionModel(hang))
+    await jobs.start(PHONE, "something slow")
+    await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, UserMessage(text="hey"))
+    timers.fire_next()
+    await asyncio.wait_for(settle_except(pipeline, jobs), timeout=2)
+    assert messenger.sent == ["hi"]
+    await jobs.cancel(PHONE, (await jobs.open(PHONE))[0].id)
+
+
+async def settle_except(pipeline: Pipeline, jobs: Jobs) -> None:
+    """Wait for background work other than the jobs' runs (settle() would wait on the hang)."""
+    runs = set(jobs._tasks.values())  # pyright: ignore[reportPrivateUsage]
+    for _ in range(10):
+        others = [t for t in pipeline._background if t not in runs and not t.done()]  # pyright: ignore[reportPrivateUsage]
+        await asyncio.gather(*others)
+        await asyncio.sleep(0)
