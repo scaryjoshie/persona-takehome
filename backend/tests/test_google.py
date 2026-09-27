@@ -12,7 +12,8 @@ from pydantic_ai.messages import ToolCallPart
 
 from app.agent.agent import agent
 from app.agent.deps import AgentEnv, Deps
-from app.agent.events import ToolCall
+from app.agent.events import TimezoneLearned, ToolCall
+from app.agent.slots import TzSource
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
 from app.google import drafts, preview
@@ -75,7 +76,9 @@ class FakeGoogle:
         return httpx.Response(200, json={})
 
 
-async def connected(db: SessionFactory, pipeline: Pipeline, fake: FakeGoogle) -> Google:
+async def connected(
+    db: SessionFactory, pipeline: Pipeline, fake: FakeGoogle, *, zone: bool = True
+) -> Google:
     google = Google(
         db,
         creds=("id", "secret"),
@@ -85,6 +88,9 @@ async def connected(db: SessionFactory, pipeline: Pipeline, fake: FakeGoogle) ->
     await google.save(PHONE, "kate@gmail.com", "refresh-me")
     event = GmailEvent(phase=GmailPhase.CONNECTED, email="kate@gmail.com")
     await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, event, route=False)
+    if zone:  # read from their calendar on connect
+        learned = TimezoneLearned(tz="America/Chicago", source=TzSource.CALENDAR)
+        await pipeline.submit(PHONE, Origin.GOOGLE, Channel.SYSTEM, learned, route=False)
     return google
 
 
@@ -206,3 +212,13 @@ async def test_tokens_are_stored_encrypted_and_disconnect_revokes(
     async with db() as s:
         assert await s.get(GoogleAccountRow, PHONE) is None
     assert fake.calls[-1] == "POST /revoke"
+
+
+async def test_events_wait_until_their_timezone_is_known(
+    db: SessionFactory, pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    fake = FakeGoogle()
+    google = await connected(db, pipeline, fake, zone=False)
+    add = {"title": "Dentist", "start": "2026-10-02 15:00"}
+    await reply(pipeline, messenger, google, [ToolCallPart("create_event", add)])
+    assert fake.events == []  # a guessed timezone would put it at the wrong hour

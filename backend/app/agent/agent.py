@@ -517,14 +517,24 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     return lines or "nothing"
 
 
+# Times are only right in their timezone, and until they say (or their calendar does) it's a
+# guess: the calendar tools check it here, so no prompt has to explain it.
+UNKNOWN_ZONE = (
+    "not done: you don't know their timezone yet. Ask where they are, in passing, then "
+    "set_timezone, then try again."
+)
+
+
 @agent.tool(prepare=acting(google_connected))
 async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
     """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
-    Only after they said yes to this exact event. If you don't know their timezone yet, check
-    it with them first, in passing, once."""
+    Only after they said yes to this exact event."""
     d = ctx.deps
     assert d.env.google is not None
-    tz = (await d.pipeline.user(d.phone)).slots.zone()
+    slots = (await d.pipeline.user(d.phone)).slots
+    if slots.timezone_source is None:
+        return UNKNOWN_ZONE
+    tz = slots.zone()
     begins = datetime.fromisoformat(start).replace(tzinfo=tz)
     await (await _account(ctx)).create_event(
         title=title, start=begins, end=begins + timedelta(minutes=minutes)
@@ -541,7 +551,10 @@ async def move_event(
     2026-10-02 15:00; it keeps its length unless you give minutes. Only after they said yes to
     this exact change."""
     d = ctx.deps
-    tz = (await d.pipeline.user(d.phone)).slots.zone()
+    slots = (await d.pipeline.user(d.phone)).slots
+    if slots.timezone_source is None:
+        return UNKNOWN_ZONE
+    tz = slots.zone()
     begins = datetime.fromisoformat(start).replace(tzinfo=tz)
     title = await (await _account(ctx)).move_event(event_id, start=begins, minutes=minutes)
     await _record(ctx, "move_event", {"event_id": event_id, "start": start}, {}, app="google")

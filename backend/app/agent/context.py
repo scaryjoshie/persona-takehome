@@ -7,7 +7,7 @@ from datetime import datetime, tzinfo
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-from app.agent.slots import DEFAULT_TZ, Slots, TzSource
+from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.google.events import GmailPhase
@@ -139,19 +139,9 @@ def _text_of(m: ModelMessage) -> str:
 
 
 def their_time(slots: Slots, now: datetime) -> str:
-    """The time where they are, and how sure we are of their timezone."""
-    zone = slots.zone()
-    local = f"{now.astimezone(zone):%A %B %-d, %-I:%M %p}"
-    match slots.timezone_source:
-        case TzSource.SAID:
-            return f"It's {local} where they are ({zone.key}; they told you)."
-        case TzSource.CALENDAR:
-            return f"It's {local} where they are ({zone.key}, from their Google Calendar)."
-        case None:
-            return (
-                f"It's {local} in US Eastern time ({DEFAULT_TZ}); you don't know where they "
-                "are yet, so times here are Eastern."
-            )
+    """The time where they are (a US Eastern guess until they say, or their calendar does; the
+    calendar tools check that, so the prompt doesn't have to explain it)."""
+    return f"It's {now.astimezone(slots.zone()):%A %B %-d, %-I:%M %p}."
 
 
 SET_ASIDE = {
