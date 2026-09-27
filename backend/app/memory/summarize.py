@@ -25,8 +25,8 @@ from app.voice.call_state import CallEvent, CallTransition
 
 log = logging.getLogger(__name__)
 
-HIGH_TOKENS = 12_000  # summarize once the conversation after the summary passes this
-KEEP_TOKENS = 6_000  # and leave at least this much of the latest word for word
+HIGH_TOKENS = 40_000  # summarize once the conversation after the summary passes this
+KEEP_TOKENS = 20_000  # and leave at least this much of the latest word for word
 
 summarizer: Agent[None, str] = Agent(
     instructions=read_md("summary"), output_type=str, defer_model_check=True, name="summary"
