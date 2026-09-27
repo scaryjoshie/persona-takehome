@@ -103,6 +103,25 @@ class LiveCall:
                 self.closed = True
                 return
 
+    async def steer(self, text: str) -> None:
+        """Standing guidance as Live instructions (session.instructions.append): followed rather
+        than paraphrased, and it never prompts speech, so it goes in straight away. They
+        accumulate, so each one says what it replaces. pydantic-ai doesn't wrap this event, so
+        it goes through the connection's raw sender; without one it falls back to a silent note."""
+        send_event = getattr(getattr(self.session, "_connection", None), "_send_event", None)
+        if send_event is None:
+            return await self.send(text, speak=False)
+        for piece in _pieces(text):
+            if self.closed:
+                return
+            try:
+                await send_event(
+                    {"type": "session.instructions.append", "delegation_id": None, "content": piece}
+                )
+            except Exception:  # the session closed under us
+                self.closed = True
+                return
+
     def said(self, line: str) -> None:
         self.agent_lines += 1
         self.last_agent_line = line

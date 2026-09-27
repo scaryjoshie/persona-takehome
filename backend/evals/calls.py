@@ -2,8 +2,10 @@
 
     uv run uvicorn app.main:app --port 8765 &
     uv run python -m evals.calls [scenario ...]    # all if none given
+    PORT=8766 CALLS_OUT=calls-realtime uv run python -m evals.calls   # another server
 
-Steps: text:<msg>  accept  decline  start  say:<line>  silence:<s>  hangup  drop  wait:<s>.
+Steps: text:<msg>  accept  decline  start  say:<line>  cutin:<line>  silence:<s>  hangup  drop
+wait:<s>. `cutin` talks over the voice a second into its next line.
 `drop` closes the audio without hanging up (a lost connection).
 Transcripts: evals/out/calls/<name>.txt.
 """
@@ -19,8 +21,10 @@ import zlib
 
 import websockets
 
-PORT = 8765
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "calls")
+PORT = int(os.environ.get("PORT", "8765"))
+OUT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "out", os.environ.get("CALLS_OUT", "calls")
+)
 WAV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "wav")
 LINES = {
     "pick": "Honestly, you pick a name for yourself.",
@@ -155,6 +159,16 @@ SCENARIOS: dict[str, list[str]] = {
         "say:bye",
         "wait:10",
     ],
+    "talk_over": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "cutin:rename",
+        "say:siobhan",
+        "say:bye",
+        "wait:10",
+    ],
     "ignore_ring": ["text:Hey, what's a Persona?", "text:sure call me", "wait:45"],
     "decline": ["text:Hey, what's a Persona?", "text:sure call me", "decline", "wait:14"],
 }
@@ -165,7 +179,7 @@ async def run(name: str, steps: list[str]) -> str:
     log: list[str] = []
     t0 = time.time()
     ts = lambda: f"[{time.time() - t0:5.1f}]"  # noqa: E731
-    state = {"ringing": False, "last": time.time(), "audio": None}
+    state = {"ringing": False, "last": time.time(), "audio": None, "agent_talking": False}
     async with websockets.connect(f"ws://localhost:{PORT}/ws?phone={phone}", max_size=None) as ws:
         await ws.recv()
         await ws.send(json.dumps({"type": "reset"}))
@@ -177,6 +191,8 @@ async def run(name: str, steps: list[str]) -> str:
                 if m["type"] == "partial":
                     if m["speaker"] == "agent":
                         state["last"] = time.time()
+                        if not m["final"]:
+                            state["agent_talking"] = True
                     if m["final"]:
                         log.append(f"{ts()}   {m['speaker'].upper()} (voice): {m['text']}")
                 elif m["type"] == "call":
@@ -224,16 +240,24 @@ async def run(name: str, steps: list[str]) -> str:
 
             async def drain() -> None:
                 try:
-                    async for _ in state["audio"]:
+                    async for frame in state["audio"]:
+                        if isinstance(frame, str):  # a control frame, e.g. "flush" on barge-in
+                            log.append(f"{ts()}   · audio socket: {frame}")
+                            continue
                         state["last"] = time.time()
+                        if state.get("stopped"):  # first audio since they stopped talking
+                            gap = time.time() - state["stopped"]
+                            state["stopped"] = None
+                            log.append(f"{ts()}   · voice starts {gap:.1f}s after they stopped")
                 except Exception:
                     pass
 
             asyncio.create_task(drain())
             await quiet(4)
 
-        for step in steps:
+        for n, step in enumerate(steps):
             kind, _, arg = step.partition(":")
+            cutin_next = n + 1 < len(steps) and steps[n + 1].startswith("cutin:")
             if kind == "text":
                 log.append(f"{ts()} USER (text): {arg}")
                 await ws.send(json.dumps({"type": "message", "text": arg}))
@@ -251,13 +275,21 @@ async def run(name: str, steps: list[str]) -> str:
                 log.append(f"{ts()} USER: calls the agent")
                 await ws.send(json.dumps({"type": "call", "action": "start"}))
                 await open_audio()
-            elif kind == "say":
+            elif kind in ("say", "cutin"):
                 pcm = wave.open(wav(arg)).readframes(10**9)
-                log.append(f"{ts()} USER (says {arg})")
+                if kind == "cutin":  # wait for the voice's reply, then talk over it
+                    while not state["agent_talking"]:
+                        await pump(0.1)
+                    await pump(1.0)
+                log.append(f"{ts()} USER ({'talks over it' if kind == 'cutin' else 'says'} {arg})")
                 for i in range(0, len(pcm), FRAME):
                     await state["audio"].send(pcm[i : i + FRAME])
                     await asyncio.sleep(0.02)
-                await quiet()
+                state["stopped"] = time.time()
+                if kind == "say" and not cutin_next:
+                    await quiet()
+                else:
+                    state["agent_talking"] = False
             elif kind == "silence":
                 log.append(f"{ts()} USER: silent {arg}s")
                 await pump(float(arg))

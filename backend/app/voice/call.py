@@ -46,6 +46,7 @@ from app.agent.objectives import guidance
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
+from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
@@ -61,6 +62,7 @@ PROMISE = re.compile(
     re.I,
 )
 NOW = "Where things stand now:"
+REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
 STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
@@ -122,7 +124,8 @@ async def run_call(
                 Channel.SYSTEM,
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
-            state = StateNotes(pipeline, phone, call)
+            steer = get_settings().live_steer == "instructions"
+            state = StateNotes(pipeline, phone, call, instructions=steer)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
@@ -373,15 +376,22 @@ class StateNotes:
 
     SETTLE = 0.3  # seconds
 
-    def __init__(self, pipeline: Pipeline, phone: str, call: LiveCall) -> None:
+    def __init__(
+        self, pipeline: Pipeline, phone: str, call: LiveCall, *, instructions: bool = False
+    ) -> None:
         self._pipeline = pipeline
         self._phone = phone
         self._call = call
+        self._instructions = instructions  # as Live instructions rather than notes
         self._task: asyncio.Task[None] | None = None
 
     async def send_now(self) -> None:
         """The first note: the only one with lines to say (updates repeat, lines shouldn't)."""
-        await self._call.send(await self._note(scripts=True), speak=False)
+        note = await self._note(scripts=True)
+        if self._instructions:
+            await self._call.steer(note)
+        else:
+            await self._call.send(note, speak=False)
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():
@@ -390,6 +400,9 @@ class StateNotes:
     async def _hold_soon(self) -> None:
         await asyncio.sleep(self.SETTLE)
         note = await self._note(scripts=False)
+        if self._instructions:  # instructions pile up: say this one replaces the last
+            await self._call.steer(f"{REPLACES}\n{note}")
+            return
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
         await self._call.whisper(note)
 
