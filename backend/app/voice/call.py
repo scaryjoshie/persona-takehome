@@ -173,6 +173,7 @@ async def run_call(
                 asyncio.create_task(_signals(session, call)),
                 asyncio.create_task(_hang_up_when_done(call, end)),
                 asyncio.create_task(_silence(call)),
+                asyncio.create_task(_quiet(call)),
                 asyncio.create_task(_time_limit(call)),
             ]
             await ended.wait()
@@ -336,6 +337,7 @@ async def _captions(session: RealtimeSession, call: LiveCall, transcript: Transc
         speaker = _speaker_of(update.speaker)
         if speaker is Speaker.AGENT:
             call.speaking, call.voice_owes_reply = True, False
+            call.voice_at = time.monotonic()
         else:
             await call.user_started()
         # Live numbers turns across both speakers
@@ -379,6 +381,28 @@ async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None
             return end(call.hang_up_reason)
         call.hang_up_asked.clear()
         call.hang_up_reason, call.check_ins = "agent_hangup", 0
+
+
+VOICE_DONE = 1.5  # seconds without its words: it's done talking, whatever Live's turn says
+REPLY_WAIT = 4.0  # they spoke and it hasn't answered in this long: what's waiting is the answer
+
+
+async def _quiet(call: LiveCall) -> None:
+    """Go by what's heard, not by Live's turns. Live holds a turn open while its own backend
+    works (a minute, once) and says nothing meanwhile; waiting for that turn to end, two
+    finished tasks' answers sat unsaid while they asked "what the fuck?!"."""
+    while True:
+        await asyncio.sleep(0.25)
+        now = time.monotonic()
+        if call.speaking and now - call.voice_at > VOICE_DONE:
+            await call.turn_complete(asked_question=call.asked_question)
+        elif (
+            call.voice_owes_reply
+            and call.deferred
+            and now - max(call.heard_at, call.voice_at) > REPLY_WAIT
+        ):
+            call.voice_owes_reply = False
+            await call.turn_complete(asked_question=call.asked_question)
 
 
 async def _silence(call: LiveCall) -> None:

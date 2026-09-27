@@ -113,6 +113,7 @@ class LiveCall:
     working: dict[str, str] = field(default_factory=lambda: {})  # job → goal, while it runs
     said_still_looking: bool = False  # since they last spoke
     spoke_at: float = 0.0  # when a spoken note last went in; the voice's answer is coming
+    voice_at: float = 0.0  # when the voice's words were last heard
 
     async def send(self, text: str, *, speak: bool) -> None:
         """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes

@@ -380,3 +380,25 @@ def test_during_onboarding_a_connection_goes_in_silently_and_the_chain_moves_on(
     moved = ObjectiveMoved(left="google", how="done", got="s@x.com", now="help_need")
     said = ONBOARDING.announcement(moved)
     assert said is not None and "what they'd like help with" in said
+
+
+async def test_what_waits_is_said_once_the_voice_is_quiet_whatever_lives_turn_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.voice import call as call_module
+
+    session = FakeSession()
+    call = LiveCall(session)
+    call.speaking = True  # Live's turn is still open (its own backend is working)
+    await call.tell("Evanston: sunny, 65°F.")
+    assert session.sent == []
+    monkeypatch.setattr(call_module, "VOICE_DONE", 0.0)
+    watcher = asyncio.create_task(call_module._quiet(call))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.4)
+    assert session.sent == [("Evanston: sunny, 65°F.", True)]
+    await call.user_started()  # they ask something; the voice says nothing back
+    await call.tell("Miami: no storms forecast next week.")
+    monkeypatch.setattr(call_module, "REPLY_WAIT", 0.0)
+    await asyncio.sleep(0.4)
+    watcher.cancel()
+    assert session.sent[-1] == ("Miami: no storms forecast next week.", True)  # its answer
