@@ -1,7 +1,9 @@
-"""The secure link a job texts when it needs a secret (an API key, a token, a webhook URL).
+"""The secure link a job texts when it needs a secret (an API key, a token, a webhook URL),
+and where an app's sign-in page (Composio's) sends them back.
 
-GET  /api/secret/{token}   a small form: what to paste and where to get it
-POST /api/secret/{token}   stores it encrypted, then the job that asked carries on
+GET  /api/secret/{token}      a small form: what to paste and where to get it
+POST /api/secret/{token}      stores it encrypted, then the job that asked carries on
+GET  /api/signed-in/{token}   back from signing in: the job carries on either way
 
 The value goes from their browser to the vault; no agent sees it. A link works once.
 """
@@ -59,3 +61,15 @@ async def save(token: str, svc: ServicesDep, value: str = Form(...)) -> HTMLResp
         f"<p>Got it. Your {html.escape(done.app.title())} is being set up; "
         "head back to your texts.</p>",
     )
+
+
+@router.get("/api/signed-in/{token}")
+async def signed_in(token: str, svc: ServicesDep) -> HTMLResponse:
+    done = await svc.integrations.signed_in(token) if svc.integrations else None
+    if done is None:
+        return _page("Link expired", GONE)
+    sign_in, ok = done
+    app = html.escape(sign_in.app.title())
+    if not ok:
+        return _page("Not connected", f"<p>{app} didn't connect. Head back to your texts.</p>")
+    return _page("Connected ✓", f"<p>{app} is connected; head back to your texts.</p>")

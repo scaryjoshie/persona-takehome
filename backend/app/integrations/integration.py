@@ -3,7 +3,9 @@
 It's built from a few kinds of parts (code), and each app is a combination of them (data):
 `auth` says how we're let in, `api` how we act. Secret values are never in here: an ApiKey only
 names a secret, whose value lives encrypted in the integration's row, and an endpoint refers to
-it as {secret:name}. More kinds of parts (Composio, MCP, a browser login) join the unions later.
+it as {secret:name}. An app they sign in to (OAuth) goes through Composio: a ComposioConnection
+(their sign-in, held by Composio) and a ComposioApi (the catalog actions chosen for it). More
+kinds of parts (MCP, a browser login) join the unions later.
 """
 
 from __future__ import annotations
@@ -21,6 +23,16 @@ class ApiKey(BaseModel):
     kind: Literal["api_key"] = "api_key"
     secret: str = Name  # its name, e.g. "token" or "webhook_url"
     about: str  # what it is and where they get it; shown to them on the secure form
+
+
+class ComposioConnection(BaseModel):
+    """Their sign-in to an app, through Composio's hosted page; Composio holds the tokens."""
+
+    kind: Literal["composio"] = "composio"
+    toolkit: str  # Composio's name for the app: "slack", "googledrive"
+    user_id: str  # ours for them at Composio: opaque, never their phone number
+    auth_config_id: str = ""  # this integration's own, so its allowlist is only these actions
+    connected_account_id: str = ""  # set when the link is made; usable once ACTIVE
 
 
 class Param(BaseModel):
@@ -53,6 +65,28 @@ class HttpApi(BaseModel):
     endpoints: list[Endpoint] = []
 
 
+class Action(BaseModel):
+    """A catalog action chosen for them. Written by code from the catalog, never by a model."""
+
+    slug: str  # "SLACK_SEND_MESSAGE"
+    about: str  # the catalog's short name: "Send message"
+    args: str = ""  # its inputs in a line, for the job
+    effect: Literal["read", "act"] = "act"  # the catalog's readOnlyHint; untagged means act
+
+
+class ComposioApi(BaseModel):
+    kind: Literal["composio"] = "composio"
+    toolkit: str
+    version: str  # pinned: an action's behavior doesn't change under them
+    actions: list[Action] = []
+    # What the catalog lacks, called with their sign-in through Composio's proxy: paths under
+    # the app's own API, and like any agent-written endpoint a read only with a GET.
+    endpoints: list[Endpoint] = []
+
+
+# Told apart by their fields, so a part written without its `kind` still loads.
+Auth = ApiKey | ComposioConnection
+Api = HttpApi | ComposioApi
 Status = Literal["setting_up", "ready", "broken"]
 
 
@@ -64,8 +98,8 @@ class Integration(BaseModel):
     account: str = ""  # which workspace or account, if they have more than one
     notes: str = Field(default="", max_length=3000)  # how to use it for them: what worked, quirks
     status: Status = "setting_up"
-    auth: list[ApiKey] = []
-    api: HttpApi | None = None
+    auth: list[Auth] = []
+    api: Api | None = None
     template: str = ""  # built from a shipped template: its api is ours, not the agent's
     host: str = ""  # a template's per-user host ("canvas.school.edu")
 
@@ -76,14 +110,19 @@ class Integration(BaseModel):
 
     @property
     def secret_names(self) -> list[str]:
-        return [part.secret for part in self.auth]
+        return [part.secret for part in self.auth if isinstance(part, ApiKey)]
+
+    @property
+    def composio(self) -> ComposioConnection | None:
+        return next((a for a in self.auth if isinstance(a, ComposioConnection)), None)
 
     def describe(self) -> str:
         """One line for the chat agent."""
         label = f"{self.app} ({self.account})" if self.account else self.app
-        can = ", ".join(
-            e.about.rstrip(".").lower() for e in (self.api.endpoints if self.api else [])
-        )
+        abouts = [e.about for e in self.api.endpoints] if self.api else []
+        if isinstance(self.api, ComposioApi):
+            abouts = [a.about for a in self.api.actions] + abouts
+        can = ", ".join(about.rstrip(".").lower() for about in abouts)
         state = {"ready": "connected", "setting_up": "being set up", "broken": "needs fixing"}
         return f"{label}: {state[self.status]}" + (
             f"; can {can}" if can and self.status == "ready" else ""

@@ -122,7 +122,7 @@ def test_an_agent_written_read_must_be_a_get_but_a_template_s_can_be_a_post() ->
 
 def test_a_template_needs_a_real_host_when_it_takes_one() -> None:
     canvas = templates.build("canvas", host="Canvas.School.edu")
-    assert canvas.api is not None
+    assert isinstance(canvas.api, HttpApi)
     assert canvas.api.base_url == "https://canvas.school.edu/api/v1"
     assert canvas.api.allowed_hosts == ["canvas.school.edu"]
     for bad in ("", "evil.com/steal", "https://x.edu", "localhost"):
@@ -434,7 +434,7 @@ async def test_a_template_s_api_cannot_be_rewritten_by_a_save(
     assert todoist.api is not None
     tampered = todoist.api.model_copy(update={"allowed_hosts": ["evil.example.com"]})
     saved = await store.save(PHONE, todoist.model_copy(update={"api": tampered}))
-    assert saved.api is not None and saved.api.allowed_hosts == ["api.todoist.com"]
+    assert isinstance(saved.api, HttpApi) and saved.api.allowed_hosts == ["api.todoist.com"]
     with pytest.raises(ValueError, match="no template"):
         await store.save(PHONE, Integration(app="x", template="made_up"))
 

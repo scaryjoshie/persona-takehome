@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     google_client_id: str | None = None  # Google sign-in (Gmail and Calendar)
     google_client_secret: SecretStr | None = None
     credentials_key: SecretStr | None = None  # Fernet key that encrypts stored Google tokens
+    composio_api_key: SecretStr | None = None  # sign-ins to apps other than Google (OAuth)
     calls_per_ip_per_day: int = 100
 
 
