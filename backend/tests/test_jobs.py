@@ -15,9 +15,8 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from app.agent.agent import Bubbles, agent
+from app.agent.agent import agent
 from app.agent.deps import Deps
-from app.agent.events import Graduated
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
 from app.jobs.events import JobAsked, JobEnded, JobStarted, JobTold
@@ -215,35 +214,9 @@ async def test_a_restart_picks_running_jobs_back_up(
     assert (await row(db, "abc123")).status == "done"
 
 
-async def test_graduating_starts_the_first_job_and_unlocks_the_job_tools(
-    app: App, messenger: CapturingMessenger
+async def test_job_tools_are_there_by_text_and_for_the_back_office_but_not_the_voice(
+    app: App,
 ) -> None:
-    pipeline = app.pipeline
-    tools: list[list[str]] = []
-
-    async def fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
-        tools.append(sorted(t.name for t in info.function_tools))
-        if len(tools) == 1:
-            return ModelResponse(
-                parts=[ToolCallPart("graduate", {"first_action": "find a dentist for a cleaning"})]
-            )
-        return ModelResponse(parts=[ToolCallPart("final_result", {"bubbles": ["on it"]})])
-
-    assert app.env.jobs is not None
-    user = await pipeline.user(PHONE)
-    with agent.override(model=FunctionModel(fn)):
-        await agent.run("go", deps=app.env.deps(user, Medium.TEXT), output_type=Bubbles)
-    await settle(pipeline)
-
-    assert "start_job" not in tools[0]
-    assert {"start_job", "tell_job", "cancel_job"} <= set(tools[1])
-    started = [
-        e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, JobStarted)
-    ]
-    assert [s.goal for s in started] == ["find a dentist for a cleaning"]
-
-
-async def test_job_tools_are_hidden_before_graduation_and_from_the_voice(app: App) -> None:
     pipeline = app.pipeline
 
     async def tools_for(deps: Deps) -> list[str]:
@@ -257,13 +230,12 @@ async def test_job_tools_are_hidden_before_graduation_and_from_the_voice(app: Ap
             await agent.run("go", deps=deps, output_type=str)
         return seen
 
-    user = await pipeline.user(PHONE)
-    assert "start_job" not in await tools_for(app.env.deps(user, Medium.TEXT))
-    await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, Graduated())
-    user = await pipeline.user(PHONE)
-    assert "start_job" in await tools_for(app.env.deps(user, Medium.TEXT))
+    user = await pipeline.user(PHONE)  # mid-onboarding: nothing collected yet
+    assert {"start_job", "tell_job", "cancel_job"} <= set(
+        await tools_for(app.env.deps(user, Medium.TEXT))
+    )
     back_office = await tools_for(app.env.deps(user, Medium.VOICE, back_office=True))
-    assert {"start_job", "tell_job"} <= set(back_office)  # its voice turn gave the second key
+    assert {"start_job", "tell_job"} <= set(back_office)
     voice = await tools_for(app.env.deps(user, Medium.VOICE))
     assert not {"start_job", "tell_job"} & set(voice)
 

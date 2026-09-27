@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.capabilities import WebSearch
+from pydantic_ai.exceptions import UserError
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models import Model
 from pydantic_ai.run import AgentRun
@@ -103,11 +104,22 @@ class Jobs:
         )
         if resumed:
             self._launch(job, phone, answers=answers)
-        elif job in self._runs:
-            self._runs[job].enqueue(f"They said: {text}")
-        else:  # between runs: the next one picks it up, or the ending one runs once more
+        elif not self._slip_in(job, text):
+            # Between runs, or the run just ended: the next run picks it up, or the ending
+            # one runs once more.
             self._inbox.setdefault(job, []).append(text)
         return f"passed on to background task {job}"
+
+    def _slip_in(self, job: str, text: str) -> bool:
+        """Into the running conversation, if there is one still taking messages."""
+        run = self._runs.get(job)
+        if run is None:
+            return False
+        try:
+            run.enqueue(f"They said: {text}")
+        except UserError:  # it ended a moment ago
+            return False
+        return True
 
     async def cancel(self, phone: str, job: str, *, why: str = "") -> bool:
         row = await self._row(job)
@@ -280,17 +292,23 @@ class Jobs:
         await self._pipeline.submit(phone, Origin.JOB, Channel.SYSTEM, payload)
 
 
-def lines(rows: Sequence[JobRow]) -> list[str]:
-    """Open jobs as facts for the chat agent: they stay in front of it until they end."""
+def lines(rows: Sequence[JobRow], *, speaking: bool = False) -> list[str]:
+    """Open jobs as facts: they stay in front of the agent until they end. `speaking`: for the
+    voice, which never sees ids or tool names (its answers reach the job on their own)."""
     out: list[str] = []
     for row in rows:
-        if row.status == "waiting":
+        name = f"a background task ({row.goal})" if speaking else f"Background task {row.id}"
+        if row.status == "waiting" and speaking:
+            out.append(f"{name} needs their answer: {row.question} Ask them when it fits.")
+        elif row.status == "waiting":
             out.append(
-                f"Background task {row.id} ({row.goal}) is waiting on their answer: {row.question} "
+                f"{name} ({row.goal}) is waiting on their answer: {row.question} "
                 "Ask them when it fits, and pass the answer on (tell_job)."
             )
         else:
-            out.append(f"Background task {row.id} is working on: {row.goal}")
+            out.append(
+                f"{name} is working on: {row.goal}" if not speaking else f"{name} is underway."
+            )
     return out
 
 

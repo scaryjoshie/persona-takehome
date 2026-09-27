@@ -163,6 +163,14 @@ class LiveCall:
         else:
             self.held.append(text)
 
+    async def tell(self, text: str) -> None:
+        """Something they're waiting to hear (the email went out): said as soon as the voice is
+        free, never held for their next turn. Mid-sentence, it's said when the sentence ends."""
+        if self.speaking:
+            self.deferred.append(text)
+        else:
+            await self.send(text, speak=True)
+
     async def user_started(self) -> None:
         """They started talking, so the voice stopped. Held background goes in now, and
         anything deferred to the end of its sentence goes in silently rather than being lost

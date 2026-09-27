@@ -23,7 +23,14 @@ from sqlalchemy import delete
 from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import CallOptOut, ContactSaved, DeviceTimezone, Graduated, SlotChanged
+from app.agent.events import (
+    CallOptOut,
+    ContactSaved,
+    DeviceTimezone,
+    Graduated,
+    SlotChanged,
+    StepSetAside,
+)
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -226,6 +233,10 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.no_calls:
                 return None
             await users.set_slots(s, user.phone, no_calls=True)
+        case StepSetAside(step=step):
+            if step in user.slots.set_aside:
+                return None
+            await users.set_slots(s, user.phone, set_aside=",".join((*user.slots.set_aside, step)))
         case SlotChanged(slot=slot, new=new):
             old: str | None = getattr(user.slots, slot)
             if old == new:

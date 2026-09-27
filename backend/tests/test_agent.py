@@ -159,7 +159,7 @@ async def test_the_back_office_acts_only_after_a_voice_turn(
         messenger,
         lambda env, u: env.deps(u, Medium.VOICE, back_office=True, may_act=False),
     )
-    assert {"set_user_name", "set_agent_name", "record_help_need", "skip_gmail"} <= theirs
+    assert {"set_user_name", "set_agent_name", "record_help_need", "set_aside"} <= theirs
     assert not {"send_gmail_link", "send_text", "send_contact_card"} & theirs
 
 

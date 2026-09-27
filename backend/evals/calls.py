@@ -46,6 +46,11 @@ LINES = {
     "wrong": "Well, the name is incorrect. It's T U N G, and then S A H U R.",
     "doit": "Are you going to do that?",
     "next": "Okay. What else do you need from me?",
+    "grocery": (
+        "Actually, can you find me a good grocery store near the Northwestern Tech building "
+        "in Evanston?"
+    ),
+    "howworks": "Cool. So how does this whole thing work anyway?",
 }
 
 
@@ -73,6 +78,19 @@ def wav(line: str) -> str:
 FRAME = 960
 
 SCENARIOS: dict[str, list[str]] = {
+    "task_on_call": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "say:yes",
+        "say:siobhan",
+        "say:grocery",
+        "say:howworks",
+        "silence:30",
+        "say:bye",
+        "wait:12",
+    ],
     "hangup_on_pickup": [
         "text:Hey, what's a Persona?",
         "text:sure call me",

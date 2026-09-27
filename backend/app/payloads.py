@@ -17,6 +17,7 @@ from app.agent.events import (
     DeviceTimezone,
     Graduated,
     SlotChanged,
+    StepSetAside,
     ToolCall,
 )
 from app.events.decision import Decision
@@ -50,6 +51,7 @@ AnyPayload = Annotated[
     | VoiceUtterance
     | ToolCall
     | SlotChanged
+    | StepSetAside
     | Graduated
     | CallEvent
     | GmailEvent

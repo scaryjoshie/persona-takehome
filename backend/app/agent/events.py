@@ -79,6 +79,22 @@ class DeviceTimezone(Payload):
     tz: str
 
 
+Step = Literal["agent_name", "user_name", "help_need"]  # Google is set aside as a skip
+
+
+class StepSetAside(Payload):
+    """They'd rather not do a setup step (a name for you, theirs, what they need, Google). It
+    stops being asked for; it comes back only if they bring it up."""
+
+    kind: Literal["step_set_aside"] = "step_set_aside"
+    routes = False
+
+    step: Step
+
+    def turn(self, at: datetime) -> Turn | None:
+        return Turn(Role.NOTE, f"they'd rather not do this for now: {self.step.replace('_', ' ')}")
+
+
 class CallOptOut(Payload):
     """They'd rather not talk on the phone. The agent stops offering a call."""
 

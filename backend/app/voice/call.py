@@ -184,11 +184,12 @@ def _opener(user: User) -> str:
         )
     elif user.slots.user_name is None:
         next_step = "ask their name"
-    else:  # a callback: they may have called with something, so let them lead
-        next_step = (
-            "bridge back in a line (like you're picking up where you left off), and if they "
-            "called about something, go with that. Don't open with a question from the setup"
-        )
+    elif user.call.initiated_by is Initiator.AGENT and user.call.reason:
+        # A callback you placed: open on what it's for now. "Pick up where you left off"
+        # made the voice replay the previous call's last lines, on a different topic.
+        next_step = f"get to what this call is about ({user.call.reason}) in a line"
+    else:  # they called you: let them lead
+        next_step = "let them say what they called about. Don't open with a question from the setup"
     if user.call.initiated_by is Initiator.USER:
         opener = "They just called you. Pick up like a friend would"
     else:
@@ -460,7 +461,7 @@ class StateNotes:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         jobs = self._env.jobs
-        open_jobs = job_lines(await jobs.open(self._phone)) if jobs and user.slots.graduated else []
+        open_jobs = job_lines(await jobs.open(self._phone), speaking=True) if jobs else []
         known = "\n".join([what_you_know(user.slots, user.call), *open_jobs])
         return f"{NOW}\n{known}\n\n{stage}".strip()
 
@@ -544,7 +545,9 @@ class Listener:
                 )
                 note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()
                 if note and note.strip(".").lower() not in ("null", "none"):
-                    await self._call.whisper(note)
+                    # After acting, the note is the outcome of something they asked for ("sent"):
+                    # they're waiting on it. After their turn it's only background.
+                    await (self._call.tell(note) if act else self._call.whisper(note))
             except Exception:
                 log.exception("%s: listener run failed", self._phone)
             log.info("%s: back office ran in %.1fs", self._phone, time.monotonic() - started)

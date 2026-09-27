@@ -44,6 +44,7 @@ class User(BaseModel):
                 contact_name=row.contact_name,
                 timezone=row.timezone,
                 no_calls=row.no_calls,
+                set_aside=tuple(s for s in row.set_aside.split(",") if s),
             ),
             call=CallState(
                 phase=CallPhase(row.call_phase),
