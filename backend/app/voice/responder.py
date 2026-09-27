@@ -89,6 +89,7 @@ class LiveCall:
     wake: Callable[[], None] = lambda: None  # run the back office (a text arrived mid-call)
     check_ins: int = 0  # times the voice checked in on a silent line since they last spoke
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
+    steer_waiting: str | None = None  # the latest instructions, held while the voice speaks
 
     async def send(self, text: str, *, speak: bool) -> None:
         """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes
@@ -122,6 +123,20 @@ class LiveCall:
                 self.closed = True
                 return
 
+    async def steer_when_quiet(self, text: str) -> None:
+        """Instructions that arrive mid-sentence make Live rewrite the sentence as it speaks
+        ("i just texted you my contact card, awesome, my contact card's..."). While it speaks,
+        keep only the latest; it goes in when its turn ends or they start talking."""
+        if self.speaking:
+            self.steer_waiting = text
+        else:
+            await self.steer(text)
+
+    async def _steer_waiting(self) -> None:
+        text, self.steer_waiting = self.steer_waiting, None
+        if text:
+            await self.steer(text)
+
     def said(self, line: str) -> None:
         self.agent_lines += 1
         self.last_agent_line = line
@@ -143,6 +158,7 @@ class LiveCall:
         self.last_sound = self.heard_at = time.monotonic()
         self.check_ins = 0
         self.speaking, self.voice_owes_reply = False, True
+        await self._steer_waiting()
         waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
         if waiting:  # one append: several at once each drew their own reply
             await self.send("\n\n".join(waiting), speak=False)
@@ -150,6 +166,7 @@ class LiveCall:
     async def turn_complete(self, *, asked_question: bool) -> None:
         self.speaking = False
         self.asked_question = asked_question
+        await self._steer_waiting()
         deferred, self.deferred = self.deferred, []
         for text in deferred:
             await self.send(text, speak=True)

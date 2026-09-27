@@ -42,7 +42,7 @@ from app.agent import prompts
 from app.agent.agent import agent
 from app.agent.context import to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
-from app.agent.objectives import guidance
+from app.agent.objectives import guidance, settled
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
@@ -401,14 +401,21 @@ class StateNotes:
         await asyncio.sleep(self.SETTLE)
         note = await self._note(scripts=False)
         if self._instructions:  # instructions pile up: say this one replaces the last
-            await self._call.steer(f"{REPLACES}\n{note}")
+            done = settled(*(await self._state()), Medium.VOICE)
+            finished = (
+                f"\nAlready done, so don't bring these up again: {', '.join(done)}." if done else ""
+            )
+            await self._call.steer_when_quiet(f"{REPLACES}{finished}\n{note}")
             return
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
         await self._call.whisper(note)
 
-    async def _note(self, *, scripts: bool) -> str:
+    async def _state(self) -> tuple[User, list[Event]]:
         user = await self._pipeline.user(self._phone)
-        events = await self._pipeline.history(self._phone, limit=RECENT)
+        return user, list(await self._pipeline.history(self._phone, limit=RECENT))
+
+    async def _note(self, *, scripts: bool) -> str:
+        user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
 
