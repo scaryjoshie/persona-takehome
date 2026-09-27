@@ -159,11 +159,11 @@ def test_a_link_that_never_connected_gets_a_check_before_wrapping_up() -> None:
     assert open_name(no) == "wrap_up"
 
 
-def test_once_gmail_connects_they_pick_the_first_thing_and_nothing_reads_the_inbox() -> None:
+def test_once_gmail_connects_the_ask_is_open_and_nothing_reads_the_inbox() -> None:
     for medium in Medium:
         connected = situation(medium, agent_name="M", user_name="S", gmail="connected")
         assert open_name(connected) == "help_need"
-        assert "going through their email" in render(connected, "1", OBJECTIVE_TEXTS)
+        assert "anywhere in their life" in render(connected, "1", OBJECTIVE_TEXTS)
     wrapping = situation(agent_name="M", user_name="S", gmail="connected", help_need="bills")
     assert open_name(wrapping) == "wrap_up"
     assert "inbox" not in render(wrapping, "1", OBJECTIVE_TEXTS)
