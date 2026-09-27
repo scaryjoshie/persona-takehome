@@ -19,7 +19,6 @@ pnpm dev                    # http://localhost:5173, proxies to the backend on :
 
 Enter any 10-digit number on the first screen; each number is its own user. Chrome is the most reliable for the voice call (mic permission required).
 
-The iPhone bezel artwork in `frontend/public/bezels/` is not in git (Apple's assets); without it the phone falls back to a CSS frame.
 
 ### Google (Gmail + Calendar)
 
