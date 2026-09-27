@@ -7,6 +7,7 @@ from datetime import datetime, tzinfo
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
+from app.agent.objectives import ONBOARDING
 from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Role, Turn
@@ -144,13 +145,6 @@ def their_time(slots: Slots, now: datetime) -> str:
     return f"It's {now.astimezone(slots.zone()):%A %B %-d, %-I:%M %p}."
 
 
-SET_ASIDE = {
-    "agent_name": "naming you",
-    "user_name": "giving their name",
-    "help_need": "saying what they need",
-}
-
-
 def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -> str:
     """What's known, in plain sentences, rendered into every prompt. What's still to do is the
     objective's business, one at a time."""
@@ -184,9 +178,9 @@ def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -
     if slots.no_calls:
         lines.append("They'd rather not do a call. Don't offer one again unless they ask.")
     if slots.set_aside:
-        skipped = ", ".join(SET_ASIDE[step] for step in slots.set_aside)
+        aside = ", ".join(ONBOARDING[step].label for step in slots.set_aside)
         lines.append(
-            f"They'd rather not do this for now: {skipped}. Leave it unless they bring it up."
+            f"They'd rather not do this for now: {aside}. Leave it unless they bring it up."
         )
     if slots.graduated:
         lines.append("They've graduated: onboarding is done.")

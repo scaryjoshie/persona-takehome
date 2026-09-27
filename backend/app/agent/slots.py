@@ -44,15 +44,3 @@ class Slots(BaseModel):
             if self.timezone and self.timezone_source
             else ZoneInfo(DEFAULT_TZ)
         )
-
-    def missing(self) -> tuple[str, ...]:
-        out: list[str] = []
-        if self.agent_name is None:
-            out.append("agent_name")
-        if self.user_name is None:
-            out.append("user_name")
-        if self.help_need is None:
-            out.append("help_need")
-        if self.gmail in (None, GmailPhase.LINK_SENT):
-            out.append("gmail")
-        return tuple(step for step in out if step not in self.set_aside)

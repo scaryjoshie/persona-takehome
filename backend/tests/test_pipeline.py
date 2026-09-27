@@ -111,7 +111,7 @@ async def test_slot_events_update_the_user_and_repeat_values_are_dropped(
     assert first is not None and again is None
     assert isinstance(first.payload, SlotChanged) and first.payload.old is None
     assert [e.kind for e in await pipeline.history(PHONE)] == ["slot_changed"]
-    assert (await pipeline.user(PHONE)).slots.missing() == ("agent_name", "help_need", "gmail")
+    assert (await pipeline.user(PHONE)).slots.user_name == "Siobhan"
 
 
 async def test_gmail_and_graduation_events_update_slots(pipeline: Pipeline) -> None:

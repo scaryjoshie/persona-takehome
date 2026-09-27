@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.agent.slots import Slots
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.payload import Channel, Origin
@@ -38,7 +39,7 @@ async def test_append_assigns_seq_per_user_and_lists_in_order(
 async def test_user_state_round_trips(db: SessionFactory, clock: FakeClock) -> None:
     async with db() as s, s.begin():
         u = await users.ensure_user(s, PHONE, now=clock())
-        assert u.slots.missing() == ("agent_name", "user_name", "help_need", "gmail")
+        assert u.slots == Slots()  # nothing known yet
         await users.set_slots(s, PHONE, agent_name="Jarvis")
         await users.set_slots(s, PHONE, gmail=GmailPhase.LINK_SENT)
         call = CallState(phase=CallPhase.CONNECTED, call_id="c1", started_at=clock())

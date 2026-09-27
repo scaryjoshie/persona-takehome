@@ -33,7 +33,7 @@ TEXT = read_md("text")  # the text channel's format
 CALL = read_md("call")  # the voice on a call
 CALL_AGENT = read_md("call_agent")  # the call agent during a call
 VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
-JOBS = read_md("jobs")  # handing work to background tasks; once onboarding is done
+JOBS = read_md("jobs")  # handing work to background tasks, while any are open
 JOB = read_md("job")  # a background task itself
 
 # The first message, sent as written unless their first text says more than hi (text/reply.py).
