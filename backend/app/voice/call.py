@@ -394,23 +394,23 @@ async def _silence(call: LiveCall) -> None:
             if quiet >= STILL_LOOKING and not call.said_still_looking:
                 call.said_still_looking = True
                 goals = "; ".join(call.working.values())
-                await call.send(
+                await call.tell(
                     f"You're still working on this for them: {goals}. It isn't back yet, so "
                     'let them know in a few words, like "i\'m still looking".',
-                    speak=True,
+                    passing=True,
                 )
             continue
         if quiet < SILENCE:
             continue
         call.last_sound, call.check_ins = time.monotonic(), call.check_ins + 1
         if call.check_ins == 1:
-            await call.send(
-                "They've gone quiet. Check in once, gently, in a few words.", speak=True
+            await call.tell(
+                "They've gone quiet. Check in once, gently, in a few words.", passing=True
             )
         else:
-            await call.send(
+            await call.tell(
                 "Still quiet. Say in a sentence that you'll keep going by text, and say bye.",
-                speak=True,
+                passing=True,
             )
             call.hang_up_reason = "silence"
             call.hang_up_after = call.agent_lines
@@ -420,10 +420,9 @@ async def _silence(call: LiveCall) -> None:
 async def _time_limit(call: LiveCall) -> None:
     """Calls are capped at MAX_CALL: near the end, wrap up and hang up; text carries on."""
     await asyncio.sleep(MAX_CALL - WRAP_UP)
-    await call.send(
+    await call.tell(
         "The call is nearly at its 10-minute limit. Wrap up in a sentence or two: say you'll "
-        "keep going by text, and say bye.",
-        speak=True,
+        "keep going by text, and say bye."
     )
     await asyncio.sleep(WRAP_UP)
     call.hang_up_reason = "time_limit"

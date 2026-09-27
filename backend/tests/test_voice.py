@@ -12,10 +12,12 @@ import pytest
 from app.events.payload import Channel, Origin
 from app.google.events import GmailEvent, GmailPhase, InboxItem
 from app.jev import Jev
+from app.jobs.events import JobAsked
 from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import Typing, UserMessage
 from app.users.user import Medium
+from app.voice import responder as responder_module
 from app.voice.responder import UNSAID, LiveCall, VoiceResponder, call_note
 from tests.conftest import PHONE, CapturingMessenger, ev
 
@@ -186,6 +188,7 @@ async def test_silence_gets_a_check_in_then_a_graceful_hang_up(
 
     _, call, session = await on_a_call(app, VoiceResponder())
     monkeypatch.setattr(call_module, "SILENCE", 0.0)
+    monkeypatch.setattr(responder_module, "ANSWER_WAIT", 0.0)  # no voice here to answer
     watcher = asyncio.create_task(call_module._silence(call))  # pyright: ignore[reportPrivateUsage]
     await asyncio.wait_for(call.hang_up_asked.wait(), 5)
     watcher.cancel()
@@ -281,6 +284,9 @@ async def test_an_outcome_they_are_waiting_on_is_said_when_the_voice_is_free() -
     await call.turn_complete(asked_question=False)
     assert session.sent == [("The email is sent.", True)]
     await call.tell("The draft is in their texts.")
+    assert session.sent[-1] == ("The email is sent.", True)  # one at a time: it's answering
+    call.speaking = True
+    await call.turn_complete(asked_question=False)  # it said it; the next one goes
     assert session.sent[-1] == ("The draft is in their texts.", True)
     await call.user_started()  # they spoke: the voice owes them an answer first
     await call.tell("The event is on their calendar.")
@@ -339,3 +345,26 @@ async def test_a_text_sent_during_a_call_shows_typing_first(
     user = await app.pipeline.user(PHONE)
     await agent_module.say(app.env.deps(user, Medium.VOICE), "recap: aid form, NU-SHIP")
     assert messenger.typing == [True, False] and messenger.sent == ["recap: aid form, NU-SHIP"]
+
+
+async def test_what_waits_goes_in_as_one_note_and_only_their_own_doing_cuts_in(app: App) -> None:
+    pipeline, call, session = await on_a_call(app, VoiceResponder(jev=jev_answering("interrupt")))
+    call.speaking = True
+    for question in ("Which channel?", "Post it now or later?"):
+        asked = JobAsked(job="j1", question=question)
+        await pipeline.submit(PHONE, Origin.JOB, Channel.SYSTEM, asked)
+    assert session.sent == [] and (await last_decision(pipeline))["verb"] == "defer"
+    await call.turn_complete(asked_question=False)
+    spoken = [text for text, speak in session.sent if speak]
+    assert len(spoken) == 1 and "Which channel?" in spoken[0] and "Post it now" in spoken[0]
+
+
+async def test_a_passing_line_is_dropped_once_they_speak() -> None:
+    session = FakeSession()
+    call = LiveCall(session)
+    call.speaking = True
+    await call.tell("They've gone quiet. Check in once.", passing=True)
+    await call.tell("The email is sent.")
+    await call.user_started()
+    sent = session.sent[-1][0]
+    assert "The email is sent." in sent and "gone quiet" not in sent  # owed stays, passing goes

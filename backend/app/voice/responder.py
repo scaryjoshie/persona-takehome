@@ -19,6 +19,7 @@ from pydantic_ai.exceptions import UserError
 from app.agent.context import last_lines
 from app.events.decision import Decision
 from app.events.event import Event
+from app.events.payload import Origin
 from app.google.events import GmailEvent, GmailPhase, inbox_lines
 from app.jev import Jev
 from app.jobs.events import JobAsked, JobEnded
@@ -75,6 +76,7 @@ def call_note(event: Event) -> Note | None:
             return None
 
 
+ANSWER_WAIT = 6.0  # seconds a spoken note holds the next one while the voice starts answering
 UNSAID = "You haven't told them this yet; work it into your reply:"
 
 
@@ -90,7 +92,8 @@ class LiveCall:
     speaking: bool = False
     tool_running: bool = False
     asked_question: bool = False
-    deferred: list[str] = field(default_factory=lambda: [])
+    deferred: list[str] = field(default_factory=lambda: [])  # to say when its turn ends
+    passing: list[str] = field(default_factory=lambda: [])  # the same, dropped once they speak
     held: list[str] = field(default_factory=lambda: [])  # background, for their next turn
     voice_owes_reply: bool = False  # they spoke last; the voice's next words answer them
     agent_lines: int = 0  # the voice's finished turns so far
@@ -106,6 +109,7 @@ class LiveCall:
     steer_waiting: str | None = None  # the latest instructions, held while the voice speaks
     working: dict[str, str] = field(default_factory=lambda: {})  # job → goal, while it runs
     said_still_looking: bool = False  # since they last spoke
+    spoke_at: float = 0.0  # when a spoken note last went in; the voice's answer is coming
 
     async def send(self, text: str, *, speak: bool) -> None:
         """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes
@@ -168,14 +172,24 @@ class LiveCall:
         else:
             self.held.append(text)
 
-    async def tell(self, text: str) -> None:
-        """Something they're waiting to hear (the email went out): said as soon as the voice is
-        free, never held for their next turn. While it's talking, or about to answer them, it's
-        said when that turn ends."""
-        if self.speaking or self.voice_owes_reply:
-            self.deferred.append(text)
+    async def tell(self, text: str, *, passing: bool = False) -> None:
+        """Something to say (the email went out, a task's answer): the only way anything but
+        their own text gets spoken. Said as soon as the voice is free; while it's talking, about
+        to answer them, or still answering the last thing it was told, it waits for that turn
+        to end, with anything else waiting, as one note. Two spoken notes in a row each drew a
+        reply, and Live spliced them into one ("hey, you're connected hey! there we go").
+        `passing`: only true for now (a check-in on a quiet line); dropped if they speak first."""
+        if self.speaking or self.voice_owes_reply or self._answering():
+            (self.passing if passing else self.deferred).append(text)
         else:
-            await self.send(text, speak=True)
+            await self._speak(text)
+
+    def _answering(self) -> bool:
+        return time.monotonic() - self.spoke_at < ANSWER_WAIT
+
+    async def _speak(self, text: str) -> None:
+        self.spoke_at = time.monotonic()
+        await self.send(text, speak=True)
 
     async def user_started(self) -> None:
         """They started talking, so the voice stopped. Held background goes in now, and
@@ -184,19 +198,19 @@ class LiveCall:
         went unmentioned while the voice said it was still checking)."""
         self.last_sound = self.heard_at = time.monotonic()
         self.check_ins, self.said_still_looking = 0, False
-        self.speaking, self.voice_owes_reply = False, True
+        self.speaking, self.voice_owes_reply, self.spoke_at = False, True, 0.0
         owed = [f"{UNSAID}\n{text}" for text in self.deferred]
-        waiting, self.held, self.deferred = [*self.held, *owed], [], []
+        waiting, self.held, self.deferred, self.passing = [*self.held, *owed], [], [], []
         if waiting:  # one append: several at once each drew their own reply
             await self.send("\n\n".join(waiting), speak=False)
 
     async def turn_complete(self, *, asked_question: bool) -> None:
-        self.speaking = False
+        self.speaking, self.spoke_at = False, 0.0
         self.asked_question = asked_question
         await self._steer_waiting()
-        deferred, self.deferred = self.deferred, []
-        for text in deferred:
-            await self.send(text, speak=True)
+        deferred, self.deferred, self.passing = [*self.deferred, *self.passing], [], []
+        if deferred:
+            await self._speak("\n\n".join(deferred))
 
 
 QUESTION = (
@@ -236,10 +250,12 @@ class VoiceResponder:
         if call is None:
             return Decision(trigger_kind=event.kind, verb="drop", note="no call in progress")
         if not call.speaking:
-            await call.send(note.text, speak=note.speak)
+            await (call.tell(note.text) if note.speak else call.send(note.text, speak=False))
             return Decision(trigger_kind=event.kind, verb="send", note="agent not speaking")
         verb, by, confidence = await self._verb(event, call, ctx)
-        if call.tool_running and verb == "interrupt":
+        if verb == "interrupt" and event.origin is not Origin.USER:
+            verb, by = "defer", f"{by}; only what they do cuts in"  # the rest waits its turn
+        elif call.tool_running and verb == "interrupt":
             verb, by = "defer", f"{by}; a tool is running"
         match verb:
             case "interrupt":
@@ -247,7 +263,7 @@ class VoiceResponder:
             case "absorb":
                 await call.send(note.text, speak=False)
             case _:
-                call.deferred.append(note.text)
+                await call.tell(note.text)
         return Decision(trigger_kind=event.kind, verb=verb, by=by, confidence=confidence)
 
     def hang_up(self, phone: str) -> bool:
