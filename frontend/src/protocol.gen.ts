@@ -5,6 +5,11 @@ export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
 export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
 export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
 export type Channel = "text" | "voice" | "system";
+/**
+ * How we know their timezone. Only what a texting assistant could really know: their
+ * Google Calendar's setting, or what they told us (which wins; they may be travelling).
+ */
+export type TzSource = "calendar" | "said";
 export type Speaker = "user" | "agent";
 export type CallTransition = "ringing" | "connecting" | "connected" | "declined" | "failed" | "ended";
 export type Initiator = "agent" | "user";
@@ -25,6 +30,7 @@ export type Payload =
   | ContactCard
   | ContactSaved
   | DeviceTimezone
+  | TimezoneLearned
   | CallOptOut
   | VoiceUtterance
   | ToolCall
@@ -96,6 +102,7 @@ export interface WireEvent {
     | ContactCard
     | ContactSaved
     | DeviceTimezone
+    | TimezoneLearned
     | CallOptOut
     | VoiceUtterance
     | ToolCall
@@ -185,12 +192,21 @@ export interface ContactSaved {
   name: string;
 }
 /**
- * Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.
- * Calendar times and "what time is it for them" use it; the agent never sees it as an event.
+ * Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.
+ * Kept so older rows still load.
  */
 export interface DeviceTimezone {
   kind: "device_timezone";
   tz: string;
+}
+/**
+ * Where they are, in time: from their Google Calendar's setting, or because they said. What
+ * they said wins over the calendar; the pipeline drops a calendar zone after one they said.
+ */
+export interface TimezoneLearned {
+  kind: "timezone_learned";
+  tz: string;
+  source: TzSource;
 }
 /**
  * They'd rather not talk on the phone. The agent stops offering a call.
@@ -297,6 +313,7 @@ export interface Slots {
   no_calls: boolean;
   contact_name: string | null;
   timezone: string | null;
+  timezone_source: TzSource | null;
 }
 export interface CallState {
   phase: CallPhase;

@@ -12,6 +12,7 @@ The cut never falls inside a call: a call is summarized whole or not at all.
 from __future__ import annotations
 
 import logging
+from datetime import tzinfo
 
 from pydantic_ai import Agent
 from pydantic_ai.models import Model
@@ -56,16 +57,17 @@ def cut(events: list[Event]) -> int:
     return call_from if call_from is not None else at
 
 
-def transcript(events: list[Event]) -> str:
-    """The events as dated lines, for the summarizer."""
+def transcript(events: list[Event], tz: tzinfo) -> str:
+    """The events as dated lines in their timezone, for the summarizer."""
     lines: list[str] = []
     day = None
     for e in events:
-        turn = e.payload.turn(e.ts)
+        at = e.ts.astimezone(tz)
+        turn = e.payload.turn(at)
         if turn is None:
             continue
-        if e.ts.date() != day:
-            day = e.ts.date()
+        if at.date() != day:
+            day = at.date()
             lines.append(f"-- {day:%A %B %-d} --")
         lines.append(f"{turn.role.value} ({e.channel.value}): {turn.text}")
     return "\n".join(lines)
@@ -84,7 +86,10 @@ async def summarize_if_due(pipeline: Pipeline, model: Model, phone: str) -> bool
         if n == 0:
             return False
         before = memory.summary.text if memory.summary else "(none yet)"
-        prompt = f"# Your notes so far\n\n{before}\n\n# What came next\n\n{transcript(events[:n])}"
+        tz = (await pipeline.user(phone)).slots.zone()
+        prompt = (
+            f"# Your notes so far\n\n{before}\n\n# What came next\n\n{transcript(events[:n], tz)}"
+        )
         result = await summarizer.run(prompt, model=model)
         text = result.output.strip()
         if not text:

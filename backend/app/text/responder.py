@@ -105,4 +105,4 @@ class TextResponder:
 
 
 def _state(ctx: Context) -> dict[str, object]:
-    return {"channel": "text messages", "conversation": last_lines(ctx.recent)}
+    return {"channel": "text messages", "conversation": last_lines(ctx.recent, ctx.tz)}

@@ -43,6 +43,7 @@ from app.agent.agent import agent
 from app.agent.context import (
     last_lines,
     remembered,
+    their_time,
     to_model_messages,
     trim_history,
     what_you_know,
@@ -85,7 +86,9 @@ async def run_call(
     user = await pipeline.user(phone)
     memory, events = await pipeline.conversation(phone)
     history = trim_history(
-        to_model_messages(events), max_messages=SEED_MESSAGES, max_tokens=SEED_TOKENS
+        to_model_messages(events, user.slots.zone()),
+        max_messages=SEED_MESSAGES,
+        max_tokens=SEED_TOKENS,
     )
     # The summary goes in the instructions, not the seeded history, so trimming never drops
     # it; nothing summarizes during a call, so it can't go stale. Facts come with the state.
@@ -275,7 +278,9 @@ class Transcript:
             return
         self._checking.add(turn_id)
         try:
-            recent = last_lines(list(await self._pipeline.history(self._phone, limit=RECENT)))
+            user = await self._pipeline.user(self._phone)
+            events = await self._pipeline.history(self._phone, limit=RECENT)
+            recent = last_lines(events, user.slots.zone())
             if turn_id not in self._committed and await commits(self._jev, recent, saying):
                 self._committed.add(turn_id)
                 self._listener.heard(voice=True, saying=saying)
@@ -459,7 +464,8 @@ class StateNotes:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         facts = remembered(await self._pipeline.memory(self._phone), summary=False)
-        parts = (what_you_know(user.slots, user.call), facts, stage)
+        now = their_time(user.slots, self._pipeline.now())
+        parts = (f"{now}\n{what_you_know(user.slots, user.call)}", facts, stage)
         return f"{NOW}\n" + "\n\n".join(p for p in parts if p)
 
 
@@ -528,7 +534,7 @@ class Listener:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
                 _, events = await pipeline.conversation(self._phone)
-                history = to_model_messages(events)
+                history = to_model_messages(events, user.slots.zone())
                 woke = VOICE_TURN if act else THEIR_TURN
                 if saying:  # not logged yet: the voice is still talking
                     woke = f'{VOICE_SAYING} "{saying}"'

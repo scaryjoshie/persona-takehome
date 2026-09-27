@@ -552,7 +552,7 @@
       },
       "DeviceTimezone": {
         "additionalProperties": false,
-        "description": "Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.\nCalendar times and \"what time is it for them\" use it; the agent never sees it as an event.",
+        "description": "Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.\nKept so older rows still load.",
         "properties": {
           "kind": {
             "const": "device_timezone",
@@ -1077,6 +1077,17 @@
             ],
             "default": null,
             "title": "Timezone"
+          },
+          "timezone_source": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TzSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -1088,7 +1099,8 @@
           "graduated",
           "no_calls",
           "contact_name",
-          "timezone"
+          "timezone",
+          "timezone_source"
         ],
         "title": "Slots",
         "type": "object"
@@ -1154,6 +1166,32 @@
         ],
         "title": "Speaker",
         "type": "string"
+      },
+      "TimezoneLearned": {
+        "additionalProperties": false,
+        "description": "Where they are, in time: from their Google Calendar's setting, or because they said. What\nthey said wins over the calendar; the pipeline drops a calendar zone after one they said.",
+        "properties": {
+          "kind": {
+            "const": "timezone_learned",
+            "default": "timezone_learned",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/TzSource"
+          }
+        },
+        "required": [
+          "kind",
+          "tz",
+          "source"
+        ],
+        "title": "TimezoneLearned",
+        "type": "object"
       },
       "ToolCall": {
         "additionalProperties": false,
@@ -1291,6 +1329,15 @@
         ],
         "title": "TypingMessage",
         "type": "object"
+      },
+      "TzSource": {
+        "description": "How we know their timezone. Only what a texting assistant could really know: their\nGoogle Calendar's setting, or what they told us (which wins; they may be travelling).",
+        "enum": [
+          "calendar",
+          "said"
+        ],
+        "title": "TzSource",
+        "type": "string"
       },
       "UserMessage": {
         "additionalProperties": false,
@@ -1462,6 +1509,7 @@
                 "reply_due": "#/$defs/ReplyDue",
                 "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
+                "timezone_learned": "#/$defs/TimezoneLearned",
                 "tool_call": "#/$defs/ToolCall",
                 "typing": "#/$defs/Typing",
                 "user_message": "#/$defs/UserMessage",
@@ -1500,6 +1548,9 @@
               },
               {
                 "$ref": "#/$defs/DeviceTimezone"
+              },
+              {
+                "$ref": "#/$defs/TimezoneLearned"
               },
               {
                 "$ref": "#/$defs/CallOptOut"
@@ -1815,7 +1866,7 @@
       },
       "DeviceTimezone": {
         "additionalProperties": false,
-        "description": "Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.\nCalendar times and \"what time is it for them\" use it; the agent never sees it as an event.",
+        "description": "Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.\nKept so older rows still load.",
         "properties": {
           "kind": {
             "const": "device_timezone",
@@ -2214,6 +2265,32 @@
         "title": "Speaker",
         "type": "string"
       },
+      "TimezoneLearned": {
+        "additionalProperties": false,
+        "description": "Where they are, in time: from their Google Calendar's setting, or because they said. What\nthey said wins over the calendar; the pipeline drops a calendar zone after one they said.",
+        "properties": {
+          "kind": {
+            "const": "timezone_learned",
+            "default": "timezone_learned",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/TzSource"
+          }
+        },
+        "required": [
+          "kind",
+          "tz",
+          "source"
+        ],
+        "title": "TimezoneLearned",
+        "type": "object"
+      },
       "ToolCall": {
         "additionalProperties": false,
         "properties": {
@@ -2295,6 +2372,15 @@
         ],
         "title": "Typing",
         "type": "object"
+      },
+      "TzSource": {
+        "description": "How we know their timezone. Only what a texting assistant could really know: their\nGoogle Calendar's setting, or what they told us (which wins; they may be travelling).",
+        "enum": [
+          "calendar",
+          "said"
+        ],
+        "title": "TzSource",
+        "type": "string"
       },
       "UserMessage": {
         "additionalProperties": false,
@@ -2448,6 +2534,7 @@
         "reply_due": "#/$defs/ReplyDue",
         "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
+        "timezone_learned": "#/$defs/TimezoneLearned",
         "tool_call": "#/$defs/ToolCall",
         "typing": "#/$defs/Typing",
         "user_message": "#/$defs/UserMessage",
@@ -2486,6 +2573,9 @@
       },
       {
         "$ref": "#/$defs/DeviceTimezone"
+      },
+      {
+        "$ref": "#/$defs/TimezoneLearned"
       },
       {
         "$ref": "#/$defs/CallOptOut"

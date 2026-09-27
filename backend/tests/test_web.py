@@ -63,6 +63,8 @@ def fake_google(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=body)
     if request.url.path.endswith("/messages"):
         return httpx.Response(200, json={"messages": [{"id": "m1"}]})
+    if request.url.path.endswith("/settings/timezone"):
+        return httpx.Response(200, json={"value": "America/Denver"})
     headers = [{"name": "From", "value": "ConEd"}, {"name": "Subject", "value": "Bill"}]
     return httpx.Response(200, json={"snippet": "due soon", "payload": {"headers": headers}})
 
@@ -286,6 +288,8 @@ def test_real_google_connects_and_peeks_at_the_inbox(client: TestClient) -> None
     assert "kate@gmail.com" in done.text
     connected = [p for p in events_of(client, phone) if p["kind"] == "gmail"][-1]
     assert connected["email"] == "kate@gmail.com" and connected["inbox"][0]["sender"] == "ConEd"
+    kinds = [p["kind"] for p in events_of(client, phone)]
+    assert kinds.index("timezone_learned") < kinds.index("gmail")  # their calendar's, first
     again = client.get(f"/api/auth/google/callback?state={state}&code=c")
     assert "expired" in again.text  # a state works once
 
@@ -305,11 +309,7 @@ def test_calls_per_ip_limit() -> None:
     assert over_call_limit("10.0.0.10", 2) is False  # another IP has its own count
 
 
-def test_the_browser_timezone_is_kept(client: TestClient) -> None:
-    """Calendar times use their device's timezone; nonsense is ignored."""
-    with client.websocket_connect("/ws?phone=+15550004444&tz=Nowhere/Atlantis") as ws:
-        assert ws.receive_json()["slots"]["timezone"] is None
+def test_the_browser_timezone_is_ignored(client: TestClient) -> None:
+    """A texting assistant can't see their device's timezone, so the simulator doesn't either."""
     with client.websocket_connect("/ws?phone=+15550004444&tz=America/Los_Angeles") as ws:
-        ws.receive_json()
-    with client.websocket_connect("/ws?phone=+15550004444") as ws:
-        assert ws.receive_json()["slots"]["timezone"] == "America/Los_Angeles"
+        assert ws.receive_json()["slots"]["timezone"] is None

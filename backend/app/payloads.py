@@ -17,6 +17,7 @@ from app.agent.events import (
     DeviceTimezone,
     Graduated,
     SlotChanged,
+    TimezoneLearned,
     ToolCall,
 )
 from app.events.decision import Decision
@@ -46,6 +47,7 @@ AnyPayload = Annotated[
     | ContactCard
     | ContactSaved
     | DeviceTimezone
+    | TimezoneLearned
     | CallOptOut
     | VoiceUtterance
     | ToolCall

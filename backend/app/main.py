@@ -95,7 +95,6 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
             if settings.google_client_id and settings.google_client_secret
             else None,
             key=settings.credentials_key.get_secret_value() if settings.credentials_key else None,
-            tz=settings.timezone,
         ),
     )
     return built, live_model(settings)

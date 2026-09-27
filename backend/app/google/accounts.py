@@ -8,7 +8,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import httpx
 from cryptography.fernet import Fernet
@@ -19,8 +18,6 @@ from app.google import api
 from app.google.events import GmailPhase, InboxItem
 from app.google.models import GoogleAccountRow
 
-DEFAULT_TZ = "America/Chicago"
-
 
 class Google:
     def __init__(
@@ -29,11 +26,9 @@ class Google:
         *,
         creds: tuple[str, str] | None = None,  # OAuth client id and secret
         key: str | None = None,  # Fernet key for stored tokens
-        tz: str = DEFAULT_TZ,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.creds = creds
-        self.tz = ZoneInfo(tz)
         self.client = client or httpx.AsyncClient(timeout=httpx.Timeout(10.0))
         self._db = db
         self._fernet = Fernet(key) if key else None

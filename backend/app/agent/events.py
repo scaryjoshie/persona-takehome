@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
+from app.agent.slots import TzSource
 from app.events.payload import Payload, Role, Turn
 
 NamedSlot = Literal["agent_name", "user_name", "help_need"]
@@ -74,13 +75,28 @@ class ContactSaved(Payload):
 
 
 class DeviceTimezone(Payload):
-    """Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.
-    Calendar times and "what time is it for them" use it; the agent never sees it as an event."""
+    """Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.
+    Kept so older rows still load."""
 
     kind: Literal["device_timezone"] = "device_timezone"
     routes = False
 
     tz: str
+
+
+class TimezoneLearned(Payload):
+    """Where they are, in time: from their Google Calendar's setting, or because they said. What
+    they said wins over the calendar; the pipeline drops a calendar zone after one they said."""
+
+    kind: Literal["timezone_learned"] = "timezone_learned"
+    routes = False
+
+    tz: str  # IANA, like America/Denver
+    source: TzSource
+
+    def turn(self, at: datetime) -> Turn | None:
+        how = "they told you" if self.source is TzSource.SAID else "from their Google Calendar"
+        return Turn(Role.NOTE, f"their timezone is {self.tz} ({how})")
 
 
 class CallOptOut(Payload):

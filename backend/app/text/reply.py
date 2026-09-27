@@ -49,7 +49,7 @@ class Replier:
             isinstance(e.payload, AgentMessage) for e in events
         )
         deps = env.deps(await pipeline.user(phone), Medium.TEXT, first_reply=first)
-        history = to_model_messages(events)
+        history = to_model_messages(events, deps.user.slots.zone())
         await env.messenger.set_typing(phone, True)  # the dots cover the thinking time
         started = time.monotonic()
         try:

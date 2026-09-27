@@ -14,11 +14,14 @@ from __future__ import annotations
 import html
 import logging
 import secrets
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from fastapi import APIRouter, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.agent.events import TimezoneLearned
+from app.agent.slots import TzSource
 from app.events.payload import Channel, Origin
 from app.google import api, preview
 from app.google.events import EmailDraft, GmailEvent, GmailPhase
@@ -86,9 +89,22 @@ async def callback(
         log.exception("%s: Google connect failed", phone)
         await _failed(svc, phone)
         return _page("Something went wrong", "<p>That didn't go through. Try the link again.</p>")
+    await _learn_timezone(svc, phone, token)  # before "connected", so the reply knows it
     connected = GmailEvent(phase=GmailPhase.CONNECTED, email=email, inbox=inbox)
     await svc.pipeline.submit(phone, Origin.GOOGLE, Channel.SYSTEM, connected)
     return _done(email)
+
+
+async def _learn_timezone(svc: ServicesDep, phone: str, token: str) -> None:
+    """Their calendar's timezone, if Google says. Without it, the default guess stands."""
+    try:
+        tz = await api.calendar_timezone(svc.google.client, token)
+        ZoneInfo(tz)
+    except (httpx.HTTPError, KeyError, ValueError, ZoneInfoNotFoundError):
+        log.warning("%s: couldn't read their calendar's timezone", phone)
+        return
+    learned = TimezoneLearned(tz=tz, source=TzSource.CALENDAR)
+    await svc.pipeline.submit(phone, Origin.GOOGLE, Channel.SYSTEM, learned)
 
 
 async def _failed(svc: ServicesDep, phone: str) -> None:

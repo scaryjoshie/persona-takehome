@@ -213,7 +213,7 @@ def test_call_lines_are_read_in_spoken_order() -> None:
     ]
     ordered = [e.seq for e in spoken_order(events)]
     assert ordered == [1, 2, 5, 3, 4, 6, 8, 7]  # the save stays after their yes
-    assert "mila" in turns(events)[0].text  # the question comes before their yes
+    assert "mila" in turns(events, UTC)[0].text  # the question comes before their yes
 
 
 async def test_a_re_offer_after_it_is_done_gets_caught() -> None:

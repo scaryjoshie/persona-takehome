@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
@@ -16,14 +16,21 @@ from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
-from app.agent.context import remembered, what_you_know
+from app.agent.context import remembered, their_time, what_you_know
 from app.agent.deps import Deps
-from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
+from app.agent.events import (
+    CallOptOut,
+    ContactCard,
+    Graduated,
+    SlotChanged,
+    TimezoneLearned,
+    ToolCall,
+)
 from app.agent.objectives import guidance
-from app.agent.slots import Slots
+from app.agent.slots import TzSource
 from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
-from app.google.accounts import DEFAULT_TZ, Account
+from app.google.accounts import Account
 from app.google.events import GmailEvent, GmailPhase
 from app.memory.events import Forgot, Remembered
 from app.pipeline import RECENT
@@ -61,20 +68,12 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
-    tz = their_tz(d, user.slots)
-    now = f"It's {datetime.now(tz):%A %B %-d, %-I:%M %p} where they are."
+    now = their_time(user.slots, d.pipeline.now())
     parts = (f"# What you know\n\n{now}\n{known}", memory, stage, tail)
     return "\n\n".join(p for p in parts if p)
 
 
 # ---- helpers ----------------------------------------------------------------
-
-
-def their_tz(d: Deps, slots: Slots) -> ZoneInfo:
-    """Their device's timezone if their browser told us, else the configured default."""
-    if slots.timezone:
-        return ZoneInfo(slots.timezone)
-    return d.env.google.tz if d.env.google else ZoneInfo(DEFAULT_TZ)
 
 
 async def _record(
@@ -243,6 +242,19 @@ async def forget(ctx: RunContext[Deps], fact_id: int) -> str:
     if not await _submit(ctx, Forgot(fact_id=fact_id)):
         return f"there's no fact [{fact_id}] to forget"
     return "forgotten"
+
+
+@agent.tool(prepare=not_the_voice)
+async def set_timezone(ctx: RunContext[Deps], tz: str) -> str:
+    """They told you where they are or what time it is for them. `tz` is the IANA name, like
+    America/Denver or Europe/London."""
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        return f"{tz} isn't a timezone name; use one like America/Denver"
+    if not await _submit(ctx, TimezoneLearned(tz=tz, source=TzSource.SAID)):
+        return f"already set to {tz}"
+    return f"their timezone is {tz}"
 
 
 @agent.tool(prepare=acting(not_the_voice))
@@ -426,7 +438,7 @@ async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: i
     Only after they said yes to this exact event."""
     d = ctx.deps
     assert d.env.google is not None
-    tz = their_tz(d, (await d.pipeline.user(d.phone)).slots)
+    tz = (await d.pipeline.user(d.phone)).slots.zone()
     begins = datetime.fromisoformat(start).replace(tzinfo=tz)
     await (await _account(ctx)).create_event(
         title=title, start=begins, end=begins + timedelta(minutes=minutes)

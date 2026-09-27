@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from pydantic_ai.messages import (
     ModelMessage,
@@ -16,6 +17,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from app.agent.agent import agent
 from app.agent.context import to_model_messages, turns
 from app.agent.deps import AgentEnv
+from app.agent.slots import DEFAULT_TZ
 from app.database import SessionFactory
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
@@ -95,7 +97,7 @@ async def test_what_a_search_showed_stays_in_the_conversation(
 ) -> None:
     google = await connected(db, pipeline, FakeGoogle())
     await reply(pipeline, messenger, google, [ToolCallPart("search_email", {"query": "heater"})])
-    notes = [t.text for t in turns(await pipeline.history(PHONE))]
+    notes = [t.text for t in turns(await pipeline.history(PHONE), UTC)]
     assert any("[m1] Maria: heater (next week)" in n for n in notes)
 
 
@@ -172,7 +174,9 @@ async def test_a_summary_replaces_what_it_covers(
         await Replier(AgentEnv(pipeline, messenger, reply_model, "http://x")).reply(PHONE, 1)
     instructions, n = seen[0]
     assert "## Earlier with them" in instructions and notes in instructions
-    assert n == len(to_model_messages(events))  # only what the summary doesn't cover
+    assert n == len(
+        to_model_messages(events, ZoneInfo(DEFAULT_TZ))
+    )  # only what the summary doesn't cover
 
 
 async def test_the_next_summary_folds_in_the_last(pipeline: Pipeline) -> None:

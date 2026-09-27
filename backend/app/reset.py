@@ -65,7 +65,6 @@ async def main(really: bool) -> None:
         if settings.google_client_id and settings.google_client_secret
         else None,
         key=settings.credentials_key.get_secret_value() if settings.credentials_key else None,
-        tz=settings.timezone,
     )
     for phone in phones:  # revoke at Google, then forget the token
         try:

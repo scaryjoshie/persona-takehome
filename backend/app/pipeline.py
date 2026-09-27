@@ -16,12 +16,13 @@ import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import Protocol
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import CallOptOut, ContactSaved, DeviceTimezone, Graduated, SlotChanged
+from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged, TimezoneLearned
+from app.agent.slots import TzSource
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -56,6 +57,7 @@ class Context:
     pipeline: Pipeline
     phone: str
     recent: list[Event]
+    tz: tzinfo  # theirs, for showing times
 
     async def record(self, origin: Origin, channel: Channel, payload: Payload) -> Event | None:
         """Save and publish an event now, without routing it."""
@@ -219,7 +221,8 @@ class Pipeline:
             recent = await events.list_events(s, phone, limit=RECENT)
         assert user is not None
         responder = self.responders[user.floor]
-        decision = await responder.handle(event, user, Context(self, phone, recent))
+        context = Context(self, phone, recent, user.slots.zone())
+        decision = await responder.handle(event, user, context)
         if decision is not None:
             await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, decision)
 
@@ -257,10 +260,13 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.contact_name == name:
                 return None
             await users.set_slots(s, user.phone, contact_name=name)
-        case DeviceTimezone(tz=tz):
-            if user.slots.timezone == tz:
+        case TimezoneLearned(tz=tz, source=source):
+            slots = user.slots
+            if (slots.timezone, slots.timezone_source) == (tz, source):
                 return None
-            await users.set_slots(s, user.phone, timezone=tz)
+            if source is TzSource.CALENDAR and slots.timezone_source is TzSource.SAID:
+                return None  # what they said wins
+            await users.set_slots(s, user.phone, timezone=tz, timezone_source=source)
         case Graduated():
             if user.slots.graduated:
                 return None
