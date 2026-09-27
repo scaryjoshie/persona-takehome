@@ -32,7 +32,7 @@ def test_until_we_know_it_is_an_eastern_guess() -> None:
     now = datetime(2026, 9, 27, 21, 11, tzinfo=UTC)
     assert Slots().zone() == ZoneInfo(DEFAULT_TZ)
     line = their_time(Slots(), now)
-    assert "5:11 PM in US Eastern" in line and "don't know where they are" in line
+    assert "5:11 PM in US Eastern" in line and "don't know where they are yet" in line
     browser = Slots(timezone="America/Los_Angeles")  # from before: no source, so it doesn't count
     assert browser.zone() == ZoneInfo(DEFAULT_TZ)
     said = Slots(timezone="America/Denver", timezone_source=TzSource.SAID)

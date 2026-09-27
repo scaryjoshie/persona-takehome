@@ -148,9 +148,8 @@ def their_time(slots: Slots, now: datetime) -> str:
             return f"It's {local} where they are ({zone.key}, from their Google Calendar)."
         case None:
             return (
-                f"It's {local} in US Eastern time ({DEFAULT_TZ}), but you don't know where "
-                "they are. Times below are Eastern. If a time matters (adding an event, a "
-                "reminder), check their timezone first, once; when they tell you, set_timezone."
+                f"It's {local} in US Eastern time ({DEFAULT_TZ}); you don't know where they "
+                "are yet, so times here are Eastern."
             )
 
 
@@ -203,9 +202,10 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     return "\n".join(lines)
 
 
-def remembered(memory: Memory, *, summary: bool = True) -> str:
+def remembered(memory: Memory, *, summary: bool = True, numbered: bool = True) -> str:
     """The summary of the conversation before the latest messages, and the facts remembered
-    about them, for the top of a prompt. Empty when there's neither."""
+    about them, for the top of a prompt. Empty when there's neither. The voice gets them
+    unnumbered: it doesn't forget things (the back office does), so numbers could only leak."""
     parts: list[str] = []
     if summary and memory.summary:
         parts.append(
@@ -213,6 +213,8 @@ def remembered(memory: Memory, *, summary: bool = True) -> str:
             + memory.summary.text
         )
     if memory.facts:
-        lines = "\n".join(f"- [{f.id}] {f.text}" for f in memory.facts)
+        lines = "\n".join(
+            f"- [{f.id}] {f.text}" if numbered else f"- {f.text}" for f in memory.facts
+        )
         parts.append(f"## What you remember about them\n\n{lines}")
     return "\n\n".join(parts)

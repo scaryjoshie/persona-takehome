@@ -67,7 +67,9 @@ log = logging.getLogger(__name__)
 SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 NOW = "Where things stand now:"
 REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
-STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated", "remembered", "forgot"}
+# Not remembered/forgot: a fact learned on the call was said on the call, so the voice heard
+# it; re-sending instructions for it only adds churn (and idle appends can prompt speech).
+STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
@@ -463,7 +465,7 @@ class StateNotes:
     async def _note(self, *, scripts: bool) -> str:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
-        facts = remembered(await self._pipeline.memory(self._phone), summary=False)
+        facts = remembered(await self._pipeline.memory(self._phone), summary=False, numbered=False)
         now = their_time(user.slots, self._pipeline.now())
         parts = (f"{now}\n{what_you_know(user.slots, user.call)}", facts, stage)
         return f"{NOW}\n" + "\n\n".join(p for p in parts if p)

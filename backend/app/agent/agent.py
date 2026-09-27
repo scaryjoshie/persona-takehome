@@ -246,8 +246,8 @@ async def forget(ctx: RunContext[Deps], fact_id: int) -> str:
 
 @agent.tool(prepare=not_the_voice)
 async def set_timezone(ctx: RunContext[Deps], tz: str) -> str:
-    """They told you where they are or what time it is for them. `tz` is the IANA name, like
-    America/Denver or Europe/London."""
+    """They mentioned where they are or what time it is for them: set their timezone, in the
+    same turn. `tz` is the IANA name, like America/Denver or Europe/London."""
     try:
         ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError):
@@ -435,7 +435,8 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
 @agent.tool(prepare=acting(google_connected))
 async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
     """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
-    Only after they said yes to this exact event."""
+    Only after they said yes to this exact event. If you don't know their timezone yet, check
+    it with them first, in passing, once."""
     d = ctx.deps
     assert d.env.google is not None
     tz = (await d.pipeline.user(d.phone)).slots.zone()
