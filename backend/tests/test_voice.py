@@ -232,7 +232,7 @@ async def test_a_re_offer_after_it_is_done_gets_caught() -> None:
 
     from app.agent.slots import Slots
     from app.google.events import GmailPhase
-    from app.jev import Choice, Jev
+    from app.jev import Choice
     from app.voice.intent import slip
 
     class FakeJev:

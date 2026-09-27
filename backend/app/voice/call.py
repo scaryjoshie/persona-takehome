@@ -476,7 +476,9 @@ class StateNotes:
         jobs = self._env.jobs
         open_jobs = job_lines(await jobs.open(self._phone), speaking=True) if jobs else []
         now = their_time(user.slots, self._pipeline.now())
-        known = "\n".join([now, what_you_know(user.slots, user.call), *open_jobs])
+        connected = self._env.integrations
+        services = [i.describe() for i in await connected.all(self._phone)] if connected else []
+        known = "\n".join([now, what_you_know(user.slots, user.call, services), *open_jobs])
         return f"{NOW}\n" + "\n\n".join(p for p in (known, facts, stage) if p)
 
 

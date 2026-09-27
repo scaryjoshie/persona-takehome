@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, tzinfo
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -160,7 +161,7 @@ SET_ASIDE = {
 }
 
 
-def what_you_know(slots: Slots, call: CallState) -> str:
+def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -> str:
     """The facts, in plain sentences, rendered into every prompt."""
     lines = [
         f"Your name is {slots.agent_name}."
@@ -189,6 +190,8 @@ def what_you_know(slots: Slots, call: CallState) -> str:
             lines.append("Connecting Gmail failed. Offer to try again once.")
         case GmailPhase.DISCONNECTED:
             lines.append("They disconnected Google. Don't bring it up unless they ask.")
+    if services:
+        lines.append(f"Other services they connected: {'; '.join(services)}.")
     if slots.no_calls:
         lines.append("They'd rather not do a call. Don't offer one again unless they ask.")
     if slots.set_aside:

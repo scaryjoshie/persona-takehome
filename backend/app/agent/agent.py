@@ -65,7 +65,7 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
         return ""  # the Live backend: its snapshot would go stale; state reaches it as notes
     # Read fresh: tools earlier in this same run may have just saved a name.
     user = await d.pipeline.user(d.phone)
-    known = what_you_know(user.slots, user.call)
+    known = what_you_know(user.slots, user.call, await services(d))
     memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
@@ -82,15 +82,14 @@ async def job_lines(d: Deps) -> str:
     if d.env.jobs is None:
         return ""
     open_now = "\n".join(jobs.lines(await d.env.jobs.open(d.phone)))
-    services = await d.env.integrations.all(d.phone) if d.env.integrations else []
-    connected = (
-        "Services they connected (a background task uses them): "
-        + "; ".join(i.describe() for i in services)
-        if services
-        else ""
+    return f"{open_now}\n\n{prompts.JOBS}" if open_now else ""
+
+
+async def services(d: Deps) -> list[str]:
+    """Their connected services, one line each, for "What you know"."""
+    return (
+        [i.describe() for i in await d.env.integrations.all(d.phone)] if d.env.integrations else []
     )
-    handling = f"\n\n{prompts.JOBS}" if open_now else ""
-    return "\n".join(line for line in (connected, open_now) if line) + handling
 
 
 # ---- helpers ----------------------------------------------------------------
