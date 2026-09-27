@@ -40,7 +40,13 @@ from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import last_lines, to_model_messages, trim_history, what_you_know
+from app.agent.context import (
+    last_lines,
+    remembered,
+    to_model_messages,
+    trim_history,
+    what_you_know,
+)
 from app.agent.deps import AgentEnv
 from app.agent.objectives import guidance, settled
 from app.events.event import Event
@@ -60,7 +66,7 @@ log = logging.getLogger(__name__)
 SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 NOW = "Where things stand now:"
 REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
-STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
+STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated", "remembered", "forgot"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
@@ -77,18 +83,21 @@ async def run_call(
     """Run one call until it ends. The caller has accepted the websocket."""
     pipeline = env.pipeline
     user = await pipeline.user(phone)
+    memory, events = await pipeline.conversation(phone)
     history = trim_history(
-        to_model_messages(await pipeline.history(phone)),
-        max_messages=SEED_MESSAGES,
-        max_tokens=SEED_TOKENS,
+        to_model_messages(events), max_messages=SEED_MESSAGES, max_tokens=SEED_TOKENS
     )
+    # The summary goes in the instructions, not the seeded history, so trimming never drops
+    # it; nothing summarizes during a call, so it can't go stale. Facts come with the state.
+    earlier = memory.summary.text if memory.summary else ""
     deps = env.deps(user, Medium.VOICE)
     # Instructions are fixed for the whole session, so they hold nothing that changes during
     # the call. Where things stand goes in as a silent note, again after every change.
     delegation = dict((live_model.settings or {}).get("openai_live_delegation", {}))
     delegation["instructions"] = prompts.VOICE_BACKEND
     settings = OpenAILiveModelSettings(
-        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}",
+        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}"
+        + (f"\n\n# Earlier with them\n\n{earlier}" if earlier else ""),
         openai_live_delegation=cast(OpenAILiveResponsesDelegation, delegation),
     )
 
@@ -449,7 +458,9 @@ class StateNotes:
     async def _note(self, *, scripts: bool) -> str:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
-        return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
+        facts = remembered(await self._pipeline.memory(self._phone), summary=False)
+        parts = (what_you_know(user.slots, user.call), facts, stage)
+        return f"{NOW}\n" + "\n\n".join(p for p in parts if p)
 
 
 USER_SETTLE = 0.8  # seconds of quiet after their last piece before it counts as their turn
@@ -516,7 +527,8 @@ class Listener:
             try:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
-                history = to_model_messages(await pipeline.history(self._phone))
+                _, events = await pipeline.conversation(self._phone)
+                history = to_model_messages(events)
                 woke = VOICE_TURN if act else THEIR_TURN
                 if saying:  # not logged yet: the voice is still talking
                     woke = f'{VOICE_SAYING} "{saying}"'

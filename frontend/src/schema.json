@@ -550,6 +550,28 @@
         "title": "Decision",
         "type": "object"
       },
+      "DeviceTimezone": {
+        "additionalProperties": false,
+        "description": "Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.\nCalendar times and \"what time is it for them\" use it; the agent never sees it as an event.",
+        "properties": {
+          "kind": {
+            "const": "device_timezone",
+            "default": "device_timezone",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "tz"
+        ],
+        "title": "DeviceTimezone",
+        "type": "object"
+      },
       "EmailDraft": {
         "additionalProperties": false,
         "properties": {
@@ -622,6 +644,41 @@
           "event"
         ],
         "title": "EventMessage",
+        "type": "object"
+      },
+      "Forgot": {
+        "additionalProperties": false,
+        "description": "The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the\nevent if there is no such fact.",
+        "properties": {
+          "kind": {
+            "const": "forgot",
+            "default": "forgot",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "integer"
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact"
+          }
+        },
+        "required": [
+          "kind",
+          "fact_id",
+          "fact"
+        ],
+        "title": "Forgot",
         "type": "object"
       },
       "GmailEvent": {
@@ -807,6 +864,41 @@
         "title": "Reaction",
         "type": "object"
       },
+      "Remembered": {
+        "additionalProperties": false,
+        "description": "The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.",
+        "properties": {
+          "kind": {
+            "const": "remembered",
+            "default": "remembered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact": {
+            "title": "Fact",
+            "type": "string"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact Id"
+          }
+        },
+        "required": [
+          "kind",
+          "fact",
+          "fact_id"
+        ],
+        "title": "Remembered",
+        "type": "object"
+      },
       "ReplyDue": {
         "additionalProperties": false,
         "description": "Time to check whether to reply. Submitted by the text medium after a delay; never stored.",
@@ -973,6 +1065,18 @@
             ],
             "default": null,
             "title": "Contact Name"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timezone"
           }
         },
         "required": [
@@ -983,7 +1087,8 @@
           "gmail_email",
           "graduated",
           "no_calls",
-          "contact_name"
+          "contact_name",
+          "timezone"
         ],
         "title": "Slots",
         "type": "object"
@@ -1080,13 +1185,26 @@
             ],
             "default": null,
             "title": "Result"
+          },
+          "shown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Shown"
           }
         },
         "required": [
           "kind",
           "name",
           "args",
-          "result"
+          "result",
+          "shown"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -1334,10 +1452,13 @@
                 "contact_card": "#/$defs/ContactCard",
                 "contact_saved": "#/$defs/ContactSaved",
                 "decision": "#/$defs/Decision",
+                "device_timezone": "#/$defs/DeviceTimezone",
                 "email_draft": "#/$defs/EmailDraft",
+                "forgot": "#/$defs/Forgot",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
                 "reaction": "#/$defs/Reaction",
+                "remembered": "#/$defs/Remembered",
                 "reply_due": "#/$defs/ReplyDue",
                 "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
@@ -1378,6 +1499,9 @@
                 "$ref": "#/$defs/ContactSaved"
               },
               {
+                "$ref": "#/$defs/DeviceTimezone"
+              },
+              {
                 "$ref": "#/$defs/CallOptOut"
               },
               {
@@ -1400,6 +1524,12 @@
               },
               {
                 "$ref": "#/$defs/EmailDraft"
+              },
+              {
+                "$ref": "#/$defs/Remembered"
+              },
+              {
+                "$ref": "#/$defs/Forgot"
               },
               {
                 "$ref": "#/$defs/Decision"
@@ -1683,6 +1813,28 @@
         "title": "Decision",
         "type": "object"
       },
+      "DeviceTimezone": {
+        "additionalProperties": false,
+        "description": "Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.\nCalendar times and \"what time is it for them\" use it; the agent never sees it as an event.",
+        "properties": {
+          "kind": {
+            "const": "device_timezone",
+            "default": "device_timezone",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "tz"
+        ],
+        "title": "DeviceTimezone",
+        "type": "object"
+      },
       "EmailDraft": {
         "additionalProperties": false,
         "properties": {
@@ -1736,6 +1888,41 @@
           "status"
         ],
         "title": "EmailDraft",
+        "type": "object"
+      },
+      "Forgot": {
+        "additionalProperties": false,
+        "description": "The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the\nevent if there is no such fact.",
+        "properties": {
+          "kind": {
+            "const": "forgot",
+            "default": "forgot",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "integer"
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact"
+          }
+        },
+        "required": [
+          "kind",
+          "fact_id",
+          "fact"
+        ],
+        "title": "Forgot",
         "type": "object"
       },
       "GmailEvent": {
@@ -1900,6 +2087,41 @@
         "title": "Reaction",
         "type": "object"
       },
+      "Remembered": {
+        "additionalProperties": false,
+        "description": "The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.",
+        "properties": {
+          "kind": {
+            "const": "remembered",
+            "default": "remembered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact": {
+            "title": "Fact",
+            "type": "string"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact Id"
+          }
+        },
+        "required": [
+          "kind",
+          "fact",
+          "fact_id"
+        ],
+        "title": "Remembered",
+        "type": "object"
+      },
       "ReplyDue": {
         "additionalProperties": false,
         "description": "Time to check whether to reply. Submitted by the text medium after a delay; never stored.",
@@ -2022,13 +2244,26 @@
             ],
             "default": null,
             "title": "Result"
+          },
+          "shown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Shown"
           }
         },
         "required": [
           "kind",
           "name",
           "args",
-          "result"
+          "result",
+          "shown"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -2203,10 +2438,13 @@
         "contact_card": "#/$defs/ContactCard",
         "contact_saved": "#/$defs/ContactSaved",
         "decision": "#/$defs/Decision",
+        "device_timezone": "#/$defs/DeviceTimezone",
         "email_draft": "#/$defs/EmailDraft",
+        "forgot": "#/$defs/Forgot",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
         "reaction": "#/$defs/Reaction",
+        "remembered": "#/$defs/Remembered",
         "reply_due": "#/$defs/ReplyDue",
         "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
@@ -2247,6 +2485,9 @@
         "$ref": "#/$defs/ContactSaved"
       },
       {
+        "$ref": "#/$defs/DeviceTimezone"
+      },
+      {
         "$ref": "#/$defs/CallOptOut"
       },
       {
@@ -2269,6 +2510,12 @@
       },
       {
         "$ref": "#/$defs/EmailDraft"
+      },
+      {
+        "$ref": "#/$defs/Remembered"
+      },
+      {
+        "$ref": "#/$defs/Forgot"
       },
       {
         "$ref": "#/$defs/Decision"

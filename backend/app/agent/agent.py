@@ -16,7 +16,7 @@ from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
 from app.agent import prompts
-from app.agent.context import what_you_know
+from app.agent.context import remembered, what_you_know
 from app.agent.deps import Deps
 from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged, ToolCall
 from app.agent.objectives import guidance
@@ -25,6 +25,7 @@ from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
 from app.google.accounts import DEFAULT_TZ, Account
 from app.google.events import GmailEvent, GmailPhase
+from app.memory.events import Forgot, Remembered
 from app.pipeline import RECENT
 from app.text.events import AgentMessage
 from app.users.user import Medium
@@ -56,12 +57,14 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     # Read fresh: tools earlier in this same run may have just saved a name.
     user = await d.pipeline.user(d.phone)
     known = what_you_know(user.slots, user.call)
+    memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
     tz = their_tz(d, user.slots)
     now = f"It's {datetime.now(tz):%A %B %-d, %-I:%M %p} where they are."
-    return f"# What you know\n\n{now}\n{known}\n\n{stage}\n\n{tail}"
+    parts = (f"# What you know\n\n{now}\n{known}", memory, stage, tail)
+    return "\n\n".join(p for p in parts if p)
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -75,9 +78,14 @@ def their_tz(d: Deps, slots: Slots) -> ZoneInfo:
 
 
 async def _record(
-    ctx: RunContext[Deps], name: str, args: dict[str, Any], result: dict[str, Any]
+    ctx: RunContext[Deps],
+    name: str,
+    args: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    shown: str | None = None,
 ) -> None:
-    await _submit(ctx, ToolCall(name=name, args=args, result=result))
+    await _submit(ctx, ToolCall(name=name, args=args, result=result, shown=shown))
 
 
 async def _submit(ctx: RunContext[Deps], payload: Payload) -> bool:
@@ -215,6 +223,28 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
     return "recorded" if changed else "already recorded; nothing to do"
 
 
+@agent.tool(prepare=not_the_voice)
+async def remember(ctx: RunContext[Deps], fact: str) -> str:
+    """Remember something about them worth knowing next week, in one short sentence: who
+    someone in their life is, a preference, a routine, a constraint, a plan. Not their name,
+    your name, or what they want help with first: those have their own tools."""
+    fact = fact.strip()
+    if not fact:
+        return "nothing to remember"
+    if not await _submit(ctx, Remembered(fact=fact)):
+        return "you already remember that"
+    return "remembered"
+
+
+@agent.tool(prepare=not_the_voice)
+async def forget(ctx: RunContext[Deps], fact_id: int) -> str:
+    """Forget something you remembered, by its number: it was wrong, it changed (then
+    remember the new version), or they asked you to."""
+    if not await _submit(ctx, Forgot(fact_id=fact_id)):
+        return f"there's no fact [{fact_id}] to forget"
+    return "forgotten"
+
+
 @agent.tool(prepare=acting(not_the_voice))
 async def send_gmail_link(ctx: RunContext[Deps]) -> str:
     """Text the user a link to connect their Gmail. Say in your own words that you sent it."""
@@ -311,6 +341,10 @@ async def google_connected(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolD
     return tool if connected and not speaking else None
 
 
+def _clip(text: str, n: int = 100) -> str:
+    return text if len(text) <= n else text[: n - 1].rstrip() + "…"
+
+
 async def _account(ctx: RunContext[Deps]) -> Account:
     d = ctx.deps
     assert d.env.google is not None
@@ -324,8 +358,10 @@ async def _account(ctx: RunContext[Deps]) -> Account:
 async def search_email(ctx: RunContext[Deps], query: str) -> str:
     """Search their Gmail (Gmail search syntax works, e.g. from:landlord newer_than:7d)."""
     found = await (await _account(ctx)).search(query)
-    await _record(ctx, "search_email", {"query": query}, {"found": len(found)})
-    return "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({m.snippet})" for m in found) or "none"
+    lines = "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({m.snippet})" for m in found)
+    kept = "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({_clip(m.snippet)})" for m in found)
+    await _record(ctx, "search_email", {"query": query}, {"found": len(found)}, shown=kept)
+    return lines or "none"
 
 
 @agent.tool(prepare=google_connected)
@@ -379,8 +415,9 @@ async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
 async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     """Their calendar for the next few days."""
     events = await (await _account(ctx)).upcoming(days)
-    await _record(ctx, "upcoming_events", {"days": days}, {"found": len(events)})
-    return "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events) or "nothing"
+    lines = "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events)
+    await _record(ctx, "upcoming_events", {"days": days}, {"found": len(events)}, shown=lines)
+    return lines or "nothing"
 
 
 @agent.tool(prepare=acting(google_connected))

@@ -24,6 +24,7 @@ export type Payload =
   | Reaction
   | ContactCard
   | ContactSaved
+  | DeviceTimezone
   | CallOptOut
   | VoiceUtterance
   | ToolCall
@@ -32,6 +33,8 @@ export type Payload =
   | CallEvent
   | GmailEvent
   | EmailDraft
+  | Remembered
+  | Forgot
   | Decision;
 
 export interface SendMessage {
@@ -92,6 +95,7 @@ export interface WireEvent {
     | Reaction
     | ContactCard
     | ContactSaved
+    | DeviceTimezone
     | CallOptOut
     | VoiceUtterance
     | ToolCall
@@ -100,6 +104,8 @@ export interface WireEvent {
     | CallEvent
     | GmailEvent
     | EmailDraft
+    | Remembered
+    | Forgot
     | Decision;
 }
 export interface UserMessage {
@@ -179,6 +185,14 @@ export interface ContactSaved {
   name: string;
 }
 /**
+ * Their device's timezone (IANA, like America/Los_Angeles), sent by their browser.
+ * Calendar times and "what time is it for them" use it; the agent never sees it as an event.
+ */
+export interface DeviceTimezone {
+  kind: "device_timezone";
+  tz: string;
+}
+/**
  * They'd rather not talk on the phone. The agent stops offering a call.
  */
 export interface CallOptOut {
@@ -202,6 +216,7 @@ export interface ToolCall {
   result: {
     [k: string]: unknown;
   } | null;
+  shown: string | null;
 }
 /**
  * The agent recorded a name or the help need. The pipeline fills in `old` and drops the
@@ -247,6 +262,23 @@ export interface EmailDraft {
   gmail_id: string;
   status: "draft" | "sent";
 }
+/**
+ * The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.
+ */
+export interface Remembered {
+  kind: "remembered";
+  fact: string;
+  fact_id: number | null;
+}
+/**
+ * The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the
+ * event if there is no such fact.
+ */
+export interface Forgot {
+  kind: "forgot";
+  fact_id: number;
+  fact: string | null;
+}
 export interface Decision {
   kind: "decision";
   trigger_kind: string;
@@ -264,6 +296,7 @@ export interface Slots {
   graduated: boolean;
   no_calls: boolean;
   contact_name: string | null;
+  timezone: string | null;
 }
 export interface CallState {
   phase: CallPhase;

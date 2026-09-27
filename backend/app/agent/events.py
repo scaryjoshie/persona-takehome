@@ -29,11 +29,15 @@ class ToolCall(Payload):
     name: str
     args: dict[str, Any]
     result: dict[str, Any] | None = None
+    # What a lookup showed the agent (email headers, calendar events), kept short, so later
+    # turns can still refer to it. Bodies aren't kept: it can open an email again by its id.
+    shown: str | None = None
 
     def turn(self, at: datetime) -> Turn | None:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.items())
         result = "" if self.result is None else f" → {self.result}"
-        return Turn(Role.NOTE, f"you called {self.name}({args}){result}")
+        shown = f", and saw:\n{self.shown}" if self.shown else ""
+        return Turn(Role.NOTE, f"you called {self.name}({args}){result}{shown}")
 
 
 class Graduated(Payload):

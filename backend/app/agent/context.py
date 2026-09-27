@@ -8,6 +8,7 @@ from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.google.events import GmailPhase
+from app.memory.service import Memory
 from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
 from app.voice.events import VoiceUtterance
 
@@ -169,3 +170,18 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     if names_sorted and slots.help_need is None:
         lines.append("Names are sorted, so when it fits naturally, it's time for the ask.")
     return "\n".join(lines)
+
+
+def remembered(memory: Memory, *, summary: bool = True) -> str:
+    """The summary of the conversation before the latest messages, and the facts remembered
+    about them, for the top of a prompt. Empty when there's neither."""
+    parts: list[str] = []
+    if summary and memory.summary:
+        parts.append(
+            "## Earlier with them\n\nThe conversation before the messages below, in short:\n"
+            + memory.summary.text
+        )
+    if memory.facts:
+        lines = "\n".join(f"- [{f.id}] {f.text}" for f in memory.facts)
+        parts.append(f"## What you remember about them\n\n{lines}")
+    return "\n\n".join(parts)

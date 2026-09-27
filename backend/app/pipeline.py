@@ -28,6 +28,9 @@ from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
+from app.memory import service as memories
+from app.memory.events import Forgot, Remembered
+from app.memory.service import Memory, Summary
 from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
@@ -87,9 +90,24 @@ class Pipeline:
         async with self._db() as s, s.begin():
             return await users.ensure_user(s, phone, now=self._clock())
 
-    async def history(self, phone: str, *, limit: int | None = None) -> list[Event]:
+    async def history(
+        self, phone: str, *, limit: int | None = None, after_seq: int = 0
+    ) -> list[Event]:
         async with self._db() as s:
-            return await events.list_events(s, phone, limit=limit)
+            return await events.list_events(s, phone, limit=limit, after_seq=after_seq)
+
+    async def memory(self, phone: str) -> Memory:
+        async with self._db() as s:
+            return await memories.memory(s, phone)
+
+    async def conversation(self, phone: str) -> tuple[Memory, list[Event]]:
+        """What a model sees of them: the memory, and the events its summary doesn't cover."""
+        memory = await self.memory(phone)
+        return memory, await self.history(phone, after_seq=memory.after_seq)
+
+    async def save_summary(self, phone: str, summary: Summary) -> None:
+        async with self._db() as s, s.begin():
+            await memories.set_summary(s, phone, summary, now=self._clock())
 
     def now(self) -> datetime:
         return self._clock()
@@ -163,6 +181,7 @@ class Pipeline:
         """Debug: forget everything about a user."""
         async with self._locks[phone], self._db() as s, s.begin():
             await events.delete_events(s, phone)
+            await memories.delete_memory(s, phone)
             await users.delete_user(s, phone)
 
     async def record(
@@ -208,7 +227,8 @@ class Pipeline:
 async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -> Payload | None:
     """The events that change user state, and how. Returns the event to record (possibly
     filled in), or None to drop it: an impossible call transition, a slot set to the value
-    it already has, a second "link sent", or a second graduation."""
+    it already has, a second "link sent", a second graduation, a fact already remembered, or
+    forgetting one that isn't."""
     match payload:
         case CallEvent():
             call = next_state(user.call, payload, now)
@@ -245,6 +265,16 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.graduated:
                 return None
             await users.set_slots(s, user.phone, graduated=True)
+        case Remembered(fact=fact):
+            fact_id = await memories.add_fact(s, user.phone, fact, now=now)
+            if fact_id is None:
+                return None
+            return payload.model_copy(update={"fact_id": fact_id})
+        case Forgot(fact_id=fact_id):
+            fact = await memories.forget_fact(s, user.phone, fact_id, now=now)
+            if fact is None:
+                return None
+            return payload.model_copy(update={"fact": fact})
         case Typing(active=active):
             await users.set_typing(s, user.phone, now if active else None)
         case _:
