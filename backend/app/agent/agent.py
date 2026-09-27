@@ -446,6 +446,9 @@ async def google_connected(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolD
     return tool if connected and not speaking else None
 
 
+READ_KEPT = 600  # characters of an opened email kept in the log
+
+
 def _clip(text: str, n: int = 100) -> str:
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
@@ -474,8 +477,18 @@ async def search_email(ctx: RunContext[Deps], query: str) -> str:
 @agent.tool(prepare=google_connected)
 async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
     """Open one email by the id from search_email."""
-    await _record(ctx, "read_email", {"message_id": message_id}, {}, app="google")
-    return await (await _account(ctx)).read(message_id)
+    text = await (await _account(ctx)).read(message_id)
+    # What it said stays in the log: the next run (on a call, a run per turn) knows it's been
+    # read, instead of opening it again and having the voice say it all twice.
+    await _record(
+        ctx,
+        "read_email",
+        {"message_id": message_id},
+        {},
+        shown=_clip(text, READ_KEPT),
+        app="google",
+    )
+    return text
 
 
 @agent.tool(prepare=acting(google_connected))
