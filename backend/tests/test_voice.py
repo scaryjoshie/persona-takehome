@@ -439,3 +439,16 @@ async def test_a_sign_off_needs_jev_to_be_sure(choice: str, p: float, move: str 
 
     jev = Jev(api_key="k", client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
     assert await saying(jev, ["user: gotta go"], "alright, talk soon, bye!") == move
+
+
+@pytest.mark.parametrize(("p", "told"), [(0.93, True), (0.34, False)])
+async def test_a_note_the_voice_already_said_is_not_said_again(p: float, told: bool) -> None:
+    from app.voice.intent import already_told
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"answers": {"q": {"noul": p}}})
+
+    jev = Jev(api_key="k", client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+    said = ["assistant: the aid office says your application is incomplete"]
+    assert await already_told(jev, said, "The aid application is incomplete.") is told
+    assert await already_told(None, said, "anything") is False  # without Jev, it's news

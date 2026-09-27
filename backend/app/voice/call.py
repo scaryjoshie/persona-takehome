@@ -60,7 +60,7 @@ from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
-from app.voice.intent import accepts, saying, slip
+from app.voice.intent import accepts, already_told, saying, slip
 from app.voice.responder import LiveCall, VoiceResponder
 from app.web.protocol import TranscriptPartial
 
@@ -640,7 +640,13 @@ class CallAgent:
                 if note and note.strip(".").lower() not in ("null", "none"):
                     # After acting, the note is the outcome of something they asked for ("sent"):
                     # they're waiting on it. After their turn it's only background.
-                    await (self._call.tell(note) if act else self._call.whisper(note))
+                    # Unless the voice already said it: then it's only background too.
+                    now = await pipeline.history(self._phone, limit=RECENT)
+                    told = await already_told(
+                        self._env.jev, last_lines(now, user.slots.zone()), note
+                    )
+                    speak = act and not told
+                    await (self._call.tell(note) if speak else self._call.whisper(note))
             except Exception:
                 log.exception("%s: call agent run failed", self._phone)
             log.info("%s: call agent ran in %.1fs", self._phone, time.monotonic() - started)

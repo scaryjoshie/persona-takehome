@@ -61,6 +61,21 @@ async def accepts(jev: Jev | None, conversation: list[str]) -> bool:
     return p is not None and p >= SURE
 
 
+TOLD = (
+    "On a phone call, the assistant has a note it could say next. Going by the conversation, "
+    "has it already told them what the note says (the same facts, even in other words)?"
+)
+
+
+async def already_told(jev: Jev | None, conversation: list[str], note: str) -> bool:
+    """The voice already said what this note says: lookups get re-run, turn after turn, and
+    each one's answer came out loud again. Without Jev, it's news."""
+    if jev is None:
+        return False
+    p = await jev.yes_probability(TOLD, {"conversation": conversation, "note": note})
+    return p is not None and p >= SURE
+
+
 SLIP = (
     "The assistant just said its latest line on a phone call. Did it offer to do, or ask for, "
     "something the facts say is already done?"
