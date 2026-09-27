@@ -75,6 +75,9 @@ def call_note(event: Event) -> Note | None:
             return None
 
 
+UNSAID = "You haven't told them this yet; work it into your reply:"
+
+
 class Session(Protocol):
     async def send(self, content: str, /, *, respond: bool | None = None) -> None: ...
 
@@ -101,6 +104,8 @@ class LiveCall:
     check_ins: int = 0  # times the voice checked in on a silent line since they last spoke
     closed: bool = False  # the call ended; late sends (a call agent run finishing) are dropped
     steer_waiting: str | None = None  # the latest instructions, held while the voice speaks
+    working: dict[str, str] = field(default_factory=lambda: {})  # job → goal, while it runs
+    said_still_looking: bool = False  # since they last spoke
 
     async def send(self, text: str, *, speak: bool) -> None:
         """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes
@@ -174,12 +179,14 @@ class LiveCall:
 
     async def user_started(self) -> None:
         """They started talking, so the voice stopped. Held background goes in now, and
-        anything deferred to the end of its sentence goes in silently rather than being lost
-        with the cut-off turn."""
+        anything deferred to the end of its sentence goes in with its reply to them: it was
+        still to be said, and a silent note alone reads as already dealt with (a failed task
+        went unmentioned while the voice said it was still checking)."""
         self.last_sound = self.heard_at = time.monotonic()
-        self.check_ins = 0
+        self.check_ins, self.said_still_looking = 0, False
         self.speaking, self.voice_owes_reply = False, True
-        waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
+        owed = [f"{UNSAID}\n{text}" for text in self.deferred]
+        waiting, self.held, self.deferred = [*self.held, *owed], [], []
         if waiting:  # one append: several at once each drew their own reply
             await self.send("\n\n".join(waiting), speak=False)
 

@@ -3,6 +3,7 @@ fragments plus a dynamic state block; tools write facts through pipeline."""
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from collections.abc import Awaitable, Callable
@@ -121,8 +122,18 @@ async def _submit(ctx: RunContext[Deps], payload: Payload) -> bool:
     return await d.pipeline.submit(d.phone, d.origin, d.channel, payload) is not None
 
 
+CALL_TYPING = 1.2  # seconds of typing dots before a text sent during a call
+
+
 async def say(deps: Deps, text: str) -> None:
-    """Send a bubble: record it, then push it through the messenger."""
+    """Send a bubble: record it, then push it through the messenger. During a call nothing
+    else shows typing (by text the reply loop does), so the dots show here first."""
+    if deps.medium is Medium.VOICE:
+        await deps.env.messenger.set_typing(deps.phone, True)
+        try:
+            await asyncio.sleep(CALL_TYPING)
+        finally:
+            await deps.env.messenger.set_typing(deps.phone, False)
     bubble = AgentMessage(text=text, from_call=deps.medium is Medium.VOICE)
     await deps.pipeline.submit(deps.phone, deps.origin, deps.channel, bubble)
     await deps.env.messenger.send(deps.phone, text)

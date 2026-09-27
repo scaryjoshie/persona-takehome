@@ -16,8 +16,8 @@ from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import Typing, UserMessage
 from app.users.user import Medium
-from app.voice.responder import LiveCall, VoiceResponder, call_note
-from tests.conftest import PHONE, ev
+from app.voice.responder import UNSAID, LiveCall, VoiceResponder, call_note
+from tests.conftest import PHONE, CapturingMessenger, ev
 
 
 class FakeSession:
@@ -118,6 +118,24 @@ async def test_talking_over_the_voice_hands_held_notes_in_silently(app: App) -> 
     assert len(call.deferred) == 1
     await call.user_started()
     assert call.deferred == [] and not call.speaking and session.sent[-1][1] is False
+    assert session.sent[-1][0].startswith(UNSAID)  # still to be said, in its reply to them
+
+
+async def test_a_task_running_through_a_quiet_stretch_gets_one_still_looking(
+    app: App, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.voice import call as call_module
+
+    _, call, session = await on_a_call(app, VoiceResponder())
+    call.working["j1"] = "look up NU-SHIP enrollment"
+    monkeypatch.setattr(call_module, "STILL_LOOKING", 0.0)
+    monkeypatch.setattr(call_module, "SILENCE", 0.0)
+    watcher = asyncio.create_task(call_module._silence(call))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(2.5)
+    watcher.cancel()
+    spoken = [text for text, speak in session.sent if speak]
+    assert len(spoken) == 1 and "still looking" in spoken[0] and "NU-SHIP" in spoken[0]
+    assert not call.hang_up_asked.is_set()  # waiting on a task isn't them leaving
 
 
 async def test_nothing_reaches_a_call_that_ended(app: App) -> None:
@@ -310,3 +328,14 @@ def test_a_callback_opens_on_what_this_call_is_for() -> None:
     )
     opener = _opener(user)
     assert "the email draft" in opener and "left off" not in opener
+
+
+async def test_a_text_sent_during_a_call_shows_typing_first(
+    app: App, messenger: CapturingMessenger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.agent import agent as agent_module
+
+    monkeypatch.setattr(agent_module, "CALL_TYPING", 0.0)
+    user = await app.pipeline.user(PHONE)
+    await agent_module.say(app.env.deps(user, Medium.VOICE), "recap: aid form, NU-SHIP")
+    assert messenger.typing == [True, False] and messenger.sent == ["recap: aid form, NU-SHIP"]

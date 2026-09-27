@@ -53,6 +53,7 @@ from app.agent.events import ObjectiveMoved
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.jev import Jev
+from app.jobs.events import JobAsked, JobEnded, JobStarted
 from app.jobs.runner import lines as job_lines
 from app.pipeline import RECENT, Pipeline
 from app.settings import get_settings
@@ -353,6 +354,7 @@ def _sentence_end(text: str) -> bool:
 
 GOODBYE = re.compile(r"\b(bye|goodbye|talk soon|see you|later)\b", re.I)
 SILENCE = 20.0  # seconds of nobody talking before the voice checks in
+STILL_LOOKING = 8.0  # seconds of quiet while a task runs before the voice says it's on it
 DROP_GRACE = 0.6  # seconds for a hang-up message to beat the audio closing
 HANG_UP_WAIT = 10.0  # seconds: hang up anyway if no goodbye plays
 MAX_CALL = 600.0  # seconds: calls are billed by the minute, so a forgotten tab can't run on
@@ -380,12 +382,25 @@ async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None
 
 
 async def _silence(call: LiveCall) -> None:
-    """They've gone quiet (muted, walked away): check in once, then offer text and hang up."""
+    """They've gone quiet (muted, walked away): check in once, then offer text and hang up.
+    While a task it started is running, the quiet is them waiting on it: say it's still
+    looking, once, and don't take the quiet for them leaving."""
     while True:
         await asyncio.sleep(1.0)
         if call.speaking:
             call.last_sound = time.monotonic()
-        if time.monotonic() - call.last_sound < SILENCE:
+        quiet = time.monotonic() - call.last_sound
+        if call.working:
+            if quiet >= STILL_LOOKING and not call.said_still_looking:
+                call.said_still_looking = True
+                goals = "; ".join(call.working.values())
+                await call.send(
+                    f"You're still working on this for them: {goals}. It isn't back yet, so "
+                    'let them know in a few words, like "i\'m still looking".',
+                    speak=True,
+                )
+            continue
+        if quiet < SILENCE:
             continue
         call.last_sound, call.check_ins = time.monotonic(), call.check_ins + 1
         if call.check_ins == 1:
@@ -460,6 +475,13 @@ class StateNotes:
             await self._call.tell(line)
 
     def changed(self, event: Event) -> None:
+        match event.payload:
+            case JobStarted(job=job, goal=goal):
+                self._call.working[job] = goal
+            case JobAsked(job=job) | JobEnded(job=job):  # back with them either way
+                self._call.working.pop(job, None)
+            case _:
+                pass
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._hold_soon())
 
