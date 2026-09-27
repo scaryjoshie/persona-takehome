@@ -114,6 +114,7 @@ class LiveCall:
     said_still_looking: bool = False  # since they last spoke
     spoke_at: float = 0.0  # when a spoken note last went in; the voice's answer is coming
     voice_at: float = 0.0  # when the voice's words were last heard
+    delegations: int = 0  # times Live handed work to its own backend this call
 
     async def send(self, text: str, *, speak: bool) -> None:
         """GPT-Live takes at most 500 tokens per send (more ends the session), so long notes

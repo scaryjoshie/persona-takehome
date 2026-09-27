@@ -193,6 +193,7 @@ async def run_call(
         closing = voice.calls.pop(phone, None)
         if closing is not None:
             closing.closed = True
+            log.info("%s: call over; live delegated %d times", phone, closing.delegations)
         # One "ended" event with the first reason; a second one is dropped by the pipeline.
         ended_event = CallEvent(transition=CallTransition.ENDED, reason=outcome["reason"])
         await pipeline.submit(phone, Origin.CALL, Channel.SYSTEM, ended_event)
@@ -395,9 +396,17 @@ async def _quiet(call: LiveCall) -> None:
     """Go by what's heard, not by Live's turns. Live holds a turn open while its own backend
     works (a minute, once) and says nothing meanwhile; waiting for that turn to end, two
     finished tasks' answers sat unsaid while they asked "what the fuck?!"."""
+    opened: dict[str, float] = {}  # Live's own delegations: logged, to see how often and how long
     while True:
         await asyncio.sleep(0.25)
         now = time.monotonic()
+        live = getattr(getattr(call.session, "_connection", None), "_delegations", {})
+        for d in live.keys() - opened.keys():
+            opened[d] = now
+            log.info("live delegated (%d so far this call)", call.delegations + 1)
+            call.delegations += 1
+        for d in opened.keys() - live.keys():
+            log.info("live delegation done after %.1fs", now - opened.pop(d))
         if call.speaking and now - call.voice_at > VOICE_DONE:
             await call.turn_complete(asked_question=call.asked_question)
         elif (
