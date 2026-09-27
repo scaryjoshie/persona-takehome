@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -148,7 +149,19 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
 # ---- the web app -------------------------------------------------------------------------
 
 
+def _log_to_stderr() -> None:
+    """Our own info lines (call agent timings, Live delegations) next to uvicorn's; without a
+    handler, only warnings got through."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(name)s: %(message)s"))
+    app_log = logging.getLogger("app")
+    app_log.setLevel(logging.INFO)
+    app_log.addHandler(handler)
+    app_log.propagate = False
+
+
 def create_app() -> FastAPI:
+    _log_to_stderr()
     settings = get_settings()
     sockets = Sockets()
     built, voice_model = from_settings(settings, WebMessenger(sockets))

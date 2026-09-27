@@ -164,8 +164,10 @@ def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -
             lines.append("You've texted the Gmail link; it isn't connected yet.")
         case GmailPhase.CONNECTED:
             lines.append(
-                f"Their Google account is connected ({slots.gmail_email}): "
-                "your email and calendar tools work on their real Gmail and Calendar."
+                f"Their Google account is connected ({slots.gmail_email}): you can search and "
+                "read their email, draft emails and send them once they say yes, and see, add, "
+                "move or cancel calendar events. Nothing else in their account: no archiving, "
+                "labels, filters or deleting."
             )
         case GmailPhase.SKIPPED:
             lines.append("They said no to connecting Google.")
