@@ -418,7 +418,7 @@ def test_a_call_they_start_reads_as_theirs() -> None:
     ("choice", "p", "move"),
     [
         ("goodbye", 0.9, "goodbye"),
-        ("goodbye", 0.8, None),
+        ("goodbye", 0.6, None),
         ("doing", 0.7, "doing"),
         ("neither", 0.9, None),
     ],
