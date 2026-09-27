@@ -38,7 +38,7 @@ from pydantic_ai.realtime.openai_live import (
 )
 from pydantic_ai.usage import UsageLimits
 
-from app.agent import prompts
+from app.agent import objectives, prompts
 from app.agent.agent import agent
 from app.agent.context import (
     last_lines,
@@ -49,7 +49,6 @@ from app.agent.context import (
     what_you_know,
 )
 from app.agent.deps import AgentEnv
-from app.agent.objectives import guidance, settled
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.jev import Jev
@@ -110,8 +109,12 @@ async def run_call(
     delegation = dict((live_model.settings or {}).get("openai_live_delegation", {}))
     delegation["instructions"] = prompts.VOICE_BACKEND
     settings = OpenAILiveModelSettings(
+        # Where things stand goes in with the session, before the voice can say anything: sent
+        # after the call opened, it often landed after the voice had started, without its
+        # objective. Every change after that goes in as an update.
         openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}"
-        + (f"\n\n# Earlier with them\n\n{earlier}" if earlier else ""),
+        + (f"\n\n# Earlier with them\n\n{earlier}" if earlier else "")
+        + f"\n\n{await where_things_stand(env, phone)}",
         openai_live_delegation=cast(OpenAILiveResponsesDelegation, delegation),
     )
 
@@ -146,7 +149,6 @@ async def run_call(
             )
             steer = get_settings().live_steer == "instructions"
             state = StateNotes(env, phone, call, instructions=steer)
-            await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
             call_agent = CallAgent(env, call, phone)
@@ -188,12 +190,12 @@ async def run_call(
 def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
-    if user.slots.agent_name is None:  # the first call: only the step at hand, no agenda
+    if user.slots.agent_name is None:  # the first call: only the objective at hand, no agenda
         # Spelling out the plan here got recited clause by clause ("a name for me, yours,
         # and your google, so i can actually do stuff...").
         next_step = "get into the first thing, a name for you, the way a friend would"
     elif user.slots.user_name is None:
-        next_step = "ask their name"
+        next_step = "go into your objective"
     elif user.call.initiated_by is Initiator.AGENT and user.call.reason:
         # A callback you placed: open on what it's for now. "Pick up where you left off"
         # made the voice replay the previous call's last lines, on a different topic.
@@ -425,8 +427,9 @@ async def _signals(session: RealtimeSession, call: LiveCall) -> None:
 
 
 class StateNotes:
-    """Where things stand, as a silent note: once at the start, then after every change.
-    Changes that land together (a call agent run often records two) go as one note."""
+    """Where things stand for the voice: in the session's instructions from the start (see
+    run_call), then again after every change. Changes that land together (a call agent run
+    often records two) go as one note."""
 
     SETTLE = 0.3  # seconds
 
@@ -434,19 +437,10 @@ class StateNotes:
         self, env: AgentEnv, phone: str, call: LiveCall, *, instructions: bool = False
     ) -> None:
         self._env = env
-        self._pipeline = env.pipeline
         self._phone = phone
         self._call = call
         self._instructions = instructions  # as Live instructions rather than notes
         self._task: asyncio.Task[None] | None = None
-
-    async def send_now(self) -> None:
-        """The first note: the only one with lines to say (updates repeat, lines shouldn't)."""
-        note = await self._note(scripts=True)
-        if self._instructions:
-            await self._call.steer(note)
-        else:
-            await self._call.send(note, speak=False)
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():
@@ -454,32 +448,25 @@ class StateNotes:
 
     async def _hold_soon(self) -> None:
         await asyncio.sleep(self.SETTLE)
-        note = await self._note(scripts=False)
+        note = await where_things_stand(self._env, self._phone)
         if self._instructions:  # instructions pile up: say this one replaces the last
-            done = settled(*(await self._state()), Medium.VOICE)
-            finished = (
-                f"\nAlready done, so don't bring these up again: {', '.join(done)}." if done else ""
-            )
-            await self._call.steer_when_quiet(f"{REPLACES}{finished}\n{note}")
+            await self._call.steer_when_quiet(f"{REPLACES}\n{note}")
             return
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
         await self._call.whisper(note)
 
-    async def _state(self) -> tuple[User, list[Event]]:
-        user = await self._pipeline.user(self._phone)
-        return user, list(await self._pipeline.history(self._phone, limit=RECENT))
 
-    async def _note(self, *, scripts: bool) -> str:
-        user, events = await self._state()
-        stage = guidance(user, events, Medium.VOICE, scripts=scripts)
-        facts = remembered(await self._pipeline.memory(self._phone), summary=False, numbered=False)
-        jobs = self._env.jobs
-        open_jobs = job_lines(await jobs.open(self._phone), speaking=True) if jobs else []
-        now = their_time(user.slots, self._pipeline.now())
-        connected = self._env.integrations
-        services = [i.describe() for i in await connected.all(self._phone)] if connected else []
-        known = "\n".join([now, what_you_know(user.slots, user.call, services), *open_jobs])
-        return f"{NOW}\n" + "\n\n".join(p for p in (known, facts, stage) if p)
+async def where_things_stand(env: AgentEnv, phone: str) -> str:
+    """For the voice: the time, what's known, open tasks, what it remembers, its objective."""
+    pipeline = env.pipeline
+    user = await pipeline.user(phone)
+    stage = objectives.brief(user.slots, Medium.VOICE)
+    facts = remembered(await pipeline.memory(phone), summary=False, numbered=False)
+    open_jobs = job_lines(await env.jobs.open(phone), speaking=True) if env.jobs else []
+    now = their_time(user.slots, pipeline.now())
+    services = [i.describe() for i in await env.integrations.all(phone)] if env.integrations else []
+    known = "\n".join([now, what_you_know(user.slots, user.call, services), *open_jobs])
+    return f"{NOW}\n" + "\n\n".join(p for p in (known, facts, stage) if p)
 
 
 USER_SETTLE = 0.8  # seconds of quiet after their last piece before it counts as their turn

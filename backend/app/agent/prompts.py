@@ -36,14 +36,5 @@ JOB = read_md("job")  # a background task itself
 # One file per onboarding objective, split into sections (see app/agent/objectives.py).
 OBJECTIVE_TEXTS = {
     name: parse(read_md(f"objectives/{name}"))
-    for name in (
-        "opener",
-        "agent_name",
-        "contact",
-        "user_name",
-        "gmail",
-        "help_need",
-        "gmail_check",
-        "wrap_up",
-    )
+    for name in ("intro", "agent_name", "user_name", "google", "help_need", "wrap_up")
 }

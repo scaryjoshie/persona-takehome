@@ -1,1 +1,0 @@
-Right now: the Google link you texted them. Give them a moment to tap it, and don't start on anything new until it's connected or they'd rather leave it. If it doesn't come through, once, lightly, check whether it worked or they got stuck; don't resend it unless they ask. Later or never is fine too: move on.

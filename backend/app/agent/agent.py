@@ -15,7 +15,7 @@ from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 from pydantic_ai.tools import ToolDefinition
 
-from app.agent import prompts
+from app.agent import objectives, prompts
 from app.agent.context import remembered, their_time, what_you_know
 from app.agent.deps import Deps
 from app.agent.events import (
@@ -27,7 +27,6 @@ from app.agent.events import (
     TimezoneLearned,
     ToolCall,
 )
-from app.agent.objectives import guidance
 from app.agent.slots import TzSource
 from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
@@ -35,7 +34,6 @@ from app.google.accounts import Account
 from app.google.events import GmailEvent, GmailPhase
 from app.jobs import runner as jobs
 from app.memory.events import Forgot, Remembered
-from app.pipeline import RECENT
 from app.text.events import AgentMessage
 from app.users.user import Medium
 from app.voice.call_state import CallEvent, CallTransition, Initiator
@@ -68,8 +66,7 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     known = what_you_know(user.slots, user.call, await services(d))
     memory = remembered(await d.pipeline.memory(d.phone))
     tail = prompts.TEXT if d.medium is Medium.TEXT else ""
-    events = await d.pipeline.history(d.phone, limit=RECENT)
-    stage = guidance(user, events, d.medium, first_reply=d.first_reply)
+    stage = objectives.brief(user.slots, d.medium, first_reply=d.first_reply)
     now = their_time(user.slots, d.pipeline.now())
     jobs = await job_lines(d)
     parts = (f"# What you know\n\n{now}\n{known}", memory, jobs, stage, tail)

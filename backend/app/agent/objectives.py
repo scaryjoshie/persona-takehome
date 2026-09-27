@@ -1,312 +1,76 @@
-"""Onboarding as a list of objectives. Exactly one is open at a time, and only its guidance
-is in front of the agent, so each step can carry explicit scripts without them leaking into
-every other moment.
+"""Onboarding as objectives: an ordered list, worked through one at a time. The active one is
+the first that's neither done nor set aside. Only it is shown to the agent, in full; what's
+already done shows up as facts, and nothing ahead of it shows at all (listed, it got recited
+as an agenda).
 
-An objective is code (when it is done, which scenario applies, how many asks it gets) plus
-words in prompts/objectives/<name>.md:
+Each objective is when it counts as done (here) plus its words, in prompts/objectives/<name>.md:
 
-    The move, in words. Always shown.
-    ## by text        shown only by text
-    ## on a call      shown only on a call
-    ## script         lines to say; code picks one per user
-    ## <scenario>     shown when that scenario applies
-    ## script: <scenario>   lines for a named scenario, used instead of `script`
-    ## angle         directions (not lines) for steps that depend on them; one per user
+    The goal, and how to go about it. Always shown.
+    ## by text              shown only by text
+    ## on a call            shown only on a call
+    ## example              a line for it, written to fit the conversation
+    ## example: on a call   the same, on a call
 
-Scripts are for the clean case only: fixed moments that are the same for everyone (the
-opener, asking for a name), shown the first time the step comes up and never right after a
-call. Anywhere else a script gets forced into a moment it doesn't fit, so steps that depend
-on what they said (their need, Gmail) have none. Scripts come in variants; the code picks one
-per user (seeded by phone and objective), so three users still hear three different openers.
+Goals, not commands ("what they'd like to be called", not "ask their name"): a picture of where
+things stand that reaches the voice a moment late can't make it ask for something it just got.
 """
 
 from __future__ import annotations
 
-import zlib
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from app.agent.events import CallOptOut, ContactCard, Graduated, SlotChanged
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
-from app.events.event import Event
-from app.google.events import GmailEvent, GmailPhase
-from app.text.events import AgentMessage, ReplyStarted, UserMessage
-from app.users.user import Medium, User
-from app.voice.call_state import CallEvent, CallTransition
-from app.voice.events import Speaker, VoiceUtterance
+from app.google.events import GmailPhase
+from app.users.user import Medium
 
 DECIDED = (GmailPhase.CONNECTED, GmailPhase.SKIPPED, GmailPhase.DISCONNECTED)
-PROGRESS = (SlotChanged, GmailEvent, CallOptOut, Graduated)  # a step moved; asks restart
-
-
-@dataclass(frozen=True)
-class Situation:
-    """Everything an objective may look at."""
-
-    slots: Slots
-    medium: Medium
-    first_reply: bool = False
-    asks: int = 0  # agent turns since onboarding last moved forward
-    said: tuple[str, ...] = ()  # the agent's recent lines, lowercased, so scripts don't repeat
-    after_call: bool = False  # a call just ended and nothing has been texted since
-    they_asked: bool = False  # their latest text is a question: answer first, push nothing
-    card_mentioned: bool = False  # the contact card was already pointed out
-    scripts: bool = True  # on a call, only the note at the start carries lines to say
 
 
 @dataclass(frozen=True)
 class Objective:
     name: str
-    done: Callable[[Situation], bool]
-    max_asks: int | None = None  # after this many turns without progress, park it for now
-    scenarios: Sequence[tuple[str, Callable[[Situation], bool]]] = field(default=())
+    done: Callable[[Slots, bool], bool]  # (slots, first reply) -> done
 
-    def handled(self, s: Situation) -> bool:
+    def handled(self, slots: Slots, first_reply: bool) -> bool:
         """Done, or set aside because they'd rather not."""
-        return self.done(s) or self.name in s.slots.set_aside
+        return self.done(slots, first_reply) or self.name in slots.set_aside
 
-    def scenario(self, s: Situation) -> str | None:
-        return next((name for name, applies in self.scenarios if applies(s)), None)
+    def brief(self, medium: Medium, slots: Slots) -> str:
+        """Its words for this channel: the goal, then the example line if it has one."""
+        sections = OBJECTIVE_TEXTS[self.name]
+        channel = "on a call" if medium is Medium.VOICE else "by text"
+        example = sections.get(f"example: {channel}") or sections.get("example")
+        if example:
+            line = example.removeprefix("- ").replace("[name]", slots.user_name or "(their name)")
+            example = f"For example: {line}"
+        return "\n\n".join(t for t in (sections[""], sections.get(channel), example) if t)
 
 
 OBJECTIVES: tuple[Objective, ...] = (
-    Objective("opener", done=lambda s: not s.first_reply),
-    # Names are never parked: everything after needs them, and the turns before the name
-    # (the opener, the call offer) would count against it.
+    Objective("intro", done=lambda slots, first_reply: not first_reply),
+    # Nice to have: someone who led with a real task and gave their own name isn't held up.
     Objective(
         "agent_name",
-        # A name for the agent is nice to have: someone who led with a real task and gave
-        # their own name shouldn't be held up for it.
-        done=lambda s: (
-            s.slots.agent_name is not None
-            or (s.slots.help_need is not None and s.slots.user_name is not None)
-        ),
-        scenarios=(
-            ("no call", lambda s: s.slots.no_calls and s.medium is Medium.TEXT),
-            ("on a call", lambda s: s.medium is Medium.VOICE),
+        done=lambda slots, _: (
+            slots.agent_name is not None
+            or (slots.help_need is not None and slots.user_name is not None)
         ),
     ),
-    # Right after the name: point them at the contact card, once, so it's sorted before
-    # moving on. One turn, then it parks whether or not they saved it.
-    Objective(
-        "contact",
-        # The agent can't see whether they saved it (that's on their phone): one mention,
-        # then it parks, and it's behind them once they've given their own name.
-        done=lambda s: s.slots.user_name is not None or s.card_mentioned,
-        max_asks=1,
-        scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
-    ),
-    Objective("user_name", done=lambda s: s.slots.user_name is not None),
-    # Google before the ask: connected, it can see what's going on and suggest, instead of
-    # pivoting from whatever they said to "connect gmail". Offering it is enough to move on.
-    Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
-    # One thing at a time: the link gets seen through (connected, or one light check-in if it
-    # never comes through) before the next step starts. Asks count from the last saved step,
-    # so these count only their own turns.
-    Objective("gmail_check", done=lambda s: s.slots.gmail in DECIDED, max_asks=1),
-    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=2),
-    Objective("wrap_up", done=lambda s: s.slots.graduated),
+    Objective("user_name", done=lambda slots, _: slots.user_name is not None),
+    # Before what they need: connected, it can see what's going on and suggest.
+    Objective("google", done=lambda slots, _: slots.gmail in DECIDED),
+    Objective("help_need", done=lambda slots, _: slots.help_need is not None),
+    Objective("wrap_up", done=lambda slots, _: slots.graduated),
 )
 
 
-def asks_since_progress(events: Sequence[Event]) -> int:
-    """Text replies sent since the last event that moved a step (the reply being written now
-    doesn't count). Spoken turns don't count: a call is a flowing conversation, and minutes
-    of banter would park a step nobody asked about."""
-    asks, answered = 0, False
-    for event in reversed(events):
-        payload = event.payload
-        if isinstance(payload, PROGRESS):
-            break
-        if isinstance(payload, AgentMessage):
-            answered = True
-        elif isinstance(payload, ReplyStarted):
-            asks, answered = asks + answered, False
-    return asks
+def active(slots: Slots, *, first_reply: bool = False) -> Objective | None:
+    return next((o for o in OBJECTIVES if not o.handled(slots, first_reply)), None)
 
 
-def current(s: Situation) -> tuple[Objective, bool] | None:
-    """The open objective, and whether earlier ones were parked on the way to it. A parked
-    objective used up its asks; the next one counts only the turns after that."""
-    parked, asks = False, s.asks
-    for objective in OBJECTIVES:
-        if objective.handled(s):
-            continue
-        if objective.max_asks is not None and asks >= objective.max_asks:
-            parked = parked or objective.name != "contact"  # the card needs no "move on"
-            asks -= objective.max_asks
-            continue
-        return objective, parked
-    return None
-
-
-def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
-    """The guidance for the open objective, for this channel and scenario. On a call it also
-    carries the step after it: when a step finishes mid-turn, the voice can go straight on
-    instead of improvising until the next picture of where things stand arrives."""
-    found = current(s)
-    if found is None:
-        return ""
-    objective, parked = found
-    parts: list[str] = []
-    if s.after_call:
-        parts.append(
-            "A call just ended. Before anything else, pick up from where the call left off, "
-            "the way a person would after hanging up; the step below comes after that. "
-            "Something the voice offered that they never said yes to is still only an offer: "
-            "ask again if it fits, but don't send it."
-        )
-    if parked:
-        parts.append(
-            "You've asked about the earlier step enough for now; leave it and move on. "
-            "Pick it up only if they bring it up."
-        )
-    parts += _block(objective, s, phone, texts)
-    following = _after(objective, s) if s.medium is Medium.VOICE else None
-    if following is not None:
-        parts.append(
-            "Once that's actually settled (they've agreed or answered, not just heard a "
-            "suggestion), this comes next. Respond to what they just said first, and take one "
-            "step per turn; never run through several steps in one go:"
-        )
-        parts += _block(following, s, phone, texts)
-    return "\n\n".join(parts)
-
-
-def _block(
-    objective: Objective, s: Situation, phone: str, texts: dict[str, dict[str, str]]
-) -> list[str]:
-    sections = texts[objective.name]
-    parts = [sections[""]]
-    channel = "on a call" if s.medium is Medium.VOICE else "by text"
-    if channel in sections:
-        parts.append(sections[channel])
-    if "angle" in sections:  # not a line to say: a direction, worded fresh, varied per user
-        angle = pick_from(variants(sections["angle"]), f"{phone}:{objective.name}:angle")
-        parts.append(f"Your angle for this, in your own words: {angle}")
-    scenario = objective.scenario(s)
-    if scenario and scenario in sections:  # what to do differently in this situation
-        parts.append(sections[scenario])
-    script = sections.get(f"script: {scenario}") if scenario else None
-    script = script or sections.get("script")
-    if s.they_asked:
-        parts.append(
-            "They just asked you something: answer that. Bring this step in only if it follows "
-            "naturally; otherwise leave it for another message."
-        )
-    clean = s.asks == 0 and not s.after_call and not s.they_asked and s.scripts
-    if script and clean:
-        fresh = [v for v in variants(script) if _norm(v) not in s.said]
-        if not fresh:
-            parts.append("You've already asked this in those words; ask differently this time.")
-            return parts
-        line = pick_from(fresh, f"{phone}:{objective.name}:{scenario or ''}")
-        line = line.replace("[name]", s.slots.user_name or "(their name)")
-        parts.append(
-            "When you ask this, use this line, fitted naturally to the moment and said in the "
-            "language you're speaking with them. If something else needs handling first (they "
-            "went off topic, asked you something, a call just ended), handle that first and "
-            "bring this in after:\n" + line
-        )
-    return parts
-
-
-def _norm(line: str) -> str:
-    return " ".join(line.lower().replace("[name]", "").split())[:60]
-
-
-def _after(objective: Objective, s: Situation) -> Objective | None:
-    later = OBJECTIVES[OBJECTIVES.index(objective) + 1 :]
-    return next((o for o in later if not o.handled(s)), None)
-
-
-def guidance(
-    user: User,
-    events: Sequence[Event],
-    medium: Medium,
-    *,
-    first_reply: bool = False,
-    scripts: bool = True,
-) -> str:
-    """The open objective's guidance for this user, from their state and log."""
-    s = Situation(
-        slots=user.slots,
-        medium=medium,
-        first_reply=first_reply,
-        asks=asks_since_progress(events),
-        said=tuple(_norm(t) for t in _agent_lines(events)),
-        after_call=medium is Medium.TEXT and _call_just_ended(events),
-        they_asked=medium is Medium.TEXT and "?" in _latest_text(events),
-        card_mentioned=_card_mentioned(events),
-        scripts=scripts,
-    )
-    return render(s, user.phone, OBJECTIVE_TEXTS)
-
-
-SETTLED = {  # how a finished step reads in "already done" (opener and wrap-up never do)
-    "agent_name": "your name",
-    "contact": "your contact card (they know it's in their texts)",
-    "user_name": "their name and how it's spelled",
-    "gmail": "the Google link",
-    "help_need": "what they need",
-}
-
-
-def settled(user: User, events: Sequence[Event], medium: Medium) -> list[str]:
-    """Steps already done, for instructions that pile up: a later update can't take back an
-    earlier one, so it has to say what's finished."""
-    s = Situation(
-        slots=user.slots,
-        medium=medium,
-        card_mentioned=_card_mentioned(events),
-    )
-    return [SETTLED[o.name] for o in OBJECTIVES if o.name in SETTLED and o.handled(s)]
-
-
-def _latest_text(events: Sequence[Event]) -> str:
-    return next(
-        (e.payload.text for e in reversed(events) if isinstance(e.payload, UserMessage)), ""
-    )
-
-
-def _card_mentioned(events: Sequence[Event]) -> bool:
-    """Did the agent point out its contact card after the latest one went out?"""
-    for event in reversed(events):
-        p = event.payload
-        if isinstance(p, ContactCard):
-            return False
-        if isinstance(p, AgentMessage | VoiceUtterance) and "card" in (p.text or "").lower():
-            return True
-    return False
-
-
-def _agent_lines(events: Sequence[Event]) -> list[str]:
-    out: list[str] = []
-    for event in events:
-        p = event.payload
-        if isinstance(p, AgentMessage) or (
-            isinstance(p, VoiceUtterance) and p.speaker is Speaker.AGENT and p.text
-        ):
-            out.append(p.text or "")
-    return out
-
-
-def _call_just_ended(events: Sequence[Event]) -> bool:
-    """The latest call event is its end, and nothing was texted to them after it."""
-    for event in reversed(events):
-        p = event.payload
-        if isinstance(p, AgentMessage):
-            return False
-        if isinstance(p, CallEvent):
-            return p.transition is CallTransition.ENDED
-    return False
-
-
-def variants(script: str) -> list[str]:
-    """A script's variants: one per `- ` bullet."""
-    return [ln[2:].strip() for ln in script.splitlines() if ln.startswith("- ")] or [script]
-
-
-def pick_from(options: Sequence[str], seed: str) -> str:
-    return options[zlib.crc32(seed.encode()) % len(options)]
+def brief(slots: Slots, medium: Medium, *, first_reply: bool = False) -> str:
+    """The active objective for the prompt, or "" once onboarding is done."""
+    objective = active(slots, first_reply=first_reply)
+    return f"## Your objective\n\n{objective.brief(medium, slots)}" if objective else ""

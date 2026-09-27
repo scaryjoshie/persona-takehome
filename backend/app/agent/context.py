@@ -162,15 +162,16 @@ SET_ASIDE = {
 
 
 def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -> str:
-    """The facts, in plain sentences, rendered into every prompt."""
+    """What's known, in plain sentences, rendered into every prompt. What's still to do is the
+    objective's business, one at a time."""
     lines = [
-        f"Your name is {slots.agent_name}."
-        if slots.agent_name
-        else "You don't have a name yet; they haven't picked one.",
-        f"They go by {slots.user_name}." if slots.user_name else "You don't know their name yet.",
-        f"They want help with: {slots.help_need}."
-        if slots.help_need
-        else "You don't know what they want help with yet.",
+        line
+        for line in (
+            f"Your name is {slots.agent_name}." if slots.agent_name else "",
+            f"They go by {slots.user_name}." if slots.user_name else "",
+            f"They want help with: {slots.help_need}." if slots.help_need else "",
+        )
+        if line
     ]
     match slots.gmail:
         case None:
@@ -203,15 +204,6 @@ def what_you_know(slots: Slots, call: CallState, services: Sequence[str] = ()) -
         lines.append("They've graduated: onboarding is done.")
     if call.phase is CallPhase.CONNECTED:
         lines.append("You're on a call with them right now.")
-    missing = slots.missing()
-    names_sorted = slots.agent_name is not None and slots.user_name is not None
-    if not names_sorted and "help_need" in missing:
-        missing = tuple(m for m in missing if m != "help_need")  # the ask comes after names
-    lines.append(
-        "Still missing: " + ", ".join(m.replace("_", " ") for m in missing) + "."
-        if missing
-        else "You have everything onboarding needs."
-    )
     return "\n".join(lines)
 
 

@@ -90,16 +90,9 @@ def test_trim_history_keeps_the_tail() -> None:
 
 def test_what_you_know_is_plain_sentences() -> None:
     text = what_you_know(Slots(agent_name="Jarvis"), CallState())
-    assert "Your name is Jarvis." in text and "You don't know their name yet." in text
-    assert text.endswith("Still missing: user name, gmail.")  # the ask waits for names
+    assert text.startswith("Your name is Jarvis.") and "their name" not in text  # only what's known
     done = what_you_know(
         Slots(agent_name="J", user_name="S", help_need="inbox", gmail=GmailPhase.SKIPPED),
         CallState(phase=CallPhase.CONNECTED),
     )
     assert "They said no to Gmail." in done and "on a call with them right now" in done
-    assert done.endswith("You have everything onboarding needs.")
-
-
-def test_the_ask_comes_after_names() -> None:
-    text = what_you_know(Slots(agent_name="Nova", user_name="Josh"), CallState())
-    assert text.endswith("Still missing: help need, gmail.")  # when to ask is the steps' call

@@ -1,4 +1,4 @@
-Right now: their name.
+Goal: what they'd like to be called.
 
 ## by text
 They typed it, so just use it; no spelling check.
