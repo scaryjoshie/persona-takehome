@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import TzSource
 from app.events.payload import Payload, Role, Turn
 
@@ -133,19 +132,22 @@ class CallOptOut(Payload):
         return Turn(Role.NOTE, "they'd rather not do a call")
 
 
+How = Literal["done", "skipped", "declined"]  # the ways an objective ends up behind them
+
+
 class ObjectiveMoved(Payload):
-    """Onboarding moved on to its next objective: the one it was on got done or set aside.
-    Recorded by the pipeline when a fact moves it; a call says it out loud."""
+    """Onboarding moved on to its next objective. Recorded by the pipeline when a fact moves
+    it; a call says it out loud in the objective's own words."""
 
     kind: Literal["objective_moved"] = "objective_moved"
     routes = False
 
     left: str  # the objective it was on
-    now: str | None  # the one it's on now; None when onboarding is behind them
-    set_aside: bool = False  # they'd rather not do the one it left
+    how: How
+    got: str | None = None  # what it came to (the name), when it was done
+    now: str | None = None  # the one it's on now; None when onboarding is behind them
 
     def turn(self, at: datetime) -> Turn | None:
-        left = OBJECTIVE_TEXTS[self.left]["title"]
-        now = f"; now: {OBJECTIVE_TEXTS[self.now]['title']}" if self.now else ""
-        how = "set aside" if self.set_aside else "done"
-        return Turn(Role.NOTE, f"onboarding: {left} {how}{now}")
+        got = f" ({self.got})" if self.got else ""
+        now = f"; now: {self.now.replace('_', ' ')}" if self.now else ""
+        return Turn(Role.NOTE, f"onboarding: {self.left.replace('_', ' ')} {self.how}{got}{now}")

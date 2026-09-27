@@ -40,8 +40,11 @@ def test_the_playbook_is_the_same_every_turn_and_has_every_objective() -> None:
     voice = ONBOARDING.playbook(Medium.VOICE)
     assert voice.index("a name for you") < voice.index("their name") < voice.index("their Google")
     assert "i need a name, so... what do you wanna call me?" in voice
-    assert "and what's your name?" in voice and "J-O-N, right?" in voice
-    assert "J-O-N, right?" not in ONBOARDING.playbook(Medium.TEXT)  # a call's part stays on calls
+    assert "and what's your name?" in voice and "by text after the call" in voice
+    text = ONBOARDING.playbook(Medium.TEXT)
+    assert "by text after the call" not in text  # a call's part stays on calls
+    assert "wanna call me" not in text  # a line wanted only on a call
+    assert "{got}" not in voice and "Done" not in voice  # what's said on a move stays off the page
 
 
 def test_the_pointer_says_where_you_are_and_what_is_behind() -> None:
@@ -50,18 +53,32 @@ def test_the_pointer_says_where_you_are_and_what_is_behind() -> None:
     assert pointer.startswith("Where you are in onboarding: you're on something")
     assert "a name for you (Meeno)" in pointer and "their name (Joseph)" in pointer
     assert "their Google (they'd rather not)" in pointer
+    task_first = ONBOARDING.pointer(Slots(user_name="Sam", help_need="a dentist"))
+    assert "a name for you (skipped)" in task_first  # never "done" without a name
+    gone = Slots(agent_name="M", user_name="J", gmail=GmailPhase.DISCONNECTED, gmail_email="k@g")
+    assert "k@g" not in ONBOARDING.pointer(gone)
 
 
-def test_a_move_is_named_and_safe_to_hear_twice() -> None:
+def test_a_move_is_said_in_the_objectives_own_words() -> None:
     moved = ONBOARDING.move(Slots(), Slots(agent_name="Mino"))
-    assert moved == ObjectiveMoved(left="agent_name", now="user_name")
+    assert moved == ObjectiveMoved(left="agent_name", how="done", got="Mino", now="user_name")
     assert moved is not None
-    assert ONBOARDING.announcement(moved) == (
-        "Done: a name for you. If you haven't already, now's the time to move on to their name."
-    )
+    said = ONBOARDING.announcement(moved)
+    assert said is not None and said.startswith("You've got a name: Mino!")
     assert ONBOARDING.move(Slots(agent_name="Mino"), Slots(agent_name="Milo")) is None  # renamed
     aside = ONBOARDING.move(Slots(agent_name="M"), Slots(agent_name="M", set_aside=("user_name",)))
-    assert aside is not None and aside.set_aside
+    assert aside is not None and aside.how == "declined"
+    assert ONBOARDING.announcement(aside) is None  # nothing to say: they just said it
+    skipped = ONBOARDING.move(Slots(user_name="Sam"), Slots(user_name="Sam", help_need="rent"))
+    assert skipped is not None and skipped.how == "skipped" and skipped.got is None
+    assert ONBOARDING.announcement(skipped) is None  # a name they didn't need isn't "done"
+
+
+def test_a_move_only_ever_goes_forward() -> None:
+    said_no = Slots(agent_name="M", user_name="J", gmail=GmailPhase.SKIPPED)
+    wanted_after_all = said_no.model_copy(update={"gmail": GmailPhase.LINK_SENT})
+    assert on(said_no) == "help_need" and on(wanted_after_all) == "google"
+    assert ONBOARDING.move(said_no, wanted_after_all) is None  # nothing got done
 
 
 async def test_the_pipeline_records_the_move_after_the_fact(pipeline: Pipeline) -> None:
@@ -71,17 +88,19 @@ async def test_the_pipeline_records_the_move_after_the_fact(pipeline: Pipeline) 
     history = await pipeline.history(PHONE)
     moves = [e.payload for e in history if isinstance(e.payload, ObjectiveMoved)]
     assert moves == [
-        ObjectiveMoved(left="agent_name", now="user_name"),
-        ObjectiveMoved(left="user_name", now="google", set_aside=True),
+        ObjectiveMoved(left="agent_name", how="done", got="Mino", now="user_name"),
+        ObjectiveMoved(left="user_name", how="declined", now="google"),
     ]
+    kinds = [e.kind for e in history]
+    assert kinds == ["slot_changed", "objective_moved", "step_set_aside", "objective_moved"]
 
 
 async def test_set_aside_is_kept_and_shown_to_the_agent(pipeline: Pipeline) -> None:
-    from app.agent.context import what_you_know
-
     step = StepSetAside(step="user_name")
     assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, step)
     assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, step) is None  # once
+    named = SlotChanged(slot="agent_name", new="Mino")
+    await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, named)
     user = await pipeline.user(PHONE)
     assert user.slots.set_aside == ("user_name",)
-    assert "rather not do this for now: giving their name" in what_you_know(user.slots, user.call)
+    assert "their name (they'd rather not)" in ONBOARDING.pointer(user.slots)

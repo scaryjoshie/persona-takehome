@@ -45,11 +45,6 @@ class Slots(BaseModel):
             else ZoneInfo(DEFAULT_TZ)
         )
 
-    @property
-    def google_decided(self) -> bool:
-        """Their Google is connected, or they've said no (or disconnected it)."""
-        return self.gmail in (GmailPhase.CONNECTED, GmailPhase.SKIPPED, GmailPhase.DISCONNECTED)
-
     def missing(self) -> tuple[str, ...]:
         out: list[str] = []
         if self.agent_name is None:

@@ -457,7 +457,8 @@ class StateNotes:
         """Onboarding moved on: said as soon as the voice is free, never left to a quiet update
         that lands after its turn (it stalled there, waiting, after each objective)."""
         assert isinstance(event.payload, ObjectiveMoved)
-        await self._call.tell(objectives.ONBOARDING.announcement(event.payload))
+        if line := objectives.ONBOARDING.announcement(event.payload):
+            await self._call.tell(line)
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():

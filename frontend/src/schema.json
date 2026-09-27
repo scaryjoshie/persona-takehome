@@ -916,7 +916,7 @@
       },
       "ObjectiveMoved": {
         "additionalProperties": false,
-        "description": "Onboarding moved on to its next objective: the one it was on got done or set aside.\nRecorded by the pipeline when a fact moves it; a call says it out loud.",
+        "description": "Onboarding moved on to its next objective. Recorded by the pipeline when a fact moves\nit; a call says it out loud in the objective's own words.",
         "properties": {
           "kind": {
             "const": "objective_moved",
@@ -928,6 +928,27 @@
             "title": "Left",
             "type": "string"
           },
+          "how": {
+            "enum": [
+              "done",
+              "skipped",
+              "declined"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "got": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Got"
+          },
           "now": {
             "anyOf": [
               {
@@ -937,19 +958,16 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Now"
-          },
-          "set_aside": {
-            "default": false,
-            "title": "Set Aside",
-            "type": "boolean"
           }
         },
         "required": [
           "kind",
           "left",
-          "now",
-          "set_aside"
+          "how",
+          "got",
+          "now"
         ],
         "title": "ObjectiveMoved",
         "type": "object"
@@ -2466,7 +2484,7 @@
       },
       "ObjectiveMoved": {
         "additionalProperties": false,
-        "description": "Onboarding moved on to its next objective: the one it was on got done or set aside.\nRecorded by the pipeline when a fact moves it; a call says it out loud.",
+        "description": "Onboarding moved on to its next objective. Recorded by the pipeline when a fact moves\nit; a call says it out loud in the objective's own words.",
         "properties": {
           "kind": {
             "const": "objective_moved",
@@ -2478,6 +2496,27 @@
             "title": "Left",
             "type": "string"
           },
+          "how": {
+            "enum": [
+              "done",
+              "skipped",
+              "declined"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "got": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Got"
+          },
           "now": {
             "anyOf": [
               {
@@ -2487,19 +2526,16 @@
                 "type": "null"
               }
             ],
+            "default": null,
             "title": "Now"
-          },
-          "set_aside": {
-            "default": false,
-            "title": "Set Aside",
-            "type": "boolean"
           }
         },
         "required": [
           "kind",
           "left",
-          "now",
-          "set_aside"
+          "how",
+          "got",
+          "now"
         ],
         "title": "ObjectiveMoved",
         "type": "object"
