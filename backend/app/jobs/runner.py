@@ -57,6 +57,8 @@ ONE_AT_A_TIME = "one question at a time: ask this again after they answer the fi
 CITATION = re.compile("[^]*")
 OPEN = ("running", "waiting")
 ONE_THING = "Ask them one thing at a time; ask this again after they've answered."
+# Waits on a link it texted (the secure form, an app's sign-in page), not on their words.
+LINKS = {"secret": "secure link", "connect": "sign-in link"}
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,7 @@ class Pending:
     is, and every open call, so the reply answers them all (the rest get "one at a time")."""
 
     ask: str
-    kind: str  # "answer", "approval" (their yes or no), or "secret" (the secure form)
+    kind: str  # "answer", "approval" (their yes or no), or a link: "secret", "connect"
     calls: tuple[str, ...] = ()
     approvals: tuple[str, ...] = ()
 
@@ -91,7 +93,7 @@ class Pending:
         if approvals:
             kind = "approval"
         else:
-            kind = "secret" if meta.get("kind") == "secret" else "answer"
+            kind = str(meta["kind"]) if meta.get("kind") in LINKS else "answer"
         question = str(meta.get("question", "")) or f"ok to go ahead with {first.tool_name}?"
         return cls(first.tool_call_id, kind, calls, approvals), question
 
@@ -173,7 +175,7 @@ class Jobs:
                 "they said with approve set"
             )
         await self._submit(phone, JobTold(job=job, text=text))
-        if pending is not None and pending.kind != "secret":
+        if pending is not None and pending.kind not in LINKS:
             reply = pending.reply(text, approve)
             # Saved with the move, so a restart before the next run saves its messages resumes
             # with the reply rather than with a question nobody answered.
@@ -183,13 +185,14 @@ class Jobs:
                 self._launch(job, phone, reply=reply)
                 return f"passed on to background task {job}"
         if not self._slip_in(job, text):
-            # Between runs, waiting on a secure link, or the run just ended: the next run
+            # Between runs, waiting on a link, or the run just ended: the next run
             # picks it up, or the ending one runs once more.
             self._inbox.setdefault(job, []).append(text)
         return f"passed on to background task {job}"
 
     async def resolve(self, job: str, question: str, result: str) -> bool:
-        """Something other than their words answered it (they saved a secret in the form)."""
+        """Something other than their words answered it (they saved a secret in the form, or
+        came back from signing in)."""
         row = await self._row(job)
         if row is None or row.status != "waiting":
             return False
@@ -394,8 +397,8 @@ def lines(rows: Sequence[JobRow], *, speaking: bool = False) -> list[str]:
     for row in rows:
         name = f"a background task ({row.goal})" if speaking else f"Background task {row.id}"
         kind = Pending.parse(row.waiting_on).kind if row.status == "waiting" else None
-        if kind == "secret":
-            out.append(f"{name} is waiting for them to use the secure link it texted.")
+        if kind in LINKS:
+            out.append(f"{name} is waiting for them to use the {LINKS[kind]} it texted.")
         elif kind is not None and speaking:
             wants = "their yes or no" if kind == "approval" else "their answer"
             out.append(f"{name} needs {wants}: {row.question} Ask them when it fits.")

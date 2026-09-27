@@ -42,6 +42,34 @@ async def call(
 
         return SECRET.sub(one, template)
 
+    path, query, body, form = fill_params(endpoint, args)
+    url = fill(api.base_url).rstrip("/") + fill(path)
+    parts = urlsplit(url)
+    if parts.scheme != "https":
+        raise Refused("only https is allowed")
+    if (parts.hostname or "").lower() not in {h.lower() for h in api.allowed_hosts}:
+        raise Refused(f"{parts.hostname} isn't one of this integration's allowed hosts")
+
+    response = await client.request(
+        endpoint.method,
+        url,
+        params=query or None,
+        json=body or None,
+        data=form or None,
+        headers={name: fill(value) for name, value in api.headers.items()},
+        timeout=TIMEOUT,
+        follow_redirects=False,
+    )
+    text = f"HTTP {response.status_code}: {_text(response)}"
+    if "link" in response.headers:  # where the next page is
+        text += f"\nLink: {response.headers['link']}"
+    return Reply(response.status_code, scrub(text, secrets))
+
+
+def fill_params(
+    endpoint: Endpoint, args: dict[str, Any]
+) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """The endpoint's path with its {param}s filled in, and its query, JSON body and form."""
     known = {p.name for p in endpoint.params}
     unknown = set(args) - known
     if unknown:
@@ -53,34 +81,13 @@ async def call(
     def path_value(match: re.Match[str]) -> str:
         return quote(str(args[match[1]]), safe="") if match[1] in args else match[0]
 
-    path = PARAM.sub(path_value, endpoint.path)
-    url = fill(api.base_url).rstrip("/") + fill(path)
-    parts = urlsplit(url)
-    if parts.scheme != "https":
-        raise Refused("only https is allowed")
-    if (parts.hostname or "").lower() not in {h.lower() for h in api.allowed_hosts}:
-        raise Refused(f"{parts.hostname} isn't one of this integration's allowed hosts")
-
     def sent(where: str) -> dict[str, Any]:
         return {
             p.sent_as: args[p.name] for p in endpoint.params if p.where == where and p.name in args
         }
 
-    body = {**endpoint.body, **sent("json")}
-    response = await client.request(
-        endpoint.method,
-        url,
-        params=sent("query") or None,
-        json=body or None,
-        data=sent("form") or None,
-        headers={name: fill(value) for name, value in api.headers.items()},
-        timeout=TIMEOUT,
-        follow_redirects=False,
-    )
-    text = f"HTTP {response.status_code}: {_text(response)}"
-    if "link" in response.headers:  # where the next page is
-        text += f"\nLink: {response.headers['link']}"
-    return Reply(response.status_code, scrub(text, secrets))
+    path = PARAM.sub(path_value, endpoint.path)
+    return path, sent("query"), {**endpoint.body, **sent("json")}, sent("form")
 
 
 @dataclass(frozen=True)
@@ -100,10 +107,14 @@ class Reply:
 
 def _text(response: httpx.Response) -> str:
     try:
-        text = json.dumps(_trim(response.json()), ensure_ascii=False)
+        return compact(response.json())
     except ValueError:
-        text = response.text
-    return text[:REPLY_CHARS] or "(empty)"
+        return response.text[:REPLY_CHARS] or "(empty)"
+
+
+def compact(value: Any) -> str:
+    """A reply as short JSON for a model: without empty fields, capped."""
+    return json.dumps(_trim(value), ensure_ascii=False)[:REPLY_CHARS] or "(empty)"
 
 
 def _trim(value: Any) -> Any:

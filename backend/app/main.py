@@ -25,6 +25,7 @@ from app.events.payload import Channel, Origin
 from app.google import routes as google_routes
 from app.google.accounts import Google
 from app.integrations import routes as integration_routes
+from app.integrations.composio import Composio
 from app.integrations.store import Integrations
 from app.integrations.tools import job_extras
 from app.jev import Jev
@@ -70,12 +71,20 @@ def assemble(
     web_search: bool = True,
     credentials_key: str | None = None,  # encrypts integrations' secrets
     http: httpx.AsyncClient | None = None,  # integrations' outbound calls
+    composio_api_key: str | None = None,  # sign-ins to apps, through Composio
 ) -> App:
     timers = timers or AsyncioTimers()
     pipeline = Pipeline(db, clock=clock, timers=timers)
     voice = VoiceResponder(jev=jev)
     google = google or Google(db)  # unconfigured: the Google link says so
-    integrations = Integrations(db, clock=clock, key=credentials_key, base_url=app_base_url)
+    http = http or httpx.AsyncClient()
+    integrations = Integrations(
+        db,
+        clock=clock,
+        key=credentials_key,
+        base_url=app_base_url,
+        composio=Composio(composio_api_key, http) if composio_api_key else None,
+    )
     jobs = Jobs(
         db,
         pipeline,
@@ -83,7 +92,7 @@ def assemble(
         timers=timers,
         google=google,
         web_search=web_search,
-        extras=job_extras(integrations, http or httpx.AsyncClient()),
+        extras=job_extras(integrations, http),
     )
 
     async def text(phone: str, body: str) -> None:  # a secure link, recorded like any bubble
@@ -122,6 +131,9 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
         jev=jev,
         credentials_key=settings.credentials_key.get_secret_value()
         if settings.credentials_key
+        else None,
+        composio_api_key=settings.composio_api_key.get_secret_value()
+        if settings.composio_api_key
         else None,
         google=Google(
             db,

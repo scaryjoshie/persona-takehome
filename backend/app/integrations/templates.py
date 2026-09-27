@@ -10,17 +10,17 @@ from __future__ import annotations
 
 import re
 
-from app.integrations.integration import ApiKey, Endpoint, HttpApi, Integration, Param
+from app.integrations.integration import ApiKey, Auth, Endpoint, HttpApi, Integration, Param
 
 HOST = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
 BEARER = {"Authorization": "Bearer {secret:token}"}
 
 
-def _token(about: str) -> list[ApiKey]:
+def _token(about: str) -> list[Auth]:
     return [ApiKey(secret="token", about=about)]
 
 
-def _webhook(about: str) -> list[ApiKey]:
+def _webhook(about: str) -> list[Auth]:
     return [ApiKey(secret="webhook_url", about=about)]
 
 
@@ -171,7 +171,7 @@ TEMPLATES: dict[str, Integration] = {
 def build(name: str, *, host: str = "", account: str = "", notes: str = "") -> Integration:
     """An integration from a template, with its per-user host filled in."""
     template = TEMPLATES[name]
-    assert template.api is not None
+    assert isinstance(template.api, HttpApi)
     needs_host = "{host}" in template.api.base_url
     if needs_host and not HOST.match(host.lower()):
         raise ValueError(f"{name} needs their host, like canvas.school.edu")
@@ -196,7 +196,12 @@ def build(name: str, *, host: str = "", account: str = "", notes: str = "") -> I
 
 def summary() -> str:
     """One line per template, for the job agent."""
-    return "; ".join(
-        f"{name} ({t.app}{', needs their host' if t.api and '{host}' in t.api.base_url else ''})"
-        for name, t in TEMPLATES.items()
-    )
+
+    def host(t: Integration) -> str:
+        return (
+            ", needs their host"
+            if isinstance(t.api, HttpApi) and "{host}" in t.api.base_url
+            else ""
+        )
+
+    return "; ".join(f"{name} ({t.app}{host(t)})" for name, t in TEMPLATES.items())
