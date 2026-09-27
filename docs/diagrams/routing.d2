@@ -1,0 +1,70 @@
+# How an event is routed. Render: d2 routing.d2 routing.svg
+# Styling follows cado's tools/depgraph/arch.d2: white leaves on tinted trays, slate edges.
+vars: {
+  d2-config: { layout-engine: elk; theme-id: 0; pad: 60 }
+}
+direction: right
+
+classes: {
+  leaf: { style: { fill: "#FFFFFF"; stroke: "#CBD5E1"; stroke-width: 1; border-radius: 6; font-color: "#475569" } }
+  flow: { style: { fill: "#FFEDD5"; stroke: "#EA580C"; stroke-width: 2; border-radius: 6; font-color: "#7C2D12"; bold: true } }
+  agent: { style: { fill: "#DBEAFE"; stroke: "#2563EB"; stroke-width: 2; border-radius: 6; font-color: "#1E3A8A" } }
+  jev: { style: { fill: "#F5F3FF"; stroke: "#8B5CF6"; stroke-width: 2; border-radius: 6; font-color: "#6D28D9"; italic: true } }
+  store: { shape: cylinder; style: { fill: "#F1F5F9"; stroke: "#64748B"; stroke-width: 2; font-color: "#0F172A" } }
+  domain: { style: { fill: "#FBFCFE"; stroke: "#64748B"; stroke-width: 2; border-radius: 16; font-color: "#0F172A"; bold: true; font-size: 20 } }
+  layer: { style: { fill: "#F1F5F9"; stroke: "#E2E8F0"; stroke-width: 1; border-radius: 10; font-color: "#64748B"; font-size: 14 } }
+  wire: { style: { stroke: "#64748B"; stroke-width: 2 } }
+  quiet: { style: { stroke: "#94A3B8"; stroke-width: 2; stroke-dash: 4 } }
+}
+
+in: "Comes in" {
+  class: layer
+  texts: "User texts" { class: leaf }
+  call: "Call transcript" { class: leaf }
+  tools: "Agent tools" { class: leaf }
+  timers: "Timers" { class: leaf }
+  google: "Google sign-in" { class: leaf }
+}
+
+pipeline: "Pipeline" {
+  class: domain
+  save: "Save" { class: flow }
+  log: "Event log" { class: store }
+  route: "Route by floor" { class: flow }
+  save -> log: { class: wire }
+  save -> route: { class: wire }
+}
+
+text: "Text" {
+  class: domain
+  check: "Jev: reply now?" { class: jev }
+  agent: "Text agent" { class: agent }
+  check -> agent: { class: wire }
+}
+
+voice: "Voice" {
+  class: domain
+  verb: "Jev: interrupt,\nabsorb or defer?" { class: jev }
+  live: "GPT-Live" { class: agent }
+  verb -> live: { class: wire }
+}
+
+out: "Goes out" {
+  class: layer
+  screen: "Their screen" { class: leaf }
+  bubbles: "Texts" { class: leaf }
+  speech: "Speech" { class: leaf }
+}
+
+in.texts -> pipeline.save: { class: wire }
+in.call -> pipeline.save: { class: wire }
+in.tools -> pipeline.save: { class: wire }
+in.timers -> pipeline.save: { class: wire }
+in.google -> pipeline.save: { class: wire }
+
+pipeline.route -> text.check: "no call" { class: wire }
+pipeline.route -> voice.verb: "on a call" { class: wire }
+
+text.agent -> out.bubbles: { class: wire }
+voice.live -> out.speech: { class: wire }
+pipeline.log -> out.screen: "live updates" { class: quiet }

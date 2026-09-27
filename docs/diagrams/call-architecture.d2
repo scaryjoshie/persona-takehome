@@ -1,0 +1,60 @@
+# A call: GPT-Live talks, the back office acts. Render: d2 call-architecture.d2 call-architecture.svg
+# Styling follows cado's tools/depgraph/arch.d2: white leaves on tinted trays, slate edges.
+vars: {
+  d2-config: { layout-engine: elk; theme-id: 0; pad: 60 }
+}
+direction: right
+
+classes: {
+  leaf: { style: { fill: "#FFFFFF"; stroke: "#CBD5E1"; stroke-width: 1; border-radius: 6; font-color: "#475569" } }
+  flow: { style: { fill: "#FFEDD5"; stroke: "#EA580C"; stroke-width: 2; border-radius: 6; font-color: "#7C2D12"; bold: true } }
+  agent: { style: { fill: "#DBEAFE"; stroke: "#2563EB"; stroke-width: 2; border-radius: 6; font-color: "#1E3A8A" } }
+  jev: { style: { fill: "#F5F3FF"; stroke: "#8B5CF6"; stroke-width: 2; border-radius: 6; font-color: "#6D28D9"; italic: true } }
+  store: { shape: cylinder; style: { fill: "#F1F5F9"; stroke: "#64748B"; stroke-width: 2; font-color: "#0F172A" } }
+  domain: { style: { fill: "#FBFCFE"; stroke: "#64748B"; stroke-width: 2; border-radius: 16; font-color: "#0F172A"; bold: true; font-size: 20 } }
+  layer: { style: { fill: "#F1F5F9"; stroke: "#E2E8F0"; stroke-width: 1; border-radius: 10; font-color: "#64748B"; font-size: 14 } }
+  wire: { style: { stroke: "#64748B"; stroke-width: 2 } }
+  into: { style: { stroke: "#8B5CF6"; stroke-width: 3 } }
+}
+
+user: "User" {
+  class: layer
+  voice: "Their voice" { class: leaf }
+  texts: "Their texts" { class: leaf }
+}
+
+openai: "OpenAI" {
+  class: domain
+  live: "GPT-Live" { class: agent }
+}
+
+backend: "Backend" {
+  class: domain
+  transcript: "Transcript\nin spoken order" { class: flow }
+  commit: "Jev: did it\nsay it's on it?" { class: jev }
+  office: "Back office\ntwo keys" { class: agent }
+  log: "Event log" { class: store }
+  brief: "Brief" { class: flow }
+  timers: "Timers" { class: leaf }
+
+  transcript -> office: "turns" { class: wire }
+  transcript -> commit: { class: wire }
+  commit -> office: "act now" { class: wire }
+  office -> log: { class: wire }
+  log -> brief: { class: wire }
+}
+
+google: "Out to them" {
+  class: layer
+  sent: "Texts, links,\ndrafts, email,\ncalendar" { class: leaf }
+}
+
+user.voice <-> openai.live: "audio" { class: wire }
+openai.live -> backend.transcript: "transcript" { class: wire }
+user.texts -> backend.log: { class: wire }
+backend.office -> google.sent: { class: wire }
+
+# written live <- source so the layout keeps the voice between the user and the backend
+openai.live <- backend.brief: "instructions" { class: into }
+openai.live <- backend.office: "context" { class: into }
+openai.live <- backend.timers: "commentary" { class: into }
