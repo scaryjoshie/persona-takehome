@@ -402,3 +402,13 @@ async def test_what_waits_is_said_once_the_voice_is_quiet_whatever_lives_turn_sa
     await asyncio.sleep(0.4)
     watcher.cancel()
     assert session.sent[-1] == ("Miami: no storms forecast next week.", True)  # its answer
+
+
+def test_a_call_they_start_reads_as_theirs() -> None:
+    from app.voice.call_state import CallEvent, CallTransition, Initiator
+
+    theirs = ev(CallEvent(transition=CallTransition.CONNECTING, initiated_by=Initiator.USER))
+    turn = theirs.payload.turn(theirs.ts)
+    assert turn is not None and turn.text.startswith("they called you")
+    ours = ev(CallEvent(transition=CallTransition.CONNECTING))
+    assert ours.payload.turn(ours.ts) is None  # "you started calling" came with the ringing

@@ -72,6 +72,8 @@ class CallEvent(Payload):
                 return Turn(Role.NOTE, f"you ended the call {t}: calls are capped at 10 minutes")
             case CallTransition.ENDED:
                 return Turn(Role.NOTE, f"call ended {t}, reason: {self.reason or 'unknown'}")
+            case CallTransition.CONNECTING if self.initiated_by is Initiator.USER:
+                return Turn(Role.NOTE, f"they called you {t}")
             case CallTransition.CONNECTING:
                 return None
 
