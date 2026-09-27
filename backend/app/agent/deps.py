@@ -10,6 +10,7 @@ from pydantic_ai.models import Model
 
 from app.events.payload import Channel, Origin
 from app.google.accounts import Google
+from app.jev import Jev
 from app.pipeline import Pipeline
 from app.users.user import Medium, User
 
@@ -30,6 +31,7 @@ class AgentEnv:
     # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
     hang_up: Callable[[str], bool] | None = None
     google: Google | None = None  # connected Google accounts (email and calendar tools)
+    jev: Jev | None = None  # fast yes/no and choice questions (on calls: what the voice means)
 
     def deps(
         self,

@@ -124,9 +124,10 @@ async def test_editing_a_draft_updates_the_same_one_and_gaps_block_sending(
     with pytest.raises(ValueError, match="missing"):
         await drafts.send(pipeline, PHONE, account, first.ref)
     fixed = await drafts.save(
-        pipeline, PHONE, account, ref=first.ref, to="a@b.c", subject="hi", body="yo"
+        pipeline, PHONE, account, ref=first.ref, to="a@b.c", subject="", body=""
     )
     assert fixed.ref == first.ref and "PUT /gmail/v1/users/me/drafts/d1" in fake.calls
+    assert (fixed.subject, fixed.body) == ("hi", "yo")  # fixing the address kept the message
     with pytest.raises(ValueError, match="answered"):  # the new version hasn't been answered
         await drafts.send(pipeline, PHONE, account, first.ref)
     await pipeline.submit(PHONE, Origin.USER, Channel.TEXT, yes, route=False)

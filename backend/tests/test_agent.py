@@ -153,7 +153,7 @@ async def test_on_a_call_only_the_back_office_records_and_sends(
 async def test_the_back_office_acts_only_after_a_voice_turn(
     pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:
-    """Two keys: after their turn it records facts; sending waits for the voice to say it's on it."""
+    """Two keys: after their turn it records facts; sending waits for the voice to say so."""
     theirs = await tools_for(
         pipeline,
         messenger,

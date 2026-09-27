@@ -216,14 +216,29 @@ def test_call_lines_are_read_in_spoken_order() -> None:
     assert "mila" in turns(events)[0].text  # the question comes before their yes
 
 
-def test_a_re_offer_after_it_is_done_gets_caught() -> None:
+async def test_a_re_offer_after_it_is_done_gets_caught() -> None:
+    """Jev judges the line; its answer becomes a note naming what's already done."""
+    from typing import cast
+
     from app.agent.slots import Slots
     from app.google.events import GmailPhase
-    from app.voice.call import contradiction
+    from app.jev import Choice, Jev
+    from app.voice.intent import slip
+
+    class FakeJev:
+        def __init__(self, choice: str, p: float) -> None:
+            self.answer = Choice(choice=choice, probabilities={choice: p})
+            self.seen: dict[str, Any] = {}
+
+        async def choice(self, question: str, criteria: object, state: dict[str, Any]) -> Choice:
+            self.seen = state
+            return self.answer
 
     sent = Slots(gmail=GmailPhase.LINK_SENT, user_name="Siobhan")
-    assert contradiction("want me to text you a link to connect your google?", sent)
-    assert not contradiction("it's already in your texts, the google link", sent)
-    assert not contradiction("want me to text you the link?", Slots())
-    assert contradiction("wait, what's your name?", sent)
-    assert not contradiction("what's the thing you'd love help with?", sent)
+    jev = FakeJev("link", 0.9)
+    note = await slip(cast(Jev, jev), sent, "want me to text you the link?")
+    assert note and "already went out" in note
+    assert jev.seen["facts"]["google_link"] == "sent"
+    assert await slip(cast(Jev, FakeJev("link", 0.4)), sent, "the link?") is None  # unsure
+    assert await slip(cast(Jev, FakeJev("none", 0.9)), sent, "what's up?") is None
+    assert await slip(None, sent, "want the link?") is None  # no Jev: no check

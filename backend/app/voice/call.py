@@ -40,18 +40,18 @@ from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import to_model_messages, trim_history, what_you_know
+from app.agent.context import last_lines, to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
 from app.agent.objectives import guidance, settled
-from app.agent.slots import Slots
 from app.events.event import Event
 from app.events.payload import Channel, Origin
-from app.google.events import GmailPhase
+from app.jev import Jev
 from app.pipeline import RECENT, Pipeline
 from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
+from app.voice.intent import commits, slip
 from app.voice.responder import LiveCall, VoiceResponder
 from app.web.protocol import TranscriptPartial
 
@@ -127,7 +127,7 @@ async def run_call(
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
             listener = Listener(env, call, phone)
-            transcript = Transcript(phone, pipeline, push, call, listener)
+            transcript = Transcript(phone, pipeline, push, call, listener, env.jev)
             call.wake = lambda: listener.heard(voice=False)  # a text: the voice answers it first
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
@@ -221,7 +221,13 @@ class Transcript:
     captions used (so the browser replaces the caption), and wakes the back office."""
 
     def __init__(
-        self, phone: str, pipeline: Pipeline, push: Push, call: LiveCall, listener: Listener
+        self,
+        phone: str,
+        pipeline: Pipeline,
+        push: Push,
+        call: LiveCall,
+        listener: Listener,
+        jev: Jev | None = None,
     ) -> None:
         self._phone = phone
         self._call = call
@@ -229,9 +235,14 @@ class Transcript:
         self._push = push
         self._listener = listener
         self._open: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
+        self._committed: set[str] = set()  # voice turns already handed over mid-sentence
+        self._checking: set[str] = set()  # voice turns with a Jev question in flight
+        self._jev = jev
 
     async def caption(self, speaker: Speaker, turn_id: str, text: str) -> None:
         self._open[speaker] = (turn_id, text)
+        if speaker is Speaker.AGENT and turn_id not in self._committed and _sentence_end(text):
+            asyncio.create_task(self._check_commit(turn_id, text))  # noqa: RUF006
         await self._show(speaker, turn_id, text, final=False)
 
     async def final(self, speaker: Speaker, text: str) -> None:
@@ -243,11 +254,30 @@ class Transcript:
         await self._pipeline.submit(self._phone, Origin.VOICE_AGENT, Channel.VOICE, utterance)
         if speaker is Speaker.AGENT:
             self._call.said(text)
-            if slip := contradiction(text, (await self._pipeline.user(self._phone)).slots):
-                await self._call.whisper(slip)
+            asyncio.create_task(self._check_slip(text))  # noqa: RUF006 (short-lived)
         else:
             await self._call.user_started()  # their speech counts even if no caption came
         self._listener.heard(voice=speaker is Speaker.AGENT)
+
+    async def _check_commit(self, turn_id: str, saying: str) -> None:
+        """At each sentence the voice finishes, ask Jev whether it just said it's on something;
+        if so, the back office acts now rather than when the whole turn ends."""
+        if turn_id in self._checking:
+            return
+        self._checking.add(turn_id)
+        try:
+            recent = last_lines(list(await self._pipeline.history(self._phone, limit=RECENT)))
+            if turn_id not in self._committed and await commits(self._jev, recent, saying):
+                self._committed.add(turn_id)
+                self._listener.heard(voice=True, saying=saying)
+        finally:
+            self._checking.discard(turn_id)
+
+    async def _check_slip(self, line: str) -> None:
+        """The voice re-offered something already done: tell it, so it corrects itself."""
+        user = await self._pipeline.user(self._phone)
+        if note := await slip(self._jev, user.slots, line):
+            await self._call.whisper(note)
 
     async def finish(self) -> None:
         """The call ended mid-sentence: close those captions and record what was said, so
@@ -283,38 +313,8 @@ async def _turns(session: RealtimeSession, transcript: Transcript) -> None:
             await transcript.final(_speaker_of(part.speaker), part.transcript)
 
 
-OFFERS_LINK = re.compile(r"\b(link|connect (your )?(google|gmail))\b", re.I)
-ASKING = re.compile(r"\?|\b(want me|should i|shall i|can i)\b", re.I)
-ALREADY = re.compile(r"\b(already|sent|in your texts|went out)\b", re.I)
-ASKS_THEIR_NAME = re.compile(r"what('s| is) your name|what should i call you", re.I)
-ASKS_MY_NAME = re.compile(r"what (do )?you (want|wanna) (to )?call me|a name for me", re.I)
-
-
-def contradiction(line: str, slots: Slots) -> str | None:
-    """The voice just offered or asked for something that's already done. A person would
-    catch it and say so; tell the voice, so it can, instead of the call getting stuck in it."""
-    if (
-        slots.gmail in (GmailPhase.LINK_SENT, GmailPhase.CONNECTED)
-        and OFFERS_LINK.search(line)
-        and ASKING.search(line)
-        and not ALREADY.search(line)
-    ):
-        where = "it's connected" if slots.gmail is GmailPhase.CONNECTED else "it's in their texts"
-        return (
-            f"You just offered the Google link, but it already went out ({where}). Correct "
-            'yourself in a few words, naturally ("oh wait, it\'s already in your texts").'
-        )
-    if slots.user_name and ASKS_THEIR_NAME.search(line):
-        return (
-            f"You just asked their name, but you already know it: {slots.user_name}. Correct "
-            "yourself in a few words, naturally."
-        )
-    if slots.agent_name and ASKS_MY_NAME.search(line):
-        return (
-            f"You just asked what to call you, but that's settled: {slots.agent_name}. Correct "
-            "yourself in a few words, naturally."
-        )
-    return None
+def _sentence_end(text: str) -> bool:
+    return text.rstrip().endswith((".", "?", "!"))
 
 
 GOODBYE = re.compile(r"\b(bye|goodbye|talk soon|see you|later)\b", re.I)
@@ -457,6 +457,10 @@ VOICE_TURN = (
     "You were woken because the voice just finished a turn: carry out what it just said "
     "it's doing, if they asked for it or agreed to it."
 )
+VOICE_SAYING = (
+    "You were woken because the voice, still mid-sentence, just said it's on something: "
+    "carry it out, if they asked for it or agreed to it. So far it has said:"
+)
 THEIR_TURN = (
     "You were woken because they just finished a turn: record facts only. Anything to send "
     "or draft waits for the voice to say it's on it; you'll be woken again then."
@@ -483,12 +487,15 @@ class Listener:
         self._timer: asyncio.Task[None] | None = None
         self._again = False
         self._act = False  # a voice turn is waiting to be acted on
+        self._saying: str | None = None  # its words so far, when it committed mid-sentence
 
-    def heard(self, *, voice: bool) -> None:
+    def heard(self, *, voice: bool, saying: str | None = None) -> None:
         """A turn finished. After the voice's, run now, and its commitments may be carried out.
         After theirs, wait for a pause first: Live splits one sentence into several finished
-        pieces ("Okay" / "that's all for now"), and a piece isn't their whole answer."""
+        pieces ("Okay" / "that's all for now"), and a piece isn't their whole answer.
+        `saying`: the voice is mid-sentence and has just said it's on something."""
         self._act = self._act or voice
+        self._saying = saying or self._saying
         if self._timer is not None:
             self._timer.cancel()
         self._timer = asyncio.create_task(self._after(0.0 if voice else USER_SETTLE))
@@ -504,12 +511,15 @@ class Listener:
         while True:
             self._again = False
             act, self._act = self._act, False
+            saying, self._saying = self._saying, None
             started = time.monotonic()
             try:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
                 history = to_model_messages(await pipeline.history(self._phone))
                 woke = VOICE_TURN if act else THEIR_TURN
+                if saying:  # not logged yet: the voice is still talking
+                    woke = f'{VOICE_SAYING} "{saying}"'
                 run = agent.run(
                     None,
                     message_history=history,

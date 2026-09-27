@@ -332,7 +332,8 @@ async def draft_email(
     ctx: RunContext[Deps], to: str = "", subject: str = "", body: str = "", ref: str = ""
 ) -> str:
     """Draft an email in their Gmail; they get a picture of it (exactly what's saved, gaps
-    included; nothing is sent). To change a draft, call again with its ref."""
+    included; nothing is sent). To change a draft, call again with its ref and only the fields
+    that change; the rest stay as they were."""
     d = ctx.deps
     try:
         draft = await drafts.save(
