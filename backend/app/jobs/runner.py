@@ -329,6 +329,7 @@ class Jobs:
     ) -> None:
         pending, question = Pending.of(asked)
         ids = pending.dump()
+        before = await self._row(job)
         waiting = await self._move(
             job,
             ("running",),
@@ -341,7 +342,10 @@ class Jobs:
         )
         if not waiting:
             return  # cancelled while it ran
-        await self._submit(phone, JobAsked(job=job, question=question))
+        # Waiting on the same link again isn't news: they were told it's there, and asking
+        # again would have the assistant say so once more.
+        if pending.kind not in LINKS or before is None or before.question != question:
+            await self._submit(phone, JobAsked(job=job, question=question))
         self._expire_later(phone, job, ids, ANSWER_WAIT)
 
     def _expire_later(self, phone: str, job: str, waiting_on: str, seconds: float) -> None:

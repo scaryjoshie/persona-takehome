@@ -416,7 +416,8 @@ async def start_job(ctx: RunContext[Deps], goal: str) -> str:
 @agent.tool(prepare=with_jobs)
 async def tell_job(ctx: RunContext[Deps], job: str, text: str, approve: bool | None = None) -> str:
     """Pass a background task something they said: their answer to its question, or a change
-    of plan. Only their words, never your own notes; the task already has its goal. When it
+    of plan. Only their words, never your own notes; the task already has its goal. Only what
+    changes its work: not thanks, "ok", or talk about something it already knows. When it
     asked for their yes or no to doing something, set `approve` to what they said."""
     d = ctx.deps
     assert d.env.jobs is not None

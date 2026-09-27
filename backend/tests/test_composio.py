@@ -313,6 +313,10 @@ async def test_a_missed_sign_in_link_points_back_to_it_then_sends_a_fresh_one_on
     assert len(api.calls("POST", "/connected_accounts/link")) == 1
     assert messenger.sent.count(LINK) == 1
     assert "still works" in (await asked(built.pipeline))[-1]
+    # Saying more meanwhile doesn't have the assistant point to it again.
+    await jobs.tell(PHONE, job, "hang on, looking")
+    await settle(built.pipeline)
+    assert sum("still works" in q for q in await asked(built.pipeline)) == 1
 
     # Once it's expired, a fresh one; its callback carries the job on.
     clock.advance(600)
