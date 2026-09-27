@@ -238,6 +238,26 @@ def guidance(
     return render(s, user.phone, OBJECTIVE_TEXTS)
 
 
+SETTLED = {  # how a finished step reads in "already done" (opener and wrap-up never do)
+    "agent_name": "your name",
+    "contact": "your contact card (they know it's in their texts)",
+    "user_name": "their name and how it's spelled",
+    "gmail": "the Google link",
+    "help_need": "what they need",
+}
+
+
+def settled(user: User, events: Sequence[Event], medium: Medium) -> list[str]:
+    """Steps already done, for instructions that pile up: a later update can't take back an
+    earlier one, so it has to say what's finished."""
+    s = Situation(
+        slots=user.slots,
+        medium=medium,
+        card_mentioned=_card_mentioned(events),
+    )
+    return [SETTLED[o.name] for o in OBJECTIVES if o.name in SETTLED and o.done(s)]
+
+
 def _latest_text(events: Sequence[Event]) -> str:
     return next(
         (e.payload.text for e in reversed(events) if isinstance(e.payload, UserMessage)), ""

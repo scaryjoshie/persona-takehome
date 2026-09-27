@@ -42,10 +42,11 @@ from app.agent import prompts
 from app.agent.agent import agent
 from app.agent.context import to_model_messages, trim_history, what_you_know
 from app.agent.deps import AgentEnv
-from app.agent.objectives import guidance
+from app.agent.objectives import guidance, settled
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.pipeline import RECENT, Pipeline
+from app.settings import get_settings
 from app.users.user import Medium, User
 from app.voice.call_state import CallEvent, CallTransition, Initiator
 from app.voice.events import Speaker, VoiceUtterance
@@ -61,6 +62,7 @@ PROMISE = re.compile(
     re.I,
 )
 NOW = "Where things stand now:"
+REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
 STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
@@ -122,7 +124,8 @@ async def run_call(
                 Channel.SYSTEM,
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
-            state = StateNotes(pipeline, phone, call)
+            steer = get_settings().live_steer == "instructions"
+            state = StateNotes(pipeline, phone, call, instructions=steer)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
@@ -166,15 +169,21 @@ async def run_call(
 def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
-    next_step = (
-        "ease into naming you: to be a helpful assistant you need a name, so suggest "
-        "coming up with one together, then ask what they want to call you. A short, warm "
-        "lead-in, never a cold question"
-        if user.slots.agent_name is None
-        else "ask their name"
-        if user.slots.user_name is None
-        else "carry on from where you left off"
-    )
+    if user.slots.agent_name is None:  # the first call: say what it's for, once
+        next_step = (
+            "set up the call in one easy line: it's a quick setup, a name for you, theirs, "
+            "and hooking up their google so you can actually do stuff, then you'll find "
+            "something you can help them with. Then ease into naming you: to be a helpful "
+            "assistant you need a name, so suggest coming up with one together. Warm, never a "
+            "cold question"
+        )
+    elif user.slots.user_name is None:
+        next_step = "ask their name"
+    else:  # a callback: they may have called with something, so let them lead
+        next_step = (
+            "bridge back in a line (like you're picking up where you left off), and if they "
+            "called about something, go with that. Don't open with a question from the setup"
+        )
     if user.call.initiated_by is Initiator.USER:
         opener = "They just called you. Pick up like a friend would"
     else:
@@ -373,15 +382,22 @@ class StateNotes:
 
     SETTLE = 0.3  # seconds
 
-    def __init__(self, pipeline: Pipeline, phone: str, call: LiveCall) -> None:
+    def __init__(
+        self, pipeline: Pipeline, phone: str, call: LiveCall, *, instructions: bool = False
+    ) -> None:
         self._pipeline = pipeline
         self._phone = phone
         self._call = call
+        self._instructions = instructions  # as Live instructions rather than notes
         self._task: asyncio.Task[None] | None = None
 
     async def send_now(self) -> None:
         """The first note: the only one with lines to say (updates repeat, lines shouldn't)."""
-        await self._call.send(await self._note(scripts=True), speak=False)
+        note = await self._note(scripts=True)
+        if self._instructions:
+            await self._call.steer(note)
+        else:
+            await self._call.send(note, speak=False)
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():
@@ -390,12 +406,22 @@ class StateNotes:
     async def _hold_soon(self) -> None:
         await asyncio.sleep(self.SETTLE)
         note = await self._note(scripts=False)
+        if self._instructions:  # instructions pile up: say this one replaces the last
+            done = settled(*(await self._state()), Medium.VOICE)
+            finished = (
+                f"\nAlready done, so don't bring these up again: {', '.join(done)}." if done else ""
+            )
+            await self._call.steer_when_quiet(f"{REPLACES}{finished}\n{note}")
+            return
         self._call.held = [t for t in self._call.held if not t.startswith(NOW)]  # superseded
         await self._call.whisper(note)
 
-    async def _note(self, *, scripts: bool) -> str:
+    async def _state(self) -> tuple[User, list[Event]]:
         user = await self._pipeline.user(self._phone)
-        events = await self._pipeline.history(self._phone, limit=RECENT)
+        return user, list(await self._pipeline.history(self._phone, limit=RECENT))
+
+    async def _note(self, *, scripts: bool) -> str:
+        user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
 
