@@ -30,7 +30,9 @@ export class WsTransport implements Transport {
   private open(): void {
     if (this.closed) return;
     this.status.emit("connecting");
-    const ws = new WebSocket(wsUrl(`/ws?phone=${encodeURIComponent(this.phone)}`));
+    // The browser's IANA zone, so the agent books calendar events in the user's local time.
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const ws = new WebSocket(wsUrl(`/ws?phone=${encodeURIComponent(this.phone)}&tz=${encodeURIComponent(tz)}`));
     this.ws = ws;
     ws.onopen = () => {
       this.retries = 0;

@@ -82,6 +82,9 @@ function idOf(seq: number | null): string | undefined {
  * Utterances since the current call connected, then any turn still being spoken. GPT-Live infers
  * turn boundaries from silence, so it can cut one sentence into two turns ("Hi" / ", you can call
  * me Sam"); a turn that starts mid-sentence joins the previous line from the same speaker.
+ *
+ * Live also records a turn when its speaker finishes, so a long agent line lands after the "yeah"
+ * said halfway through it. Turn ids ("agent-3", "user-4") number both speakers in spoken order.
  */
 export function transcriptLines(
   events: WireEvent[],
@@ -105,7 +108,7 @@ export function transcriptLines(
   }
 
   const lines: TranscriptLine[] = [];
-  for (const turn of turns) {
+  for (const turn of spokenOrder(turns)) {
     const text = turn.text.trim();
     const prev = lines.at(-1);
     if (prev && prev.speaker === turn.speaker && /^[,.;:!?]|^[a-z]/.test(text)) {
@@ -119,6 +122,20 @@ export function transcriptLines(
     }
   }
   return lines;
+}
+
+/** Sorts numbered turns into the slots they hold; a turn without a number keeps its place. */
+function spokenOrder(turns: TranscriptLine[]): TranscriptLine[] {
+  const numbered = turns.filter((t) => turnIndex(t.id) !== null);
+  numbered.sort((a, b) => turnIndex(a.id)! - turnIndex(b.id)!);
+  let next = 0;
+  return turns.map((t) => (turnIndex(t.id) === null ? t : numbered[next++]));
+}
+
+/** The spoken-order number in a Live turn id ("agent-3" → 3), or null for ids without one. */
+function turnIndex(id: string): number | null {
+  const m = /^(?:agent|user)-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : null;
 }
 
 /** Whether this number has never texted: it starts with an empty thread and a suggested first message. */
