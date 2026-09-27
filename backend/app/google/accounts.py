@@ -112,5 +112,14 @@ class Account:
             self.google.client, token, title=title, start=start.isoformat(), end=end.isoformat()
         )
 
+    async def move_event(self, event_id: str, *, start: datetime, minutes: int | None) -> str:
+        token = await self._token()
+        return await api.move_event(
+            self.google.client, token, event_id, start=start, minutes=minutes
+        )
+
+    async def cancel_event(self, event_id: str) -> None:
+        await api.cancel_event(self.google.client, await self._token(), event_id)
+
     async def _token(self) -> str:
         return await self.google.access_token(self.phone)

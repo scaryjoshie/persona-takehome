@@ -200,7 +200,7 @@ async def send_draft(client: httpx.AsyncClient, token: str, draft_id: str) -> No
 
 
 async def upcoming(client: httpx.AsyncClient, token: str, days: int) -> list[dict[str, str]]:
-    """Their events from now to `days` ahead: title, start, end (ISO)."""
+    """Their events from now to `days` ahead: id, title, start, end (ISO)."""
     now = datetime.now(UTC)
     response = await client.get(
         CALENDAR,
@@ -216,6 +216,7 @@ async def upcoming(client: httpx.AsyncClient, token: str, days: int) -> list[dic
     response.raise_for_status()
     return [
         {
+            "id": e["id"],
             "title": e.get("summary", "(no title)"),
             "start": e["start"].get("dateTime", e["start"].get("date", "")),
             "end": e["end"].get("dateTime", e["end"].get("date", "")),
@@ -245,3 +246,41 @@ async def create_event(
     )
     response.raise_for_status()
     return response.json().get("htmlLink", "")
+
+
+async def move_event(
+    client: httpx.AsyncClient, token: str, event_id: str, *, start: datetime, minutes: int | None
+) -> str:
+    """Move an event to `start`, keeping its length unless `minutes` is given. Returns its title."""
+    url, auth = f"{CALENDAR}/{event_id}", {"Authorization": f"Bearer {token}"}
+    if minutes is None:
+        got = await client.get(url, headers=auth)
+        got.raise_for_status()
+        was = got.json()
+        length = _when(was["end"]) - _when(was["start"])
+    else:
+        length = timedelta(minutes=minutes)
+    response = await client.patch(
+        url,
+        headers=auth,
+        params={"sendUpdates": "all"},  # guests hear about it
+        json={
+            "start": {"dateTime": start.isoformat()},
+            "end": {"dateTime": (start + length).isoformat()},
+        },
+    )
+    response.raise_for_status()
+    return response.json().get("summary", "(no title)")
+
+
+async def cancel_event(client: httpx.AsyncClient, token: str, event_id: str) -> None:
+    response = await client.delete(
+        f"{CALENDAR}/{event_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"sendUpdates": "all"},
+    )
+    response.raise_for_status()
+
+
+def _when(point: dict[str, str]) -> datetime:
+    return datetime.fromisoformat(point.get("dateTime", point.get("date", "")))

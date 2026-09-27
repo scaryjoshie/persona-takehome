@@ -12,6 +12,7 @@ from pydantic_ai.messages import ToolCallPart
 
 from app.agent.agent import agent
 from app.agent.deps import AgentEnv, Deps
+from app.agent.events import ToolCall
 from app.database import SessionFactory
 from app.events.payload import Channel, Origin
 from app.google import drafts, preview
@@ -25,6 +26,13 @@ from app.users.user import User
 from tests.conftest import PHONE, CapturingMessenger
 from tests.test_agent import scripted, tools_for
 
+DENTIST = {
+    "id": "e1",
+    "summary": "Dentist",
+    "start": {"dateTime": "2026-10-02T15:00:00-05:00"},
+    "end": {"dateTime": "2026-10-02T15:30:00-05:00"},
+}
+
 
 class FakeGoogle:
     """Just enough of Google's token, Gmail and Calendar APIs; records what was asked."""
@@ -33,6 +41,7 @@ class FakeGoogle:
         self.calls: list[str] = []
         self.sent: list[str] = []
         self.events: list[str] = []
+        self.moved: list[dict[str, dict[str, str]]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -55,7 +64,14 @@ class FakeGoogle:
             self.events.append(json.loads(request.content)["summary"])
             return httpx.Response(200, json={"htmlLink": "x"})
         if path.endswith("/events"):
-            return httpx.Response(200, json={"items": []})
+            return httpx.Response(200, json={"items": [DENTIST]})
+        if path.endswith("/events/e1") and request.method == "PATCH":
+            self.moved.append(json.loads(request.content))
+            return httpx.Response(200, json=DENTIST)
+        if path.endswith("/events/e1") and request.method == "DELETE":
+            return httpx.Response(204)
+        if path.endswith("/events/e1"):
+            return httpx.Response(200, json=DENTIST)
         return httpx.Response(200, json={})
 
 
@@ -110,6 +126,29 @@ async def test_search_draft_send_and_schedule(
     assert fake.sent == ["d1"]  # once, by the stored draft's id
 
 
+async def test_moving_and_cancelling_an_event_by_its_id(
+    db: SessionFactory, pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    fake = FakeGoogle()
+    google = await connected(db, pipeline, fake)
+    later = {"event_id": "e1", "start": "2026-10-03 10:00", "minutes": 60}
+    await reply(
+        pipeline,
+        messenger,
+        google,
+        [ToolCallPart("upcoming_events", {})],
+        [ToolCallPart("move_event", {"event_id": "e1", "start": "2026-10-03 09:00"})],
+        [ToolCallPart("move_event", later)],
+        [ToolCallPart("cancel_event", {"event_id": "e1"})],
+    )
+    calls = [e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, ToolCall)]
+    listed = next(c for c in calls if c.name == "upcoming_events")
+    assert listed.shown is not None and listed.shown.startswith("[e1] ")
+    assert [m["end"]["dateTime"][11:16] for m in fake.moved] == ["09:30", "11:00"]  # kept 30 min
+    assert fake.calls[-1] == "DELETE /calendar/v3/calendars/primary/events/e1"
+    assert {c.app for c in calls if c.name in ("move_event", "cancel_event")} == {"google"}
+
+
 async def test_editing_a_draft_updates_the_same_one_and_gaps_block_sending(
     db: SessionFactory, pipeline: Pipeline
 ) -> None:
@@ -152,6 +191,7 @@ async def test_the_tools_appear_only_once_google_is_connected(
 
     after = await tools_for(pipeline, messenger, with_google)
     assert "send_draft" not in before and {"search_email", "send_draft", "create_event"} <= after
+    assert {"move_event", "cancel_event"} <= after
 
 
 async def test_tokens_are_stored_encrypted_and_disconnect_revokes(

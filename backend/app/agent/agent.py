@@ -492,7 +492,7 @@ async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
 async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     """Their calendar for the next few days."""
     events = await (await _account(ctx)).upcoming(days)
-    lines = "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events)
+    lines = "\n".join(f"[{e['id']}] {e['start']} to {e['end']}: {e['title']}" for e in events)
     await _record(
         ctx, "upcoming_events", {"days": days}, {"found": len(events)}, shown=lines, app="google"
     )
@@ -513,6 +513,30 @@ async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: i
     )
     await _record(ctx, "create_event", {"title": title, "start": start}, {}, app="google")
     return f"added {title} at {begins:%a %b %-d %-I:%M %p}"
+
+
+@agent.tool(prepare=acting(google_connected))
+async def move_event(
+    ctx: RunContext[Deps], event_id: str, start: str, minutes: int | None = None
+) -> str:
+    """Move an event, by its id from upcoming_events. `start` is their local time, like
+    2026-10-02 15:00; it keeps its length unless you give minutes. Only after they said yes to
+    this exact change."""
+    d = ctx.deps
+    tz = (await d.pipeline.user(d.phone)).slots.zone()
+    begins = datetime.fromisoformat(start).replace(tzinfo=tz)
+    title = await (await _account(ctx)).move_event(event_id, start=begins, minutes=minutes)
+    await _record(ctx, "move_event", {"event_id": event_id, "start": start}, {}, app="google")
+    return f"moved {title} to {begins:%a %b %-d %-I:%M %p}"
+
+
+@agent.tool(prepare=acting(google_connected))
+async def cancel_event(ctx: RunContext[Deps], event_id: str) -> str:
+    """Delete an event, by its id from upcoming_events. Only after they said yes to cancelling
+    this exact event."""
+    await (await _account(ctx)).cancel_event(event_id)
+    await _record(ctx, "cancel_event", {"event_id": event_id}, {}, app="google")
+    return "cancelled"
 
 
 @agent.tool(prepare=acting(google_connected))
