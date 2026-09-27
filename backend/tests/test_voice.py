@@ -10,14 +10,14 @@ import httpx
 import pytest
 
 from app.events.payload import Channel, Origin
-from app.google.events import GmailEvent, GmailPhase
+from app.google.events import GmailEvent, GmailPhase, InboxItem
 from app.jev import Jev
 from app.main import App
 from app.pipeline import Pipeline
 from app.text.events import Typing, UserMessage
 from app.users.user import Medium
-from app.voice.responder import LiveCall, VoiceResponder
-from tests.conftest import PHONE
+from app.voice.responder import LiveCall, VoiceResponder, call_note
+from tests.conftest import PHONE, ev
 
 
 class FakeSession:
@@ -125,6 +125,16 @@ async def test_nothing_reaches_a_call_that_ended(app: App) -> None:
     call.closed = True
     await call.send("late", speak=False)
     assert session.sent == []
+
+
+def test_a_connected_gmail_is_confirmed_and_its_inbox_kept_for_when_they_ask() -> None:
+    item = InboxItem(id="m1", sender="ConEd", subject="Your bill is ready", snippet="$84.12")
+    connected = ev(GmailEvent(phase=GmailPhase.CONNECTED, email="s@x.com", inbox=[item]))
+    note = call_note(connected)
+    assert note is not None and note.speak and "what's next" in note.text
+    assert "once they want you to" in note.text and "ConEd: Your bill" in note.text
+    turn = connected.payload.turn(connected.ts)
+    assert turn is not None and "once they want you to" in turn.text
 
 
 async def test_held_background_goes_in_when_they_start_talking(app: App) -> None:

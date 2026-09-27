@@ -101,11 +101,11 @@ OBJECTIVES: tuple[Objective, ...] = (
     # Google before the ask: connected, it can see what's going on and suggest, instead of
     # pivoting from whatever they said to "connect gmail". Offering it is enough to move on.
     Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
-    # Asks count from the last saved step, so these count only their own turns.
-    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=2),
-    # Onboarding isn't done until Google is connected or declined: a link that went out and
-    # never connected gets one light check-in.
+    # One thing at a time: the link gets seen through (connected, or one light check-in if it
+    # never comes through) before the next step starts. Asks count from the last saved step,
+    # so these count only their own turns.
     Objective("gmail_check", done=lambda s: s.slots.gmail in DECIDED, max_asks=1),
+    Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=2),
     Objective("wrap_up", done=lambda s: s.slots.graduated),
 )
 

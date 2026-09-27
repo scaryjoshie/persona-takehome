@@ -102,6 +102,4 @@ def test_what_you_know_is_plain_sentences() -> None:
 
 def test_the_ask_comes_after_names() -> None:
     text = what_you_know(Slots(agent_name="Nova", user_name="Josh"), CallState())
-    assert "Still missing: help need, gmail." in text and "time for the ask" in text
-    told = what_you_know(Slots(agent_name="Nova", user_name="Josh", help_need="inbox"), CallState())
-    assert "time for the ask" not in told
+    assert text.endswith("Still missing: help need, gmail.")  # when to ask is the steps' call

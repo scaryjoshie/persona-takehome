@@ -51,7 +51,11 @@ class GmailEvent(Payload):
             case GmailPhase.CONNECTED:
                 text = f"Gmail connected: {self.email}."
                 if self.inbox:
-                    text += f" Their latest inbox messages:\n{inbox_lines(self)}"
+                    text += (
+                        " Go through it once they want you to; their latest inbox messages, "
+                        "for then:\n"
+                        f"{inbox_lines(self)}"
+                    )
                 return Turn(Role.NOTE, text)
             case GmailPhase.LINK_SENT:
                 return Turn(Role.NOTE, "Gmail link sent by text")

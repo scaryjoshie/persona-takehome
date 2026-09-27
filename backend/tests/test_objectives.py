@@ -37,9 +37,11 @@ def test_objectives_open_in_order() -> None:
     assert open_name(situation(agent_name="Mila")) == "contact"
     assert open_name(situation(agent_name="Mila", asks=1)) == "user_name"
     assert open_name(situation(agent_name="Mila", user_name="Sam")) == "gmail"
-    assert open_name(situation(agent_name="M", user_name="S", gmail="link_sent")) == "help_need"
-    pending = situation(agent_name="M", user_name="S", gmail="link_sent", help_need="x")
-    assert open_name(pending) == "gmail_check"
+    sent = situation(agent_name="M", user_name="S", gmail="link_sent")
+    assert open_name(sent) == "gmail_check"  # the link is seen through before the next step
+    never_came = situation(agent_name="M", user_name="S", gmail="link_sent", asks=1)
+    assert open_name(never_came) == "help_need"
+    assert open_name(situation(agent_name="M", user_name="S", gmail="connected")) == "help_need"
     done = situation(agent_name="M", user_name="S", help_need="x", gmail="skipped")
     assert open_name(done) == "wrap_up"
     assert (
@@ -152,9 +154,19 @@ def test_later_call_notes_carry_no_lines_to_repeat() -> None:
 def test_a_link_that_never_connected_gets_a_check_before_wrapping_up() -> None:
     sent = situation(agent_name="M", user_name="S", help_need="bills", gmail="link_sent")
     assert open_name(sent) == "gmail_check"
-    assert "hasn't come through" in render(sent, "1", OBJECTIVE_TEXTS)
+    assert "doesn't come through" in render(sent, "1", OBJECTIVE_TEXTS)
     no = situation(agent_name="M", user_name="S", help_need="bills", gmail="skipped")
     assert open_name(no) == "wrap_up"
+
+
+def test_once_gmail_connects_they_pick_the_first_thing_and_nothing_reads_the_inbox() -> None:
+    for medium in Medium:
+        connected = situation(medium, agent_name="M", user_name="S", gmail="connected")
+        assert open_name(connected) == "help_need"
+        assert "going through their email" in render(connected, "1", OBJECTIVE_TEXTS)
+    wrapping = situation(agent_name="M", user_name="S", gmail="connected", help_need="bills")
+    assert open_name(wrapping) == "wrap_up"
+    assert "inbox" not in render(wrapping, "1", OBJECTIVE_TEXTS)
 
 
 def test_a_step_they_set_aside_is_not_asked_for_again() -> None:

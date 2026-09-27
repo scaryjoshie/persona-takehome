@@ -48,9 +48,9 @@ def call_note(event: Event) -> Note | None:
             )
         case GmailEvent(phase=GmailPhase.CONNECTED) as connected:
             return Note(
-                "Their Gmail just connected. Say so in a few words, then show you're useful: "
-                "mention one thing from their inbox that fits what they need. Their latest "
-                f"messages:\n{inbox_lines(connected)}",
+                "Their Gmail just connected. Say so in a few words, then go on to what's next. "
+                "Go through it once they want you to; their latest messages, for then:\n"
+                f"{inbox_lines(connected)}",
                 True,
             )
         case GmailEvent(phase=GmailPhase.LINK_SENT):

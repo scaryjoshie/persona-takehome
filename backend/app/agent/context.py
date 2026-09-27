@@ -209,8 +209,6 @@ def what_you_know(slots: Slots, call: CallState) -> str:
         if missing
         else "You have everything onboarding needs."
     )
-    if names_sorted and slots.help_need is None:
-        lines.append("Names are sorted, so when it fits naturally, it's time for the ask.")
     return "\n".join(lines)
 
 
