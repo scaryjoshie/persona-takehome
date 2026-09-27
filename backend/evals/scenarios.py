@@ -181,6 +181,14 @@ SCENARIOS: dict[str, list[str]] = {
         "haha yeah",
         "ok cool",
     ],
+    "capabilities": [
+        "Hey, what's a Persona?",
+        "text",
+        "what can you actually do?",
+        "can you book me a dentist appointment for next week?",
+        "ok can you remind me tomorrow at 5 to call my mom",
+        "can you connect to my notion?",
+    ],
     "tangent": [
         "Hey, what's a Persona?",
         "text",
