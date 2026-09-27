@@ -37,7 +37,6 @@ backend: "Backend" {
   jev_voice: "Jev Voice\nfiltration head" { class: jev }
   text: "Text Handler" { class: agent }
   voice: "Voice Handler" { class: agent }
-  agent_texts: "Agent Texts" { class: leaf }
   note: "Dashed lines indicate passive store:\nthe event is saved, not routed to an agent" {
     shape: text
     style.font-color: "#64748B"
@@ -50,8 +49,9 @@ backend: "Backend" {
   router -> jev_voice: "call" { class: wire }
   jev_text -> text: { class: wire }
   jev_voice -> voice: { class: wire }
-  text -> agent_texts: { class: wire }
-  agent_texts -> store: { class: passive }
+  # written store <- handler so these don't change the left-to-right order
+  store <- text: "texts" { class: passive }
+  store <- voice: "transcripts, actions" { class: passive }
 }
 
 openai: "OpenAI" {
