@@ -27,7 +27,7 @@ def text_model(settings: Settings) -> Model:
 
 
 def live_model(settings: Settings) -> OpenAILiveModel:
-    live = OpenAILiveModelSettings()
+    live = OpenAILiveModelSettings(openai_live_turn_silence_ms=settings.openai_live_turn_silence_ms)
     if settings.openai_live_backend_model:
         live["openai_live_delegation"] = {"model": settings.openai_live_backend_model}
     return OpenAILiveModel(settings.openai_live_model, provider=_provider(settings), settings=live)

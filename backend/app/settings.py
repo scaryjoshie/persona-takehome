@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     agent_reasoning_effort: str = "low"  # measured: ~25% faster than default, same replies
     openai_live_model: str = "gpt-live-1"  # the voice on calls
     openai_live_backend_model: str | None = None  # empty = Live's default backend
+    # Quiet this long ends a turn in the log (Live has no end-of-turn signal of its own). The
+    # voice hears the audio either way; this is only where its speech is cut into saved lines.
+    openai_live_turn_silence_ms: int = 1200
     # How where-things-stand reaches the voice: "instructions" (session.instructions.append)
     # or "notes" (silent context in the conversation, held until they next speak)
     live_steer: str = "instructions"
