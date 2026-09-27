@@ -201,12 +201,11 @@ async def run_call(
 def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
-    if user.slots.agent_name is None:  # the first call: only the objective at hand, no agenda
-        # Spelling out the plan here got recited clause by clause ("a name for me, yours,
-        # and your google, so i can actually do stuff...").
-        next_step = "get into the first thing, a name for you, the way a friend would"
-    elif user.slots.user_name is None:
-        next_step = "go into your objective"
+    now = objectives.ONBOARDING.current(user.slots)
+    if now is not None and now.name in ("agent_name", "user_name"):  # names come first
+        # Only the objective at hand, no agenda: spelling out the plan here got recited clause
+        # by clause ("a name for me, yours, and your google, so i can actually do stuff...").
+        next_step = f"get into the first thing, {now.label}, the way a friend would"
     elif user.call.initiated_by is Initiator.AGENT and user.call.reason:
         # A callback you placed: open on what it's for now. "Pick up where you left off"
         # made the voice replay the previous call's last lines, on a different topic.

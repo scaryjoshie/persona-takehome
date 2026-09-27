@@ -48,7 +48,7 @@ def call_note(event: Event) -> Note | None:
             )
         case GmailEvent(phase=GmailPhase.CONNECTED) as connected:
             return Note(
-                "Their Gmail just connected. Say so in a few words, then go on to what's next. "
+                "Their Gmail just connected. Say so in a few words. "
                 "Go through it once they want you to; their latest messages, for then:\n"
                 f"{inbox_lines(connected)}",
                 True,
@@ -165,8 +165,9 @@ class LiveCall:
 
     async def tell(self, text: str) -> None:
         """Something they're waiting to hear (the email went out): said as soon as the voice is
-        free, never held for their next turn. Mid-sentence, it's said when the sentence ends."""
-        if self.speaking:
+        free, never held for their next turn. While it's talking, or about to answer them, it's
+        said when that turn ends."""
+        if self.speaking or self.voice_owes_reply:
             self.deferred.append(text)
         else:
             await self.send(text, speak=True)

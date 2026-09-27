@@ -131,7 +131,7 @@ def test_a_connected_gmail_is_confirmed_and_its_inbox_kept_for_when_they_ask() -
     item = InboxItem(id="m1", sender="ConEd", subject="Your bill is ready", snippet="$84.12")
     connected = ev(GmailEvent(phase=GmailPhase.CONNECTED, email="s@x.com", inbox=[item]))
     note = call_note(connected)
-    assert note is not None and note.speak and "what's next" in note.text
+    assert note is not None and note.speak and "what's next" not in note.text  # the chain's job
     assert "once they want you to" in note.text and "ConEd: Your bill" in note.text
     turn = connected.payload.turn(connected.ts)
     assert turn is not None and "once they want you to" in turn.text
@@ -264,6 +264,31 @@ async def test_an_outcome_they_are_waiting_on_is_said_when_the_voice_is_free() -
     assert session.sent == [("The email is sent.", True)]
     await call.tell("The draft is in their texts.")
     assert session.sent[-1] == ("The draft is in their texts.", True)
+    await call.user_started()  # they spoke: the voice owes them an answer first
+    await call.tell("The event is on their calendar.")
+    assert session.sent[-1] == ("The draft is in their texts.", True)  # not over its answer
+    call.speaking, call.voice_owes_reply = True, False  # its answer began
+    await call.turn_complete(asked_question=False)
+    assert session.sent[-1] == ("The event is on their calendar.", True)
+
+
+async def test_the_voice_hears_onboarding_move_on_in_the_objectives_words(app: App) -> None:
+    from app.agent.events import SlotChanged
+    from app.voice.call import StateNotes
+
+    pipeline, call, session = await on_a_call(app, VoiceResponder())
+    state = StateNotes(app.env, PHONE, call)
+    pipeline.subscribe(PHONE, state.moved, kinds={"objective_moved"})
+    await pipeline.submit(
+        PHONE, Origin.VOICE_AGENT, Channel.VOICE, SlotChanged(slot="agent_name", new="Mino")
+    )
+    said, spoken = session.sent[-1]
+    assert said.startswith("You've got a name: Mino!") and spoken
+    assert "contact card" not in said
+    await pipeline.submit(
+        PHONE, Origin.VOICE_AGENT, Channel.VOICE, SlotChanged(slot="agent_name", new="Milo")
+    )
+    assert len(session.sent) == 1  # a rename moves nothing
 
 
 def test_a_callback_opens_on_what_this_call_is_for() -> None:
