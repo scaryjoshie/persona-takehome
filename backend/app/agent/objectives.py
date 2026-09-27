@@ -70,8 +70,12 @@ class Chain:
             None,
         )
 
-    def render(self, slots: Slots, medium: Medium, *, first_reply: bool = False) -> str:
-        """Where you are in the chain, for the prompt; "" once every objective is behind."""
+    def render(
+        self, slots: Slots, medium: Medium, *, first_reply: bool = False, playbook: bool = False
+    ) -> str:
+        """Where you are in the chain, for the prompt; "" once every objective is behind.
+        `playbook`: also how to handle each one still ahead, for when you get to it (the voice
+        gets it once, at the start of a call, so a move never waits on its instructions)."""
         now = self.current(slots, first_reply=first_reply)
         if now is None:
             return ""
@@ -86,19 +90,44 @@ class Chain:
                 log.append(f"✓ {o.label}: {got}" if got else f"✓ {o.label}")
             else:
                 log.append(f"· {o.label}")
-        text, example = now.words(medium, slots)
         parts = [
             f"## {self.title}: where you are",
             "\n".join(log),
-            f"Lead them through this, one at a time. Right now: {now.label}.\n\n{text}",
+            f"Lead them through this, one at a time. Right now: {now.label}.",
+            _how(now, medium, slots),
         ]
-        if example:
-            parts.append(
-                "When you ask this, use this line, fitted naturally to the moment and said in the "
-                "language you're speaking with them. If something else needs handling first, "
-                f"handle that first and bring this in after:\n{example}"
-            )
+        ahead = self.objectives[self.objectives.index(now) + 1 :]
+        if playbook and ahead:
+            parts.append("### When you get to the next ones")
+            parts += [f"**{o.label}**\n{_how(o, medium, slots)}" for o in ahead]
         return "\n\n".join(parts)
+
+    def moved(self, before: str | None, slots: Slots) -> str | None:
+        """A line for the voice when the chain moved on during a call, or None if it didn't.
+        Said when it's free: it names what's done and where to go, and it's safe if the voice
+        already got there on its own."""
+        now = self.current(slots)
+        if before is None or now is None or now.name == before:
+            return None
+        left = next(o for o in self.objectives if o.name == before)
+        if left.set_aside(slots):
+            behind = f"Leaving {left.label} for now; they'd rather not."
+        else:
+            got = left.got(slots)
+            behind = f"Done: {left.label} ({got})." if got else f"Done: {left.label}."
+        return f"{behind} If you haven't already, now's the time to move on to {now.label}."
+
+
+def _how(o: Objective, medium: Medium, slots: Slots) -> str:
+    """An objective's words, then its example line."""
+    text, example = o.words(medium, slots)
+    if not example:
+        return text
+    return (
+        f"{text}\n\nWhen you ask this, use this line, fitted naturally to the moment and said in "
+        "the language you're speaking with them. If something else needs handling first, "
+        f"handle that first and bring this in after:\n{example}"
+    )
 
 
 def _google(slots: Slots) -> str | None:

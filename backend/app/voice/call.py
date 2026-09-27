@@ -114,7 +114,7 @@ async def run_call(
         # objective. Every change after that goes in as an update.
         openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}"
         + (f"\n\n# Earlier with them\n\n{earlier}" if earlier else "")
-        + f"\n\n{await where_things_stand(env, phone)}",
+        + f"\n\n{await where_things_stand(env, phone, playbook=True)}",
         openai_live_delegation=cast(OpenAILiveResponsesDelegation, delegation),
     )
 
@@ -149,6 +149,7 @@ async def run_call(
             )
             steer = get_settings().live_steer == "instructions"
             state = StateNotes(env, phone, call, instructions=steer)
+            await state.start()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
             call_agent = CallAgent(env, call, phone)
@@ -441,6 +442,12 @@ class StateNotes:
         self._call = call
         self._instructions = instructions  # as Live instructions rather than notes
         self._task: asyncio.Task[None] | None = None
+        self._at: str | None = None  # the objective it was on; set by start()
+
+    async def start(self) -> None:
+        """Remember where onboarding stands as the call begins."""
+        now = objectives.ONBOARDING.current((await self._env.pipeline.user(self._phone)).slots)
+        self._at = now.name if now else None
 
     def changed(self, event: Event) -> None:
         if self._task is None or self._task.done():
@@ -448,6 +455,14 @@ class StateNotes:
 
     async def _hold_soon(self) -> None:
         await asyncio.sleep(self.SETTLE)
+        # The chain moved on: said as soon as the voice is free, never left to a quiet update
+        # that lands after its turn (it stalled there, waiting, after each objective).
+        slots = (await self._env.pipeline.user(self._phone)).slots
+        moved = objectives.ONBOARDING.moved(self._at, slots)
+        now = objectives.ONBOARDING.current(slots)
+        self._at = now.name if now else None
+        if moved:
+            await self._call.tell(moved)
         note = await where_things_stand(self._env, self._phone)
         if self._instructions:  # instructions pile up: say this one replaces the last
             await self._call.steer_when_quiet(f"{REPLACES}\n{note}")
@@ -456,11 +471,12 @@ class StateNotes:
         await self._call.whisper(note)
 
 
-async def where_things_stand(env: AgentEnv, phone: str) -> str:
-    """For the voice: the time, what's known, open tasks, what it remembers, its objective."""
+async def where_things_stand(env: AgentEnv, phone: str, *, playbook: bool = False) -> str:
+    """For the voice: the time, what's known, open tasks, what it remembers, and where it is in
+    onboarding (`playbook`: with how to handle each objective ahead, at the start of a call)."""
     pipeline = env.pipeline
     user = await pipeline.user(phone)
-    stage = objectives.ONBOARDING.render(user.slots, Medium.VOICE)
+    stage = objectives.ONBOARDING.render(user.slots, Medium.VOICE, playbook=playbook)
     facts = remembered(await pipeline.memory(phone), summary=False, numbered=False)
     open_jobs = job_lines(await env.jobs.open(phone), speaking=True) if env.jobs else []
     now = their_time(user.slots, pipeline.now())

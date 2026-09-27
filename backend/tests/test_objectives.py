@@ -46,7 +46,9 @@ def test_the_log_shows_where_you_are_and_only_the_current_one_in_full() -> None:
 def test_each_channel_gets_its_own_part_and_example() -> None:
     assert "Spell it back" in ONBOARDING.render(Slots(), Medium.VOICE)
     assert "Spell it back" not in ONBOARDING.render(Slots(), Medium.TEXT)
-    assert "i need a name, so... what do you wanna call me?" in ONBOARDING.render(Slots(), Medium.VOICE)
+    assert "i need a name, so... what do you wanna call me?" in ONBOARDING.render(
+        Slots(), Medium.VOICE
+    )
     assert "what do you want to name me?" in ONBOARDING.render(Slots(), Medium.TEXT)
 
 
@@ -77,3 +79,25 @@ async def test_set_aside_is_kept_and_shown_to_the_agent(pipeline: Pipeline) -> N
     user = await pipeline.user(PHONE)
     assert user.slots.set_aside == ("user_name",)
     assert "rather not do this for now: giving their name" in what_you_know(user.slots, user.call)
+
+
+def test_the_playbook_carries_how_to_handle_each_one_ahead() -> None:
+    playbook = ONBOARDING.render(Slots(), Medium.VOICE, playbook=True)
+    assert "▶ a name for you (you're here)" in playbook
+    assert "### When you get to the next ones" in playbook
+    assert "**their name**" in playbook and "J-O-N, right?" in playbook  # ahead, in full
+    assert "### When you get to the next ones" not in ONBOARDING.render(Slots(), Medium.VOICE)
+
+
+def test_a_move_is_named_once_and_safe_to_hear_twice() -> None:
+    named = Slots(agent_name="Mino")
+    assert ONBOARDING.moved("agent_name", named) == (
+        "Done: a name for you (Mino). If you haven't already, now's the time to move on to "
+        "their name."
+    )
+    assert ONBOARDING.moved("user_name", named.model_copy(update={"user_name": None})) is None
+    aside = Slots(agent_name="Mino", set_aside=("user_name",))
+    assert ONBOARDING.moved("user_name", aside) == (
+        "Leaving their name for now; they'd rather not. If you haven't already, now's the time "
+        "to move on to their Google."
+    )
