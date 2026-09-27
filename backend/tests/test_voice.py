@@ -315,6 +315,12 @@ async def test_the_voice_hears_onboarding_move_on_in_the_objectives_words(app: A
         PHONE, Origin.VOICE_AGENT, Channel.VOICE, SlotChanged(slot="agent_name", new="Milo")
     )
     assert len(session.sent) == 1  # a rename moves nothing
+    await call.user_started()  # "you got it": the voice's reply is forming
+    await pipeline.submit(
+        PHONE, Origin.VOICE_AGENT, Channel.VOICE, SlotChanged(slot="user_name", new="Billy")
+    )
+    said, spoken = session.sent[-1]
+    assert said.startswith("You know their name now: Billy") and not spoken  # into that reply
 
 
 def test_a_callback_opens_on_what_this_call_is_for() -> None:

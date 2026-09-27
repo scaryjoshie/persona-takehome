@@ -507,7 +507,12 @@ class StateNotes:
         """Onboarding moved on: said as soon as the voice is free, never left to a quiet update
         that lands after its turn (it stalled there, waiting, after each objective)."""
         assert isinstance(event.payload, ObjectiveMoved)
-        if line := objectives.ONBOARDING.announcement(event.payload):
+        line = objectives.ONBOARDING.announcement(event.payload)
+        if line is None:
+            return
+        if self._call.voice_owes_reply:  # its reply to them is forming: it goes in that
+            await self._call.whisper(line)  # (held to after it, the reply went on without it)
+        else:
             await self._call.tell(line)
 
     def changed(self, event: Event) -> None:
