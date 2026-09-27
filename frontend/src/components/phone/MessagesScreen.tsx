@@ -140,7 +140,12 @@ export function MessagesScreen({
       <App theme="ios" darkMode name="messages">
         <Page messagesContent>
           <Navbar>
-            <NavLeft backLink />
+            <NavLeft>
+              {/* NavLeft's backLink always sets href="#", which Chrome previews in the corner on hover. */}
+              <Link href={false} className="back icon-only">
+                <i className="icon icon-back" />
+              </Link>
+            </NavLeft>
             <NavTitle>
               <div className="contact-avatar">
                 {/^[a-z]/i.test(contact) ? contact.slice(0, 1).toUpperCase() : <Icon f7="person_fill" />}
@@ -149,7 +154,7 @@ export function MessagesScreen({
                 {contact} <Icon f7="chevron_right" />
               </div>
             </NavTitle>
-            <NavRight>{onCall && <Link iconF7="phone_fill" onClick={onCall} aria-label="Call" />}</NavRight>
+            <NavRight>{onCall && <Link href={false} iconF7="phone_fill" onClick={onCall} aria-label="Call" />}</NavRight>
           </Navbar>
           <Messagebar
             placeholder="iMessage"
@@ -170,11 +175,12 @@ export function MessagesScreen({
                 </button>
               </div>
             )}
-            <Link slot="inner-start" iconF7="plus" />
+            <Link href={false} slot="inner-start" iconF7="plus" />
             {draft ? (
-              <Link slot="after-area" className="send-button" iconF7="arrow_up" onClick={send} aria-label="Send" />
+              <Link href={false} slot="after-area" className="send-button" iconF7="arrow_up" onClick={send} aria-label="Send" />
             ) : (
               <Link
+                href={false}
                 slot="inner-end"
                 iconF7="mic"
                 aria-label="Record audio message"
