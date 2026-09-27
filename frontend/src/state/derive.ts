@@ -81,7 +81,9 @@ function idOf(seq: number | null): string | undefined {
 /**
  * Utterances since the current call connected, then any turn still being spoken. GPT-Live infers
  * turn boundaries from silence, so it can cut one sentence into two turns ("Hi" / ", you can call
- * me Sam"); a turn that starts mid-sentence joins the previous line from the same speaker.
+ * me Sam"). A turn joins the previous line from the same speaker when it starts with punctuation or
+ * that line hadn't ended a sentence ("get my" / "taxes done"). Case says nothing: the voice's own
+ * transcripts are all lowercase.
  *
  * Live also records a turn when its speaker finishes, so a long agent line lands after the "yeah"
  * said halfway through it. Turn ids ("agent-3", "user-4") number both speakers in spoken order.
@@ -111,10 +113,11 @@ export function transcriptLines(
   for (const turn of spokenOrder(turns)) {
     const text = turn.text.trim();
     const prev = lines.at(-1);
-    if (prev && prev.speaker === turn.speaker && /^[,.;:!?]|^[a-z]/.test(text)) {
+    const punctuated = /^[,.;:!?]/.test(text);
+    if (text && prev && prev.speaker === turn.speaker && (punctuated || !/[.?!]$/.test(prev.text))) {
       lines[lines.length - 1] = {
         ...prev,
-        text: `${prev.text}${/^[a-z]/.test(text) ? " " : ""}${text}`,
+        text: `${prev.text}${punctuated ? "" : " "}${text}`,
         partial: turn.partial,
       };
     } else if (text) {

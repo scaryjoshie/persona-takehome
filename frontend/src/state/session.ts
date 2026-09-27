@@ -8,7 +8,6 @@ import type {
   TranscriptPartial,
   Slots,
   Snapshot,
-  Speaker,
   WireEvent,
 } from "../types";
 import type { ConnectionStatus, Transport } from "../transport/types";
@@ -21,8 +20,11 @@ export interface SessionState {
   call: CallState;
   floor: Medium;
   agentTyping: boolean;
-  /** The turn each speaker is saying right now; a speaker says one thing at a time. Dropped once that speaker's utterance lands. */
-  partials: Partial<Record<Speaker, TranscriptPartial>>;
+  /**
+   * Captions of turns not yet recorded, by turn id. A speaker's next turn can start before the last
+   * one is recorded, so each turn keeps its own caption until its utterance lands.
+   */
+  partials: Partial<Record<string, TranscriptPartial>>;
 }
 
 type Action = { type: "status"; status: ConnectionStatus } | { type: "message"; message: ServerMessage };
@@ -42,9 +44,9 @@ function reduce(state: SessionState, action: Action): SessionState {
       if (last && m.event.seq <= last.seq) return state; // replayed after a reconnect
       const p = m.event.payload;
       let partials = state.partials;
-      if (p.kind === "voice_utterance" && partials[p.speaker]) {
+      if (p.kind === "voice_utterance" && partials[p.turn_id]) {
         partials = { ...partials };
-        delete partials[p.speaker];
+        delete partials[p.turn_id];
       }
       return { ...state, events: [...state.events, m.event], partials };
     }
@@ -60,7 +62,7 @@ function reduce(state: SessionState, action: Action): SessionState {
     case "typing":
       return { ...state, agentTyping: m.active };
     case "partial":
-      return { ...state, partials: { ...state.partials, [m.speaker]: m } };
+      return { ...state, partials: { ...state.partials, [m.turn_id]: m } };
   }
 }
 
