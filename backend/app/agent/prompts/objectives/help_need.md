@@ -4,3 +4,6 @@ Right now: something they could use a hand with, anywhere in their life. Make it
 - the replies and follow-ups that pile up
 - getting their week under control
 - the little admin nobody wants to do
+
+## script
+- alright, [name], now that setup's done, what's something in your life you could use help with?
