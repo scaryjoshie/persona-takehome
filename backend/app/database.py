@@ -36,7 +36,7 @@ def make_sessions(engine: AsyncEngine) -> SessionFactory:
 
 
 async def create_schema(engine: AsyncEngine) -> None:
-    for module in ("app.events.models", "app.users.models", "app.google.models"):
+    for module in ("app.events.models", "app.users.models", "app.google.models", "app.jobs.models"):
         import_module(module)  # register each section's tables on the metadata
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

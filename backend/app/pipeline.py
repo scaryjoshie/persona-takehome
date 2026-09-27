@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from sqlalchemy import delete
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.agent.events import CallOptOut, ContactSaved, DeviceTimezone, Graduated, SlotChanged
@@ -28,6 +30,7 @@ from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
+from app.jobs.models import JobRow
 from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
@@ -122,7 +125,7 @@ class Pipeline:
 
         self._timers.call_later(seconds, fire)
 
-    def spawn(self, work: Awaitable[object]) -> None:
+    def spawn(self, work: Awaitable[object]) -> asyncio.Future[object]:
         """Run work in the background, keeping a reference and logging failures."""
 
         async def run() -> object:
@@ -135,6 +138,7 @@ class Pipeline:
         task = asyncio.ensure_future(run())
         self._background.add(task)
         task.add_done_callback(self._background.discard)
+        return task
 
     def subscribe(
         self, phone: str, fn: Subscriber, *, kinds: Iterable[str] | None = None
@@ -163,6 +167,7 @@ class Pipeline:
         """Debug: forget everything about a user."""
         async with self._locks[phone], self._db() as s, s.begin():
             await events.delete_events(s, phone)
+            await s.exec(delete(JobRow).where(col(JobRow.phone) == phone))  # pyright: ignore[reportArgumentType]
             await users.delete_user(s, phone)
 
     async def record(

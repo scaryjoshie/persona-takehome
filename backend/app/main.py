@@ -23,6 +23,7 @@ from app.database import SessionFactory, create_schema, make_engine, make_sessio
 from app.google import routes as google_routes
 from app.google.accounts import Google
 from app.jev import Jev
+from app.jobs.runner import Jobs
 from app.pipeline import Pipeline
 from app.previews import routes as preview_routes
 from app.services import Services
@@ -60,17 +61,24 @@ def assemble(
     timers: Timers | None = None,
     clock: Clock = utc_now,
     google: Google | None = None,
+    web_search: bool = True,
 ) -> App:
-    pipeline = Pipeline(db, clock=clock, timers=timers or AsyncioTimers())
+    timers = timers or AsyncioTimers()
+    pipeline = Pipeline(db, clock=clock, timers=timers)
     voice = VoiceResponder(jev=jev)
+    google = google or Google(db)  # unconfigured: the Google link says so
+    jobs = Jobs(
+        db, pipeline, model=model, timers=timers, tz=google.tz, google=google, web_search=web_search
+    )
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,
         model=model,
         app_base_url=app_base_url,
         hang_up=voice.hang_up,
-        google=google or Google(db),  # unconfigured: the Google link says so
+        google=google,
         jev=jev,
+        jobs=jobs,
     )
     pipeline.responders[Medium.TEXT] = TextResponder(Replier(env), jev=jev)
     pipeline.responders[Medium.VOICE] = voice
@@ -123,6 +131,8 @@ def create_app() -> FastAPI:
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         await create_schema(make_engine(settings.database_url))
         await built.pipeline.close_open_calls()
+        assert built.env.jobs is not None
+        await built.env.jobs.resume()
         yield
 
     web = FastAPI(lifespan=lifespan)

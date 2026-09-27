@@ -22,6 +22,7 @@ from app.agent.events import (
 from app.events.decision import Decision
 from app.events.payload import Payload
 from app.google.events import EmailDraft, GmailEvent
+from app.jobs.events import JobAsked, JobEnded, JobStarted, JobTold
 from app.text.events import (
     AgentMessage,
     Reaction,
@@ -53,6 +54,10 @@ AnyPayload = Annotated[
     | CallEvent
     | GmailEvent
     | EmailDraft
+    | JobStarted
+    | JobAsked
+    | JobTold
+    | JobEnded
     | Decision,
     Field(discriminator="kind"),
 ]

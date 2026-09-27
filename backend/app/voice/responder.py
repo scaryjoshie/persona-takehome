@@ -21,6 +21,7 @@ from app.events.decision import Decision
 from app.events.event import Event
 from app.google.events import GmailEvent, GmailPhase, inbox_lines
 from app.jev import Jev
+from app.jobs.events import JobAsked, JobEnded
 from app.pipeline import Context
 from app.text.events import Typing, UserMessage
 from app.users.user import User
@@ -60,6 +61,16 @@ def call_note(event: Event) -> Note | None:
             return Note(
                 "Tell the user the Gmail connection didn't go through; offer to retry.", True
             )
+        case JobAsked(question=question):
+            return Note(
+                f"A background task you started needs their answer: {question} Ask them when "
+                "there's a natural moment.",
+                True,
+            )
+        case JobEnded(outcome="done", text=text):
+            return Note(f"A background task you started finished: {text} Tell them briefly.", True)
+        case JobEnded(outcome="failed", text=text):
+            return Note(f"A background task you started didn't work out: {text}", True)
         case _:
             return None
 

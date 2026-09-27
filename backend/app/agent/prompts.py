@@ -30,6 +30,8 @@ TEXT = read_md("text")  # the text channel's format
 CALL = read_md("call")  # the voice on a call
 LISTENER = read_md("listener")  # the back office during a call
 VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
+JOBS = read_md("jobs")  # handing work to background tasks; once onboarding is done
+JOB = read_md("job")  # a background task itself
 
 # One file per onboarding objective, split into sections (see app/agent/objectives.py).
 OBJECTIVE_TEXTS = {

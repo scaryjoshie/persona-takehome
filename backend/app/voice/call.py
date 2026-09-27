@@ -46,6 +46,7 @@ from app.agent.objectives import guidance, settled
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.jev import Jev
+from app.jobs.runner import lines as job_lines
 from app.pipeline import RECENT, Pipeline
 from app.settings import get_settings
 from app.users.user import Medium, User
@@ -60,7 +61,15 @@ log = logging.getLogger(__name__)
 SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 NOW = "Where things stand now:"
 REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
-STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
+STATE_KINDS = {
+    "slot_changed",
+    "gmail",
+    "call_opt_out",
+    "graduated",
+    "job_started",
+    "job_asked",
+    "job_ended",
+}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
@@ -122,7 +131,7 @@ async def run_call(
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
             steer = get_settings().live_steer == "instructions"
-            state = StateNotes(pipeline, phone, call, instructions=steer)
+            state = StateNotes(env, phone, call, instructions=steer)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
@@ -409,9 +418,10 @@ class StateNotes:
     SETTLE = 0.3  # seconds
 
     def __init__(
-        self, pipeline: Pipeline, phone: str, call: LiveCall, *, instructions: bool = False
+        self, env: AgentEnv, phone: str, call: LiveCall, *, instructions: bool = False
     ) -> None:
-        self._pipeline = pipeline
+        self._env = env
+        self._pipeline = env.pipeline
         self._phone = phone
         self._call = call
         self._instructions = instructions  # as Live instructions rather than notes
@@ -449,7 +459,10 @@ class StateNotes:
     async def _note(self, *, scripts: bool) -> str:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
-        return f"{NOW}\n{what_you_know(user.slots, user.call)}\n\n{stage}".strip()
+        jobs = self._env.jobs
+        open_jobs = job_lines(await jobs.open(self._phone)) if jobs and user.slots.graduated else []
+        known = "\n".join([what_you_know(user.slots, user.call), *open_jobs])
+        return f"{NOW}\n{known}\n\n{stage}".strip()
 
 
 USER_SETTLE = 0.8  # seconds of quiet after their last piece before it counts as their turn

@@ -153,6 +153,7 @@ def app(
         app_base_url="http://x",
         timers=timers,
         clock=clock,
+        web_search=False,
     )
     built.pipeline.responders[Medium.TEXT] = TextResponder(Replier(built.env, sleep=no_sleep))
     return built
