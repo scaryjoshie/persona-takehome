@@ -242,3 +242,36 @@ async def test_a_re_offer_after_it_is_done_gets_caught() -> None:
     assert await slip(cast(Jev, FakeJev("link", 0.4)), sent, "the link?") is None  # unsure
     assert await slip(cast(Jev, FakeJev("none", 0.9)), sent, "what's up?") is None
     assert await slip(None, sent, "want the link?") is None  # no Jev: no check
+
+
+async def test_an_outcome_they_are_waiting_on_is_said_when_the_voice_is_free() -> None:
+    session = FakeSession()
+    call = LiveCall(session)
+    call.speaking = True
+    await call.tell("The email is sent.")
+    assert session.sent == []  # not over its own sentence
+    await call.turn_complete(asked_question=False)
+    assert session.sent == [("The email is sent.", True)]
+    await call.tell("The draft is in their texts.")
+    assert session.sent[-1] == ("The draft is in their texts.", True)
+
+
+def test_a_callback_opens_on_what_this_call_is_for() -> None:
+    from datetime import UTC, datetime
+
+    from app.agent.slots import Slots
+    from app.users.user import User
+    from app.voice.call import _opener  # pyright: ignore[reportPrivateUsage]
+    from app.voice.call_state import CallPhase, CallState, Initiator
+
+    call = CallState(
+        phase=CallPhase.CONNECTED,
+        reason="the email draft",
+        initiated_by=Initiator.AGENT,
+        started_at=datetime.now(UTC),
+    )
+    user = User(
+        phone=PHONE, slots=Slots(agent_name="Mila", user_name="Sam"), call=call, floor=Medium.VOICE
+    )
+    opener = _opener(user)
+    assert "the email draft" in opener and "left off" not in opener

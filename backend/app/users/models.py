@@ -20,6 +20,7 @@ class UserRow(SQLModel, table=True):
     gmail_email: str | None = None
     graduated: bool = False
     no_calls: bool = False
+    set_aside: str = ""  # setup steps they'd rather not do, comma-separated
     contact_name: str | None = None  # what the user saved the agent as
     timezone: str | None = None  # IANA, see Slots.timezone_source
     timezone_source: str | None = None

@@ -30,6 +30,7 @@ class Slots(BaseModel):
     gmail_email: str | None = None
     graduated: bool = False
     no_calls: bool = False  # they declined a call; don't offer again unless they ask
+    set_aside: tuple[str, ...] = ()  # setup steps they'd rather not do; not asked for again
     # Phone-only: what their phone has the agent saved as (None = not saved). Drives the
     # phone's header; the agent never sees it (not routed, not in any prompt).
     contact_name: str | None = None
@@ -54,4 +55,4 @@ class Slots(BaseModel):
             out.append("help_need")
         if self.gmail in (None, GmailPhase.LINK_SENT):
             out.append("gmail")
-        return tuple(out)
+        return tuple(step for step in out if step not in self.set_aside)

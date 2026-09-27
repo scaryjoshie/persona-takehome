@@ -24,6 +24,7 @@ from app.database import create_schema, make_engine, make_sessions
 from app.events.models import EventRow
 from app.google.accounts import Google
 from app.google.models import GoogleAccountRow
+from app.jobs.models import JobRow
 from app.memory.service import delete_memory
 from app.settings import get_settings
 from app.users.models import UserRow
@@ -78,6 +79,7 @@ async def main(really: bool) -> None:
         await s.exec(delete(EventRow))  # pyright: ignore[reportArgumentType]
         await delete_memory(s)
         await s.exec(delete(UserRow))  # pyright: ignore[reportArgumentType]
+        await s.exec(delete(JobRow))  # pyright: ignore[reportArgumentType]
     for path in note_files:
         path.unlink(missing_ok=True)
     await engine.dispose()

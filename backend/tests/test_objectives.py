@@ -6,6 +6,7 @@ from app.agent.events import SlotChanged
 from app.agent.objectives import OBJECTIVES, Situation, asks_since_progress, current, render
 from app.agent.prompts import OBJECTIVE_TEXTS
 from app.agent.slots import Slots
+from app.pipeline import Pipeline
 from app.text.events import AgentMessage, ReplyStarted, UserMessage
 from app.users.user import Medium
 from app.voice.events import Speaker, VoiceUtterance
@@ -154,3 +155,24 @@ def test_a_link_that_never_connected_gets_a_check_before_wrapping_up() -> None:
     assert "hasn't come through" in render(sent, "1", OBJECTIVE_TEXTS)
     no = situation(agent_name="M", user_name="S", help_need="bills", gmail="skipped")
     assert open_name(no) == "wrap_up"
+
+
+def test_a_step_they_set_aside_is_not_asked_for_again() -> None:
+    assert open_name(situation(agent_name="Mila", asks=1)) == "user_name"
+    declined = situation(agent_name="Mila", asks=1, set_aside=("user_name",))
+    assert open_name(declined) == "gmail"
+    assert "user_name" not in declined.slots.missing()
+
+
+async def test_set_aside_is_kept_and_shown_to_the_agent(pipeline: Pipeline) -> None:
+    from app.agent.context import what_you_know
+    from app.agent.events import StepSetAside
+    from app.events.payload import Channel, Origin
+    from tests.conftest import PHONE
+
+    step = StepSetAside(step="user_name")
+    assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, step)
+    assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, step) is None  # once
+    user = await pipeline.user(PHONE)
+    assert user.slots.set_aside == ("user_name",)
+    assert "rather not do this for now: giving their name" in what_you_know(user.slots, user.call)

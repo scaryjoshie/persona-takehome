@@ -788,6 +788,123 @@
         "title": "Initiator",
         "type": "string"
       },
+      "JobAsked": {
+        "additionalProperties": false,
+        "description": "The job needs something from them. It waits until it's told or cancelled.",
+        "properties": {
+          "kind": {
+            "const": "job_asked",
+            "default": "job_asked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "question"
+        ],
+        "title": "JobAsked",
+        "type": "object"
+      },
+      "JobEnded": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_ended",
+            "default": "job_ended",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "outcome",
+          "text"
+        ],
+        "title": "JobEnded",
+        "type": "object"
+      },
+      "JobStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_started",
+            "default": "job_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "goal"
+        ],
+        "title": "JobStarted",
+        "type": "object"
+      },
+      "JobTold": {
+        "additionalProperties": false,
+        "description": "Their answer, or anything else they said the job should know, passed on to it.",
+        "properties": {
+          "kind": {
+            "const": "job_told",
+            "default": "job_told",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "text"
+        ],
+        "title": "JobTold",
+        "type": "object"
+      },
       "Medium": {
         "description": "Which medium has the floor: voice while a call is connected, text otherwise.",
         "enum": [
@@ -804,6 +921,7 @@
           "voice_agent",
           "call",
           "google",
+          "job",
           "system"
         ],
         "title": "Origin",
@@ -1067,6 +1185,14 @@
             "title": "No Calls",
             "type": "boolean"
           },
+          "set_aside": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Set Aside",
+            "type": "array"
+          },
           "contact_name": {
             "anyOf": [
               {
@@ -1111,6 +1237,7 @@
           "gmail_email",
           "graduated",
           "no_calls",
+          "set_aside",
           "contact_name",
           "timezone",
           "timezone_source"
@@ -1179,6 +1306,33 @@
         ],
         "title": "Speaker",
         "type": "string"
+      },
+      "StepSetAside": {
+        "additionalProperties": false,
+        "description": "They'd rather not do a setup step (a name for you, theirs, what they need, Google). It\nstops being asked for; it comes back only if they bring it up.",
+        "properties": {
+          "kind": {
+            "const": "step_set_aside",
+            "default": "step_set_aside",
+            "title": "Kind",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "step"
+        ],
+        "title": "StepSetAside",
+        "type": "object"
       },
       "TimezoneLearned": {
         "additionalProperties": false,
@@ -1537,11 +1691,16 @@
                 "forgot": "#/$defs/Forgot",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
+                "job_asked": "#/$defs/JobAsked",
+                "job_ended": "#/$defs/JobEnded",
+                "job_started": "#/$defs/JobStarted",
+                "job_told": "#/$defs/JobTold",
                 "reaction": "#/$defs/Reaction",
                 "remembered": "#/$defs/Remembered",
                 "reply_due": "#/$defs/ReplyDue",
                 "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
+                "step_set_aside": "#/$defs/StepSetAside",
                 "timezone_learned": "#/$defs/TimezoneLearned",
                 "tool_call": "#/$defs/ToolCall",
                 "typing": "#/$defs/Typing",
@@ -1598,6 +1757,9 @@
                 "$ref": "#/$defs/SlotChanged"
               },
               {
+                "$ref": "#/$defs/StepSetAside"
+              },
+              {
                 "$ref": "#/$defs/Graduated"
               },
               {
@@ -1614,6 +1776,18 @@
               },
               {
                 "$ref": "#/$defs/Forgot"
+              },
+              {
+                "$ref": "#/$defs/JobStarted"
+              },
+              {
+                "$ref": "#/$defs/JobAsked"
+              },
+              {
+                "$ref": "#/$defs/JobTold"
+              },
+              {
+                "$ref": "#/$defs/JobEnded"
               },
               {
                 "$ref": "#/$defs/Decision"
@@ -2116,6 +2290,123 @@
         "title": "Initiator",
         "type": "string"
       },
+      "JobAsked": {
+        "additionalProperties": false,
+        "description": "The job needs something from them. It waits until it's told or cancelled.",
+        "properties": {
+          "kind": {
+            "const": "job_asked",
+            "default": "job_asked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "question"
+        ],
+        "title": "JobAsked",
+        "type": "object"
+      },
+      "JobEnded": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_ended",
+            "default": "job_ended",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "outcome",
+          "text"
+        ],
+        "title": "JobEnded",
+        "type": "object"
+      },
+      "JobStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_started",
+            "default": "job_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "goal"
+        ],
+        "title": "JobStarted",
+        "type": "object"
+      },
+      "JobTold": {
+        "additionalProperties": false,
+        "description": "Their answer, or anything else they said the job should know, passed on to it.",
+        "properties": {
+          "kind": {
+            "const": "job_told",
+            "default": "job_told",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "text"
+        ],
+        "title": "JobTold",
+        "type": "object"
+      },
       "Reaction": {
         "additionalProperties": false,
         "description": "A tapback (\u2764\ufe0f \ud83d\udc4d \ud83d\ude02 \u2026) on a bubble, by either side. The user's route: a \ud83d\udc4d on\n\"want me to call?\" is an answer. The agent's are recorded only.",
@@ -2310,6 +2601,33 @@
         ],
         "title": "Speaker",
         "type": "string"
+      },
+      "StepSetAside": {
+        "additionalProperties": false,
+        "description": "They'd rather not do a setup step (a name for you, theirs, what they need, Google). It\nstops being asked for; it comes back only if they bring it up.",
+        "properties": {
+          "kind": {
+            "const": "step_set_aside",
+            "default": "step_set_aside",
+            "title": "Kind",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "step"
+        ],
+        "title": "StepSetAside",
+        "type": "object"
       },
       "TimezoneLearned": {
         "additionalProperties": false,
@@ -2595,11 +2913,16 @@
         "forgot": "#/$defs/Forgot",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
+        "job_asked": "#/$defs/JobAsked",
+        "job_ended": "#/$defs/JobEnded",
+        "job_started": "#/$defs/JobStarted",
+        "job_told": "#/$defs/JobTold",
         "reaction": "#/$defs/Reaction",
         "remembered": "#/$defs/Remembered",
         "reply_due": "#/$defs/ReplyDue",
         "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
+        "step_set_aside": "#/$defs/StepSetAside",
         "timezone_learned": "#/$defs/TimezoneLearned",
         "tool_call": "#/$defs/ToolCall",
         "typing": "#/$defs/Typing",
@@ -2656,6 +2979,9 @@
         "$ref": "#/$defs/SlotChanged"
       },
       {
+        "$ref": "#/$defs/StepSetAside"
+      },
+      {
         "$ref": "#/$defs/Graduated"
       },
       {
@@ -2672,6 +2998,18 @@
       },
       {
         "$ref": "#/$defs/Forgot"
+      },
+      {
+        "$ref": "#/$defs/JobStarted"
+      },
+      {
+        "$ref": "#/$defs/JobAsked"
+      },
+      {
+        "$ref": "#/$defs/JobTold"
+      },
+      {
+        "$ref": "#/$defs/JobEnded"
       },
       {
         "$ref": "#/$defs/Decision"

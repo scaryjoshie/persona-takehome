@@ -16,6 +16,7 @@ class Origin(StrEnum):
     VOICE_AGENT = "voice_agent"
     CALL = "call"
     GOOGLE = "google"
+    JOB = "job"  # a background task
     SYSTEM = "system"
 
 

@@ -53,6 +53,7 @@ from app.agent.objectives import guidance, settled
 from app.events.event import Event
 from app.events.payload import Channel, Origin
 from app.jev import Jev
+from app.jobs.runner import lines as job_lines
 from app.pipeline import RECENT, Pipeline
 from app.settings import get_settings
 from app.users.user import Medium, User
@@ -69,7 +70,15 @@ NOW = "Where things stand now:"
 REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
 # Not remembered/forgot: a fact learned on the call was said on the call, so the voice heard
 # it; re-sending instructions for it only adds churn (and idle appends can prompt speech).
-STATE_KINDS = {"slot_changed", "gmail", "call_opt_out", "graduated"}
+STATE_KINDS = {
+    "slot_changed",
+    "gmail",
+    "call_opt_out",
+    "graduated",
+    "job_started",
+    "job_asked",
+    "job_ended",
+}
 
 Push = Callable[[str, BaseModel], Awaitable[None]]
 
@@ -136,7 +145,7 @@ async def run_call(
                 CallEvent(transition=CallTransition.CONNECTED, call_id=uuid.uuid4().hex),
             )
             steer = get_settings().live_steer == "instructions"
-            state = StateNotes(pipeline, phone, call, instructions=steer)
+            state = StateNotes(env, phone, call, instructions=steer)
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
@@ -179,21 +188,18 @@ async def run_call(
 def _opener(user: User) -> str:
     """Say hi, then pick up the setup where it stands. The reason for the call is
     background, not a script: reading it out made the voice lead with the ask."""
-    if user.slots.agent_name is None:  # the first call: say what it's for, once
-        next_step = (
-            "set up the call in one easy line: it's a quick setup, a name for you, theirs, "
-            "and hooking up their google so you can actually do stuff, then you'll find "
-            "something you can help them with. Then ease into naming you: to be a helpful "
-            "assistant you need a name, so suggest coming up with one together. Warm, never a "
-            "cold question"
-        )
+    if user.slots.agent_name is None:  # the first call: only the step at hand, no agenda
+        # Spelling out the plan here got recited clause by clause ("a name for me, yours,
+        # and your google, so i can actually do stuff...").
+        next_step = "get into the first thing, a name for you, the way a friend would"
     elif user.slots.user_name is None:
         next_step = "ask their name"
-    else:  # a callback: they may have called with something, so let them lead
-        next_step = (
-            "bridge back in a line (like you're picking up where you left off), and if they "
-            "called about something, go with that. Don't open with a question from the setup"
-        )
+    elif user.call.initiated_by is Initiator.AGENT and user.call.reason:
+        # A callback you placed: open on what it's for now. "Pick up where you left off"
+        # made the voice replay the previous call's last lines, on a different topic.
+        next_step = f"get to what this call is about ({user.call.reason}) in a line"
+    else:  # they called you: let them lead
+        next_step = "let them say what they called about. Don't open with a question from the setup"
     if user.call.initiated_by is Initiator.USER:
         opener = "They just called you. Pick up like a friend would"
     else:
@@ -425,9 +431,10 @@ class StateNotes:
     SETTLE = 0.3  # seconds
 
     def __init__(
-        self, pipeline: Pipeline, phone: str, call: LiveCall, *, instructions: bool = False
+        self, env: AgentEnv, phone: str, call: LiveCall, *, instructions: bool = False
     ) -> None:
-        self._pipeline = pipeline
+        self._env = env
+        self._pipeline = env.pipeline
         self._phone = phone
         self._call = call
         self._instructions = instructions  # as Live instructions rather than notes
@@ -466,9 +473,11 @@ class StateNotes:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
         facts = remembered(await self._pipeline.memory(self._phone), summary=False, numbered=False)
+        jobs = self._env.jobs
+        open_jobs = job_lines(await jobs.open(self._phone), speaking=True) if jobs else []
         now = their_time(user.slots, self._pipeline.now())
-        parts = (f"{now}\n{what_you_know(user.slots, user.call)}", facts, stage)
-        return f"{NOW}\n" + "\n\n".join(p for p in parts if p)
+        known = "\n".join([now, what_you_know(user.slots, user.call), *open_jobs])
+        return f"{NOW}\n" + "\n\n".join(p for p in (known, facts, stage) if p)
 
 
 USER_SETTLE = 0.8  # seconds of quiet after their last piece before it counts as their turn
@@ -551,7 +560,9 @@ class Listener:
                 )
                 note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()
                 if note and note.strip(".").lower() not in ("null", "none"):
-                    await self._call.whisper(note)
+                    # After acting, the note is the outcome of something they asked for ("sent"):
+                    # they're waiting on it. After their turn it's only background.
+                    await (self._call.tell(note) if act else self._call.whisper(note))
             except Exception:
                 log.exception("%s: listener run failed", self._phone)
             log.info("%s: back office ran in %.1fs", self._phone, time.monotonic() - started)

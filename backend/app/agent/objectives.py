@@ -62,6 +62,10 @@ class Objective:
     max_asks: int | None = None  # after this many turns without progress, park it for now
     scenarios: Sequence[tuple[str, Callable[[Situation], bool]]] = field(default=())
 
+    def handled(self, s: Situation) -> bool:
+        """Done, or set aside because they'd rather not."""
+        return self.done(s) or self.name in s.slots.set_aside
+
     def scenario(self, s: Situation) -> str | None:
         return next((name for name, applies in self.scenarios if applies(s)), None)
 
@@ -127,7 +131,7 @@ def current(s: Situation) -> tuple[Objective, bool] | None:
     objective used up its asks; the next one counts only the turns after that."""
     parked, asks = False, s.asks
     for objective in OBJECTIVES:
-        if objective.done(s):
+        if objective.handled(s):
             continue
         if objective.max_asks is not None and asks >= objective.max_asks:
             parked = parked or objective.name != "contact"  # the card needs no "move on"
@@ -214,7 +218,7 @@ def _norm(line: str) -> str:
 
 def _after(objective: Objective, s: Situation) -> Objective | None:
     later = OBJECTIVES[OBJECTIVES.index(objective) + 1 :]
-    return next((o for o in later if not o.done(s)), None)
+    return next((o for o in later if not o.handled(s)), None)
 
 
 def guidance(
@@ -257,7 +261,7 @@ def settled(user: User, events: Sequence[Event], medium: Medium) -> list[str]:
         medium=medium,
         card_mentioned=_card_mentioned(events),
     )
-    return [SETTLED[o.name] for o in OBJECTIVES if o.name in SETTLED and o.done(s)]
+    return [SETTLED[o.name] for o in OBJECTIVES if o.name in SETTLED and o.handled(s)]
 
 
 def _latest_text(events: Sequence[Event]) -> str:

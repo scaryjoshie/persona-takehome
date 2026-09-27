@@ -49,6 +49,11 @@ LINES = {
     "landlord": "My landlord Dave never fixes anything. I work nights, so no calls before noon.",
     "moved": "Oh wait, actually I moved last month. Dave isn't my landlord anymore.",
     "denver": "By the way, I'm in Denver, if that matters for anything.",
+    "grocery": (
+        "Actually, can you find me a good grocery store near the Northwestern Tech building "
+        "in Evanston?"
+    ),
+    "howworks": "Cool. So how does this whole thing work anyway?",
 }
 
 
@@ -89,6 +94,19 @@ SCENARIOS: dict[str, list[str]] = {
         "say:bye",
         "wait:14",
         "text:what do you know about me so far?",
+        "wait:12",
+    ],
+    "task_on_call": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "say:yes",
+        "say:siobhan",
+        "say:grocery",
+        "say:howworks",
+        "silence:30",
+        "say:bye",
         "wait:12",
     ],
     "hangup_on_pickup": [

@@ -40,6 +40,7 @@ async def create_schema(engine: AsyncEngine) -> None:
         "app.events.models",
         "app.users.models",
         "app.google.models",
+        "app.jobs.models",
         "app.memory.models",
     ):
         import_module(module)  # register each section's tables on the metadata

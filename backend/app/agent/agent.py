@@ -7,7 +7,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,7 @@ from app.agent.events import (
     ContactCard,
     Graduated,
     SlotChanged,
+    StepSetAside,
     TimezoneLearned,
     ToolCall,
 )
@@ -32,6 +33,7 @@ from app.events.payload import Channel, Origin, Payload
 from app.google import drafts
 from app.google.accounts import Account
 from app.google.events import GmailEvent, GmailPhase
+from app.jobs import runner as jobs
 from app.memory.events import Forgot, Remembered
 from app.pipeline import RECENT
 from app.text.events import AgentMessage
@@ -69,8 +71,18 @@ async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     events = await d.pipeline.history(d.phone, limit=RECENT)
     stage = guidance(user, events, d.medium, first_reply=d.first_reply)
     now = their_time(user.slots, d.pipeline.now())
-    parts = (f"# What you know\n\n{now}\n{known}", memory, stage, tail)
+    jobs = await job_lines(d)
+    parts = (f"# What you know\n\n{now}\n{known}", memory, jobs, stage, tail)
     return "\n\n".join(p for p in parts if p)
+
+
+async def job_lines(d: Deps) -> str:
+    """Background tasks still open, and how to handle them. An open task stays here until it
+    ends, so a question it asked can't be forgotten."""
+    if d.env.jobs is None:
+        return ""
+    open_now = "\n".join(jobs.lines(await d.env.jobs.open(d.phone)))
+    return f"{open_now}\n\n{prompts.JOBS}" if open_now else ""
 
 
 # ---- helpers ----------------------------------------------------------------
@@ -276,11 +288,17 @@ async def send_gmail_link(ctx: RunContext[Deps]) -> str:
 
 
 @agent.tool(prepare=not_the_voice)
-async def skip_gmail(ctx: RunContext[Deps]) -> str:
-    """The user declined to connect Gmail. Do not ask again."""
-    await _submit(ctx, GmailEvent(phase=GmailPhase.SKIPPED))
-    await _record(ctx, "skip_gmail", {}, {})
-    return "recorded: gmail skipped"
+async def set_aside(
+    ctx: RunContext[Deps], step: Literal["agent_name", "user_name", "help_need", "google"]
+) -> str:
+    """They'd rather not do a setup step: name you, give their name, say what they need, or
+    connect Google. It isn't asked for again; it comes back only if they bring it up."""
+    if step == "google":
+        changed = await _submit(ctx, GmailEvent(phase=GmailPhase.SKIPPED))
+    else:
+        changed = await _submit(ctx, StepSetAside(step=step))
+    await _record(ctx, "set_aside", {"step": step}, {"changed": changed})
+    return f"set aside: {step.replace('_', ' ')}; don't ask for it again"
 
 
 @agent.tool(prepare=only_text)
@@ -343,6 +361,48 @@ async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
     await _submit(ctx, Graduated())
     await _record(ctx, "graduate", {"first_action": first_action}, {})
     return "graduated"
+
+
+# ---- background tasks ---------------------------------------------------------------------
+
+
+async def with_jobs(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    """By text or for the back office; never the voice itself."""
+    d = ctx.deps
+    return None if d.env.jobs is None else await not_the_voice(ctx, tool)
+
+
+# Not two keys: a job only looks things up, and anything it would do waits for their yes.
+@agent.tool(prepare=with_jobs)
+async def start_job(ctx: RunContext[Deps], goal: str) -> str:
+    """Hand something they asked for (or agreed to) that takes looking up or time to a
+    background task: finding options, checking facts, digging through their email. `goal`:
+    what to find out or get done, with what you know (who, when, what matters to them) and
+    anything you're unsure of, so it can ask them. It reports back on its own; meanwhile
+    don't guess what it will find."""
+    d = ctx.deps
+    assert d.env.jobs is not None
+    job = await d.env.jobs.start(d.phone, goal)
+    return f"background task {job} started; it reports back on its own"
+
+
+@agent.tool(prepare=with_jobs)
+async def tell_job(ctx: RunContext[Deps], job: str, text: str) -> str:
+    """Pass a background task something they said: their answer to its question, or a change
+    of plan. Only their words, never your own notes; the task already has its goal."""
+    d = ctx.deps
+    assert d.env.jobs is not None
+    return await d.env.jobs.tell(d.phone, job, text)
+
+
+@agent.tool(prepare=acting(with_jobs))
+async def cancel_job(ctx: RunContext[Deps], job: str) -> str:
+    """Stop a background task they no longer want."""
+    d = ctx.deps
+    assert d.env.jobs is not None
+    if not await d.env.jobs.cancel(d.phone, job):
+        return f"background task {job} isn't running"
+    return f"background task {job} cancelled"
 
 
 # ---- their Google account (once connected) -------------------------------------------

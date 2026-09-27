@@ -17,12 +17,14 @@ from app.agent.events import (
     DeviceTimezone,
     Graduated,
     SlotChanged,
+    StepSetAside,
     TimezoneLearned,
     ToolCall,
 )
 from app.events.decision import Decision
 from app.events.payload import Payload
 from app.google.events import EmailDraft, GmailEvent
+from app.jobs.events import JobAsked, JobEnded, JobStarted, JobTold
 from app.memory.events import Forgot, Remembered
 from app.text.events import (
     AgentMessage,
@@ -52,12 +54,17 @@ AnyPayload = Annotated[
     | VoiceUtterance
     | ToolCall
     | SlotChanged
+    | StepSetAside
     | Graduated
     | CallEvent
     | GmailEvent
     | EmailDraft
     | Remembered
     | Forgot
+    | JobStarted
+    | JobAsked
+    | JobTold
+    | JobEnded
     | Decision,
     Field(discriminator="kind"),
 ]

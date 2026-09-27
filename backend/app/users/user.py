@@ -45,6 +45,7 @@ class User(BaseModel):
                 timezone=row.timezone,
                 timezone_source=TzSource(row.timezone_source) if row.timezone_source else None,
                 no_calls=row.no_calls,
+                set_aside=tuple(s for s in row.set_aside.split(",") if s),
             ),
             call=CallState(
                 phase=CallPhase(row.call_phase),

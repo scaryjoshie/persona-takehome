@@ -19,9 +19,18 @@ from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from typing import Protocol
 
+from sqlalchemy import delete
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.agent.events import CallOptOut, ContactSaved, Graduated, SlotChanged, TimezoneLearned
+from app.agent.events import (
+    CallOptOut,
+    ContactSaved,
+    Graduated,
+    SlotChanged,
+    StepSetAside,
+    TimezoneLearned,
+)
 from app.agent.slots import TzSource
 from app.database import SessionFactory
 from app.events import service as events
@@ -29,6 +38,7 @@ from app.events.decision import Decision
 from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
+from app.jobs.models import JobRow
 from app.memory import service as memories
 from app.memory.events import Forgot, Remembered
 from app.memory.service import Fact, Memory, Summary
@@ -147,7 +157,7 @@ class Pipeline:
 
         self._timers.call_later(seconds, fire)
 
-    def spawn(self, work: Awaitable[object]) -> None:
+    def spawn(self, work: Awaitable[object]) -> asyncio.Future[object]:
         """Run work in the background, keeping a reference and logging failures."""
 
         async def run() -> object:
@@ -160,6 +170,7 @@ class Pipeline:
         task = asyncio.ensure_future(run())
         self._background.add(task)
         task.add_done_callback(self._background.discard)
+        return task
 
     def subscribe(
         self, phone: str, fn: Subscriber, *, kinds: Iterable[str] | None = None
@@ -189,6 +200,7 @@ class Pipeline:
         async with self._locks[phone], self._db() as s, s.begin():
             await events.delete_events(s, phone)
             await memories.delete_memory(s, phone)
+            await s.exec(delete(JobRow).where(col(JobRow.phone) == phone))  # pyright: ignore[reportArgumentType]
             await users.delete_user(s, phone)
 
     async def record(
@@ -249,6 +261,10 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.no_calls:
                 return None
             await users.set_slots(s, user.phone, no_calls=True)
+        case StepSetAside(step=step):
+            if step in user.slots.set_aside:
+                return None
+            await users.set_slots(s, user.phone, set_aside=",".join((*user.slots.set_aside, step)))
         case SlotChanged(slot=slot, new=new):
             old: str | None = getattr(user.slots, slot)
             if old == new:
