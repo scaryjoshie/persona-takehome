@@ -149,7 +149,9 @@ def render(s: Situation, phone: str, texts: dict[str, dict[str, str]]) -> str:
     if s.after_call:
         parts.append(
             "A call just ended. Before anything else, pick up from where the call left off, "
-            "the way a person would after hanging up; the step below comes after that."
+            "the way a person would after hanging up; the step below comes after that. "
+            "Something the voice offered that they never said yes to is still only an offer: "
+            "ask again if it fits, but don't send it."
         )
     if parked:
         parts.append(
