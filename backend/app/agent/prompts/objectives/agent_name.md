@@ -5,6 +5,7 @@ Once they've given you a name, check the spelling unless it's completely obvious
 
 ## script
 - so, to be a proper assistant i need a name. let's come up with one. what do you want to call me?
+- first i need a name, so you'll know it's me when i text or call. what do you want to call me?
 - first things first: i need a name if i'm gonna be your assistant. what do you want to call me?
 
 ## script: no call
@@ -12,4 +13,5 @@ Once they've given you a name, check the spelling unless it's completely obvious
 
 ## script: on a call
 - so, to be a helpful assistant i kinda need a name. let's come up with one. what do you want to call me?
+- hey, i need a name, so you'll know it's me when i call you! what do you wanna call me?
 - okay, first thing: i need a name if i'm gonna be your assistant. what do you want to call me?
