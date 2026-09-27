@@ -19,7 +19,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 from app.agent.events import ToolCall
 from app.events.payload import Channel, Origin
-from app.integrations import http
+from app.integrations import http, templates
 from app.integrations.integration import Endpoint, Integration
 from app.integrations.store import Integrations, SecretRequest
 from app.jobs.agent import JobDeps
@@ -68,6 +68,24 @@ def _setup_tools(integrations: Integrations, client: httpx.AsyncClient) -> Funct
                 + (f"\nnotes: {i.notes}" if i.notes else "")
             )
         return "\n".join(lines) or "none yet"
+
+    async def use_template(
+        ctx: RunContext[JobDeps], template: str, host: str = "", account: str = ""
+    ) -> str:
+        try:
+            built = templates.build(template, host=host, account=account)
+        except (KeyError, ValueError) as exc:
+            return f"not saved: {exc}"
+        saved = await integrations.save(ctx.deps.phone, built)
+        missing = await integrations.missing(ctx.deps.phone, saved)
+        return f"saved as {saved.id}; secrets still needed: {', '.join(missing) or 'none'}"
+
+    tools.add_function(
+        use_template,
+        description="Set up a common service from a known-good template, instead of "
+        f"designing it: {templates.summary()}. `host`: only for templates that need it. "
+        "Then ask for its secret with request_secret.",
+    )
 
     @tools.tool
     async def save_integration(ctx: RunContext[JobDeps], integration: Integration) -> str:
@@ -125,7 +143,7 @@ def _setup_tools(integrations: Integrations, client: httpx.AsyncClient) -> Funct
         target = _endpoint(found, endpoint)
         if found is None or found.api is None or target is None:
             return f"no endpoint {endpoint} on {integration_id}"
-        if not target.reads:
+        if not found.reads(target):
             return f"{endpoint} changes something; it can't be tried, only used once they say yes"
         return await _call(integrations, client, found, target, args, ctx.deps)
 
@@ -176,7 +194,7 @@ def _add_endpoint(
     about = f"{integration.app}: {endpoint.about}" + (f" Arguments: {params}." if params else "")
     notes = f" Notes: {integration.notes}" if integration.notes else ""
 
-    if endpoint.reads:
+    if integration.reads(endpoint):
 
         async def read(ctx: RunContext[JobDeps], args: dict[str, Any]) -> str:
             return await _call(integrations, client, integration, endpoint, args, ctx.deps)
@@ -216,12 +234,16 @@ async def _call(
     assert integration.api is not None
     secrets = await integrations.secrets(deps.phone, integration.id)
     try:
-        out = await http.call(client, integration.api, endpoint, args, secrets)
-        ok = out.startswith("HTTP 2")
+        reply = await http.call(client, integration.api, endpoint, args, secrets)
+        out, ok = reply.text, reply.ok
     except http.Refused as exc:
         return f"not called: {exc}"
     except httpx.HTTPError as exc:
         out, ok = http.scrub(f"the request failed: {type(exc).__name__}: {exc}", secrets), False
+    else:
+        if reply.rejected:  # the key expired or was revoked: it needs a new one
+            await integrations.save(deps.phone, integration.model_copy(update={"status": "broken"}))
+            out += "\nTheir access was refused; ask them for a new one with request_secret."
     call = ToolCall(
         name=f"{integration.app}_{endpoint.name}",
         args=args,

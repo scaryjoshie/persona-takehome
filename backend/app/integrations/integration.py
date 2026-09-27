@@ -8,7 +8,7 @@ it as {secret:name}. More kinds of parts (Composio, MCP, a browser login) join t
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,10 +24,15 @@ class ApiKey(BaseModel):
 
 
 class Param(BaseModel):
-    name: str = Name
-    where: Literal["query", "json", "path"] = "json"
+    name: str = Name  # what the job calls it
+    key: str = ""  # what the service calls it, if different ("context_codes[]")
+    where: Literal["query", "json", "form", "path"] = "json"
     about: str = ""
     required: bool = True
+
+    @property
+    def sent_as(self) -> str:
+        return self.key or self.name
 
 
 class Endpoint(BaseModel):
@@ -36,11 +41,8 @@ class Endpoint(BaseModel):
     method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"] = "GET"
     path: str = ""  # after base_url; may hold {param} and {secret:name}
     params: list[Param] = []
-    effect: Literal["read", "act"] = "act"  # an act waits for their yes; only a GET can be a read
-
-    @property
-    def reads(self) -> bool:
-        return self.effect == "read" and self.method == "GET"
+    body: dict[str, Any] = {}  # fixed JSON fields sent every time (a GraphQL query, a parent)
+    effect: Literal["read", "act"] = "act"  # an act waits for their yes
 
 
 class HttpApi(BaseModel):
@@ -64,6 +66,13 @@ class Integration(BaseModel):
     status: Status = "setting_up"
     auth: list[ApiKey] = []
     api: HttpApi | None = None
+    template: str = ""  # built from a shipped template: its api is ours, not the agent's
+    host: str = ""  # a template's per-user host ("canvas.school.edu")
+
+    def reads(self, endpoint: Endpoint) -> bool:
+        """Runs without asking. An agent-written endpoint reads only with a GET; a shipped
+        template's POST can be a read (a search), because its api can't be rewritten."""
+        return endpoint.effect == "read" and (endpoint.method == "GET" or bool(self.template))
 
     @property
     def secret_names(self) -> list[str]:

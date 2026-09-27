@@ -17,6 +17,7 @@ from cryptography.fernet import Fernet
 from sqlmodel import col, select
 
 from app.database import SessionFactory
+from app.integrations import templates
 from app.integrations.integration import Integration
 from app.integrations.models import IntegrationRow
 from app.timers import Clock
@@ -71,6 +72,11 @@ class Integrations:
         """Create, or replace the one with the same id (or app and account). Once it's
         ready, its allowed hosts can shrink but never grow: notes written by an agent that
         read web pages can't widen where it may send their secrets."""
+        if integration.template:  # its api and auth are the template's, whatever was sent
+            if integration.template not in templates.TEMPLATES:
+                raise ValueError(f"there's no template {integration.template}")
+            shipped = templates.build(integration.template, host=integration.host)
+            integration = integration.model_copy(update={"api": shipped.api, "auth": shipped.auth})
         existing = await self._match(phone, integration)
         if existing is not None and existing.status == "ready" and integration.api:
             before = set(existing.api.allowed_hosts if existing.api else [])

@@ -19,7 +19,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.database import SessionFactory
-from app.integrations import http
+from app.integrations import http, templates
 from app.integrations.integration import ApiKey, Endpoint, HttpApi, Integration, Param
 from app.integrations.models import IntegrationRow
 from app.jobs.events import JobAsked, JobEnded
@@ -81,7 +81,7 @@ async def test_a_call_fills_in_secrets_and_never_returns_them() -> None:
     out = await http.call(net.client(), api, endpoint, {"text": "hi"}, {"webhook_url": WEBHOOK})
     assert str(net.requests[0].url) == WEBHOOK
     assert json.loads(net.requests[0].content) == {"text": "hi"}
-    assert "XXXXsecretXXXX" not in out and "[secret]" in out
+    assert out.ok and "XXXXsecretXXXX" not in out.text and "[secret]" in out.text
 
 
 @pytest.mark.parametrize(
@@ -111,9 +111,56 @@ async def test_a_missing_secret_is_refused() -> None:
         )
 
 
-def test_only_a_get_can_be_a_read() -> None:
-    assert Endpoint(name="list", about="x", method="GET", effect="read").reads
-    assert not Endpoint(name="send", about="x", method="POST", effect="read").reads
+def test_an_agent_written_read_must_be_a_get_but_a_template_s_can_be_a_post() -> None:
+    get = Endpoint(name="list", about="x", method="GET", effect="read")
+    post = Endpoint(name="search", about="x", method="POST", effect="read")
+    written = Integration(app="x")
+    assert written.reads(get) and not written.reads(post)
+    assert templates.build("notion").reads(post)
+
+
+def test_a_template_needs_a_real_host_when_it_takes_one() -> None:
+    canvas = templates.build("canvas", host="Canvas.School.edu")
+    assert canvas.api is not None
+    assert canvas.api.base_url == "https://canvas.school.edu/api/v1"
+    assert canvas.api.allowed_hosts == ["canvas.school.edu"]
+    for bad in ("", "evil.com/steal", "https://x.edu", "localhost"):
+        with pytest.raises(ValueError, match="needs their host"):
+            templates.build("canvas", host=bad)
+
+
+async def test_params_can_go_by_another_name_as_a_form_with_a_fixed_body_and_pages_come_back() -> (
+    None
+):
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        body: dict[str, Any] = {"items": [{"id": 1, "note": None, "tags": []}], "extra": ""}
+        return httpx.Response(200, json=body, headers={"Link": '<https://a.io/p2>; rel="next"'})
+
+    seen: list[httpx.Request] = []
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+    api = HttpApi(base_url="https://a.io", allowed_hosts=["a.io"])
+    listing = Endpoint(
+        name="list",
+        about="x",
+        params=[Param(name="codes", key="context_codes[]", where="query")],
+        effect="read",
+    )
+    out = await http.call(client, api, listing, {"codes": "course_1"}, {})
+    assert seen[0].url.params["context_codes[]"] == "course_1"
+    assert '{"items": [{"id": 1}]}' in out.text and 'rel="next"' in out.text
+    form = Endpoint(name="send", about="x", method="POST", params=[Param(name="to", where="form")])
+    await http.call(client, api, form, {"to": "+1555"}, {})
+    assert seen[1].content == b"to=%2B1555"
+    graphql = Endpoint(
+        name="issues",
+        about="x",
+        method="POST",
+        body={"query": "{ issues { id } }"},
+        params=[Param(name="variables")],
+    )
+    await http.call(client, api, graphql, {"variables": {"n": 5}}, {})
+    assert json.loads(seen[2].content) == {"query": "{ issues { id } }", "variables": {"n": 5}}
 
 
 # ---- storage --------------------------------------------------------------------------
@@ -375,3 +422,45 @@ async def test_a_job_knows_each_service_and_what_they_like_there_and_what_was_do
     ]
     assert "XXXXsecretXXXX" not in (calls[0].shown or "")
     assert seen["past"].startswith("slack_post_message({'text': 'hi'})")
+
+
+async def test_a_template_s_api_cannot_be_rewritten_by_a_save(
+    db: SessionFactory, clock: FakeClock, timers: FakeTimers
+) -> None:
+    store = with_integrations(db, clock, timers).env.integrations
+    assert store is not None
+    todoist = templates.build("todoist")
+    assert todoist.api is not None
+    tampered = todoist.api.model_copy(update={"allowed_hosts": ["evil.example.com"]})
+    saved = await store.save(PHONE, todoist.model_copy(update={"api": tampered}))
+    assert saved.api is not None and saved.api.allowed_hosts == ["api.todoist.com"]
+    with pytest.raises(ValueError, match="no template"):
+        await store.save(PHONE, Integration(app="x", template="made_up"))
+
+
+async def test_a_refused_key_marks_it_broken_so_the_next_job_asks_again(
+    db: SessionFactory, clock: FakeClock, timers: FakeTimers
+) -> None:
+    def refuse(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "invalid token"})
+
+    heard: list[str] = []
+
+    async def read(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        if not returns(messages, "todoist_projects"):
+            return call("todoist_projects", args={})
+        heard.append(returns(messages, "todoist_projects")[-1])
+        return done("their token was refused")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(refuse))
+    built = with_integrations(db, clock, timers, model=FunctionModel(read), http=client)
+    store, jobs = built.env.integrations, built.env.jobs
+    assert store is not None and jobs is not None
+    saved = await store.save(
+        PHONE, templates.build("todoist").model_copy(update={"status": "ready"})
+    )
+    await store.set_secret(PHONE, saved.id, "token", "tok_1234")
+    await jobs.start(PHONE, "what projects do i have")
+    await settle(built.pipeline)
+    assert "HTTP 401" in heard[0] and "request_secret" in heard[0]
+    assert (await store.all(PHONE))[0].status == "broken"

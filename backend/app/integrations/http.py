@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, cast
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -18,7 +19,7 @@ from app.integrations.integration import Endpoint, HttpApi
 
 SECRET = re.compile(r"\{secret:([a-z][a-z0-9_]*)\}")
 PARAM = re.compile(r"\{([a-z][a-z0-9_]*)\}")
-REPLY_CHARS = 4000
+REPLY_CHARS = 6000
 TIMEOUT = 15.0
 
 
@@ -32,7 +33,7 @@ async def call(
     endpoint: Endpoint,
     args: dict[str, Any],
     secrets: dict[str, str],
-) -> str:
+) -> Reply:
     def fill(template: str) -> str:
         def one(match: re.Match[str]) -> str:
             if match[1] not in secrets:
@@ -60,26 +61,60 @@ async def call(
     if (parts.hostname or "").lower() not in {h.lower() for h in api.allowed_hosts}:
         raise Refused(f"{parts.hostname} isn't one of this integration's allowed hosts")
 
-    query = {p.name: args[p.name] for p in endpoint.params if p.where == "query" and p.name in args}
-    body = {p.name: args[p.name] for p in endpoint.params if p.where == "json" and p.name in args}
+    def sent(where: str) -> dict[str, Any]:
+        return {
+            p.sent_as: args[p.name] for p in endpoint.params if p.where == where and p.name in args
+        }
+
+    body = {**endpoint.body, **sent("json")}
     response = await client.request(
         endpoint.method,
         url,
-        params=query or None,
+        params=sent("query") or None,
         json=body or None,
+        data=sent("form") or None,
         headers={name: fill(value) for name, value in api.headers.items()},
         timeout=TIMEOUT,
         follow_redirects=False,
     )
-    return scrub(f"HTTP {response.status_code}: {_text(response)}", secrets)
+    text = f"HTTP {response.status_code}: {_text(response)}"
+    if "link" in response.headers:  # where the next page is
+        text += f"\nLink: {response.headers['link']}"
+    return Reply(response.status_code, scrub(text, secrets))
+
+
+@dataclass(frozen=True)
+class Reply:
+    status: int
+    text: str
+
+    @property
+    def ok(self) -> bool:
+        return 200 <= self.status < 300
+
+    @property
+    def rejected(self) -> bool:
+        """Their access was refused: an expired or revoked key."""
+        return self.status == 401
 
 
 def _text(response: httpx.Response) -> str:
     try:
-        text = json.dumps(response.json(), ensure_ascii=False)
+        text = json.dumps(_trim(response.json()), ensure_ascii=False)
     except ValueError:
         text = response.text
     return text[:REPLY_CHARS] or "(empty)"
+
+
+def _trim(value: Any) -> Any:
+    """Without empty fields, so a list of results fits."""
+    if isinstance(value, dict):
+        items = cast(dict[str, Any], value).items()
+        kept = {k: _trim(v) for k, v in items}
+        return {k: v for k, v in kept.items() if v not in (None, "", [], {})}
+    if isinstance(value, list):
+        return [_trim(v) for v in cast(list[Any], value)]
+    return value
 
 
 def scrub(text: str, secrets: dict[str, str]) -> str:
