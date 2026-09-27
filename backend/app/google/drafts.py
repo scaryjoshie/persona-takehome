@@ -3,7 +3,8 @@
 A draft is an `email_draft` event: what it says, its Gmail draft id, and whether it's been
 sent. Each version is texted to them as an image of the draft (preview.py), missing fields
 marked, and each edit posts a new version under the same `ref`. Sending sends the stored
-Gmail draft by id, never text the model retyped, and only after they've answered.
+Gmail draft by id, never text the model retyped, and only after they've answered (by text,
+or out loud on a call: the picture is in their texts either way).
 """
 
 from __future__ import annotations
@@ -16,6 +17,15 @@ from app.google.accounts import Account
 from app.google.events import EmailDraft
 from app.pipeline import Pipeline
 from app.text.events import UserMessage
+from app.voice.events import Speaker, VoiceUtterance
+
+
+def _from_them(event: Event) -> bool:
+    """Something they said: a text, or a turn on a call."""
+    p = event.payload
+    return isinstance(p, UserMessage) or (
+        isinstance(p, VoiceUtterance) and p.speaker is Speaker.USER
+    )
 
 
 def latest(events: list[Event], ref: str) -> tuple[int, EmailDraft] | None:
@@ -61,7 +71,7 @@ async def send(pipeline: Pipeline, phone: str, account: Account, ref: str) -> Em
         raise ValueError(f"email {ref} was already sent")
     if draft.missing:
         raise ValueError(f"draft {ref} is missing {', '.join(draft.missing)}")
-    if not any(e.seq > seq and isinstance(e.payload, UserMessage) for e in events):
+    if not any(e.seq > seq and _from_them(e) for e in events):
         raise ValueError(f"they haven't answered since you showed draft {ref}; ask first")
     await account.send(draft.gmail_id)
     sent = draft.model_copy(update={"status": "sent"})

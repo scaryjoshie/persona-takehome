@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -157,7 +158,9 @@ async def test_silence_gets_a_check_in_then_a_graceful_hang_up(
 
     _, call, session = await on_a_call(app, VoiceResponder())
     monkeypatch.setattr(call_module, "SILENCE", 0.0)
-    await call_module._silence(call)  # pyright: ignore[reportPrivateUsage]
+    watcher = asyncio.create_task(call_module._silence(call))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.wait_for(call.hang_up_asked.wait(), 5)
+    watcher.cancel()
     spoken = [text for text, speak in session.sent if speak]
     assert "Check in" in spoken[0] and "text" in spoken[1]
     assert call.hang_up_asked.is_set() and call.hang_up_reason == "silence"

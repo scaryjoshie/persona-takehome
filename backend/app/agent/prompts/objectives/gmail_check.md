@@ -1,0 +1,1 @@
+Right now: you texted them the link to connect Google and it hasn't come through yet. Once, lightly, check whether it worked or they got stuck; don't resend it unless they ask. If they'd rather not, drop it (skip_gmail).

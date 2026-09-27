@@ -94,16 +94,14 @@ OBJECTIVES: tuple[Objective, ...] = (
         scenarios=(("on a call", lambda s: s.medium is Medium.VOICE),),
     ),
     Objective("user_name", done=lambda s: s.slots.user_name is not None),
+    # Google before the ask: connected, it can see what's going on and suggest, instead of
+    # pivoting from whatever they said to "connect gmail". Offering it is enough to move on.
+    Objective("gmail", done=lambda s: s.slots.gmail is not None, max_asks=3),
     # Asks count from the last saved step, so these count only their own turns.
     Objective("help_need", done=lambda s: s.slots.help_need is not None, max_asks=2),
-    # Gmail is a goal, not an extra: done only once it's connected or they've said no. A
-    # link that went out but never connected gets a light check-in, then it parks.
-    Objective(
-        "gmail",
-        done=lambda s: s.slots.gmail in DECIDED,
-        max_asks=4,
-        scenarios=(("link sent", lambda s: s.slots.gmail is GmailPhase.LINK_SENT),),
-    ),
+    # Onboarding isn't done until Google is connected or declined: a link that went out and
+    # never connected gets one light check-in.
+    Objective("gmail_check", done=lambda s: s.slots.gmail in DECIDED, max_asks=1),
     Objective("wrap_up", done=lambda s: s.slots.graduated),
 )
 

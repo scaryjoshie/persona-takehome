@@ -129,6 +129,7 @@ async def run_call(
             listener = Listener(env, call, phone)
             transcript = Transcript(phone, pipeline, push, call, listener)
             listener.voice_now = transcript.voice_now
+            call.wake = listener.heard
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
@@ -237,6 +238,8 @@ class Transcript:
         await self._pipeline.submit(self._phone, Origin.VOICE_AGENT, Channel.VOICE, utterance)
         if speaker is Speaker.AGENT:
             self._call.said(text)
+        else:
+            await self._call.user_started()  # their speech counts even if no caption came
         if speaker is Speaker.USER or PROMISE.search(text):
             self._listener.heard()
 
@@ -290,15 +293,21 @@ WRAP_UP = 45.0  # seconds before MAX_CALL that the voice starts wrapping up
 async def _hang_up_when_done(call: LiveCall, end: Callable[[str], None]) -> None:
     """After end_call: wait for the voice to finish a goodbye (one it says next, or one it
     already said), let it play out, then hang up."""
-    await call.hang_up_asked.wait()
-    asked = time.monotonic()
-    while time.monotonic() - asked < HANG_UP_WAIT:  # noqa: ASYNC110 (polls two conditions)
-        said_bye = call.agent_lines > call.hang_up_after or GOODBYE.search(call.last_agent_line)
-        if said_bye and not call.speaking:
-            await asyncio.sleep(1.0)
-            break
-        await asyncio.sleep(0.2)
-    end(call.hang_up_reason)
+    while True:
+        await call.hang_up_asked.wait()
+        asked = time.monotonic()
+        while time.monotonic() - asked < HANG_UP_WAIT:  # noqa: ASYNC110 (polls conditions)
+            if call.hang_up_reason == "silence" and call.heard_at > asked:
+                break  # they spoke after all: stay on the line
+            said_bye = call.agent_lines > call.hang_up_after or GOODBYE.search(call.last_agent_line)
+            if said_bye and not call.speaking:
+                await asyncio.sleep(1.0)
+                return end(call.hang_up_reason)
+            await asyncio.sleep(0.2)
+        else:
+            return end(call.hang_up_reason)
+        call.hang_up_asked.clear()
+        call.hang_up_reason, call.check_ins = "agent_hangup", 0
 
 
 async def _silence(call: LiveCall) -> None:
@@ -322,7 +331,6 @@ async def _silence(call: LiveCall) -> None:
             call.hang_up_reason = "silence"
             call.hang_up_after = call.agent_lines
             call.hang_up_asked.set()
-            return
 
 
 async def _time_limit(call: LiveCall) -> None:

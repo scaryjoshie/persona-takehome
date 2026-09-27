@@ -337,14 +337,7 @@ async def draft_email(
     )
 
 
-async def by_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    """Google tools that act, not just read: only by text, where they can see what happens."""
-    if ctx.deps.medium is not Medium.TEXT:
-        return None
-    return await google_connected(ctx, tool)
-
-
-@agent.tool(prepare=by_text)
+@agent.tool(prepare=google_connected)
 async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
     """Send a draft you showed them, by its ref, once they've said yes to it."""
     d = ctx.deps
@@ -364,7 +357,7 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     return "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events) or "nothing"
 
 
-@agent.tool(prepare=by_text)
+@agent.tool(prepare=google_connected)
 async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: int = 60) -> str:
     """Add an event to their calendar. `start` is their local time, like 2026-10-02 15:00.
     Only after they said yes to this exact event."""

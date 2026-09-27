@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
+
+from pydantic_ai.exceptions import UserError
 
 from app.agent.context import last_lines
 from app.events.decision import Decision
@@ -82,6 +85,8 @@ class LiveCall:
     hang_up_after: int = 0  # agent_lines when end_call asked
     hang_up_reason: str = "agent_hangup"
     last_sound: float = field(default_factory=time.monotonic)  # anyone speaking, for silence
+    heard_at: float = 0.0  # when they last spoke
+    wake: Callable[[], None] = lambda: None  # run the back office (a text arrived mid-call)
     check_ins: int = 0  # times the voice checked in on a silent line since they last spoke
     closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
 
@@ -92,7 +97,11 @@ class LiveCall:
         for i, piece in enumerate(pieces):
             if self.closed:
                 return
-            await self.session.send(piece, respond=speak and i == len(pieces) - 1)
+            try:
+                await self.session.send(piece, respond=speak and i == len(pieces) - 1)
+            except UserError:  # the session closed under us (a late back-office run)
+                self.closed = True
+                return
 
     def said(self, line: str) -> None:
         self.agent_lines += 1
@@ -112,7 +121,8 @@ class LiveCall:
         """They started talking, so the voice stopped. Held background goes in now, and
         anything deferred to the end of its sentence goes in silently rather than being lost
         with the cut-off turn."""
-        self.last_sound, self.check_ins = time.monotonic(), 0
+        self.last_sound = self.heard_at = time.monotonic()
+        self.check_ins = 0
         self.speaking, self.voice_owes_reply = False, True
         waiting, self.held, self.deferred = [*self.held, *self.deferred], [], []
         if waiting:  # one append: several at once each drew their own reply
@@ -155,6 +165,8 @@ class VoiceResponder:
         call = self.calls.get(ctx.phone)
         if call is not None:
             call.last_sound = time.monotonic()  # a text or typing counts as them being there
+            if isinstance(event.payload, UserMessage):
+                call.wake()  # the back office acts on texts too ("yes send it")
         note = call_note(event)
         if note is None:
             return None

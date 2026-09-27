@@ -35,7 +35,10 @@ def test_objectives_open_in_order() -> None:
     assert open_name(situation()) == "agent_name"
     assert open_name(situation(agent_name="Mila")) == "contact"
     assert open_name(situation(agent_name="Mila", asks=1)) == "user_name"
-    assert open_name(situation(agent_name="Mila", user_name="Sam")) == "help_need"
+    assert open_name(situation(agent_name="Mila", user_name="Sam")) == "gmail"
+    assert open_name(situation(agent_name="M", user_name="S", gmail="link_sent")) == "help_need"
+    pending = situation(agent_name="M", user_name="S", gmail="link_sent", help_need="x")
+    assert open_name(pending) == "gmail_check"
     done = situation(agent_name="M", user_name="S", help_need="x", gmail="skipped")
     assert open_name(done) == "wrap_up"
     assert (
@@ -67,7 +70,7 @@ def test_a_scenario_swaps_the_script() -> None:
 def test_the_name_goes_into_the_script() -> None:
     texts = {name: dict(sections) for name, sections in OBJECTIVE_TEXTS.items()}
     texts["help_need"]["script"] = "- okay [name], what've you got?"
-    text = render(situation(agent_name="Mila", user_name="Sam"), "1", texts)
+    text = render(situation(agent_name="Mila", user_name="Sam", gmail="skipped"), "1", texts)
     assert "okay Sam, what've you got?" in text
 
 
@@ -95,9 +98,9 @@ def test_asks_count_text_replies_sent_since_the_last_saved_step() -> None:
 
 def test_on_a_call_the_next_step_comes_along() -> None:
     on_call = render(situation(Medium.VOICE, agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
-    assert "Right now: their name" in on_call and "Right now: the one thing" in on_call
+    assert "Right now: their name" in on_call and "Right now: connecting their Google" in on_call
     by_text = render(situation(agent_name="Mila", asks=1), "1", OBJECTIVE_TEXTS)
-    assert "Right now: the one thing" not in by_text
+    assert "Right now: connecting their Google" not in by_text
 
 
 def test_a_line_already_said_is_not_scripted_again() -> None:
@@ -122,7 +125,7 @@ def test_scripts_show_only_in_the_clean_case() -> None:
 
 def test_the_ask_gets_an_angle_that_varies_by_user() -> None:
     angles = {
-        render(situation(agent_name="M", user_name="S"), phone, OBJECTIVE_TEXTS)
+        render(situation(agent_name="M", user_name="S", gmail="skipped"), phone, OBJECTIVE_TEXTS)
         for phone in ("1", "2", "3", "4", "5", "6")
     }
     assert len(angles) > 1 and all("Your angle for this" in a for a in angles)
@@ -145,9 +148,9 @@ def test_later_call_notes_carry_no_lines_to_repeat() -> None:
     assert "use this line" in first and "use this line" not in later
 
 
-def test_gmail_stays_open_until_connected_or_declined() -> None:
+def test_a_link_that_never_connected_gets_a_check_before_wrapping_up() -> None:
     sent = situation(agent_name="M", user_name="S", help_need="bills", gmail="link_sent")
-    assert open_name(sent) == "gmail"
-    assert "already texted the link" in render(sent, "1", OBJECTIVE_TEXTS)
+    assert open_name(sent) == "gmail_check"
+    assert "hasn't come through" in render(sent, "1", OBJECTIVE_TEXTS)
     no = situation(agent_name="M", user_name="S", help_need="bills", gmail="skipped")
     assert open_name(no) == "wrap_up"

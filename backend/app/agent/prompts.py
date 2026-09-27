@@ -34,5 +34,14 @@ VOICE_BACKEND = read_md("voice_backend")  # the voice's own delegation backend
 # One file per onboarding objective, split into sections (see app/agent/objectives.py).
 OBJECTIVE_TEXTS = {
     name: parse(read_md(f"objectives/{name}"))
-    for name in ("opener", "agent_name", "contact", "user_name", "help_need", "gmail", "wrap_up")
+    for name in (
+        "opener",
+        "agent_name",
+        "contact",
+        "user_name",
+        "gmail",
+        "help_need",
+        "gmail_check",
+        "wrap_up",
+    )
 }
