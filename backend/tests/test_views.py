@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC
+
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart
 
 from app.agent.context import to_model_messages, trim_history, turns, what_you_know
@@ -54,7 +56,7 @@ def seeded() -> list[Event]:
 
 
 def test_events_render_themselves_and_merge() -> None:
-    t = turns(seeded())
+    t = turns(seeded(), UTC)
     assert [x.role for x in t] == [Role.USER, Role.ASSISTANT, Role.NOTE]
     assert t[0].text == "hey\nyou there?"
     note = t[2].text
@@ -71,7 +73,7 @@ def test_events_render_themselves_and_merge() -> None:
 
 
 def test_model_messages_alternate_and_bracket_notes() -> None:
-    msgs = to_model_messages(seeded())
+    msgs = to_model_messages(seeded(), UTC)
     assert [type(m) for m in msgs] == [ModelRequest, ModelResponse, ModelRequest]
     last = msgs[-1]
     assert isinstance(last, ModelRequest)

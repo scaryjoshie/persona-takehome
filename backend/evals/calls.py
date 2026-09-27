@@ -46,6 +46,9 @@ LINES = {
     "wrong": "Well, the name is incorrect. It's T U N G, and then S A H U R.",
     "doit": "Are you going to do that?",
     "next": "Okay. What else do you need from me?",
+    "landlord": "My landlord Dave never fixes anything. I work nights, so no calls before noon.",
+    "moved": "Oh wait, actually I moved last month. Dave isn't my landlord anymore.",
+    "denver": "By the way, I'm in Denver, if that matters for anything.",
     "grocery": (
         "Actually, can you find me a good grocery store near the Northwestern Tech building "
         "in Evanston?"
@@ -78,6 +81,21 @@ def wav(line: str) -> str:
 FRAME = 960
 
 SCENARIOS: dict[str, list[str]] = {
+    "memory_on_call": [
+        "text:Hey, what's a Persona?",
+        "text:sure call me",
+        "accept",
+        "say:pick",
+        "say:yes",
+        "say:siobhan",
+        "say:landlord",
+        "say:moved",
+        "say:denver",
+        "say:bye",
+        "wait:14",
+        "text:what do you know about me so far?",
+        "wait:12",
+    ],
     "task_on_call": [
         "text:Hey, what's a Persona?",
         "text:sure call me",
@@ -267,6 +285,12 @@ async def run(name: str, steps: list[str]) -> str:
                         log.append(f"{ts()}   · call {p['transition']} {p.get('reason') or ''}")
                     elif k == "slot_changed":
                         log.append(f"{ts()}   · {p['slot']} = {p['new']}")
+                    elif k == "remembered":
+                        log.append(f"{ts()}   · remember [{p['fact_id']}] {p['fact']}")
+                    elif k == "forgot":
+                        log.append(f"{ts()}   · forget [{p['fact_id']}] {p['fact']}")
+                    elif k == "timezone_learned":
+                        log.append(f"{ts()}   · timezone {p['tz']} ({p['source']})")
                     elif k == "graduated":
                         log.append(f"{ts()}   · GRADUATED")
 

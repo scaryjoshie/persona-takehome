@@ -16,7 +16,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import Protocol
 
 from sqlalchemy import delete
@@ -26,11 +26,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.agent.events import (
     CallOptOut,
     ContactSaved,
-    DeviceTimezone,
     Graduated,
     SlotChanged,
     StepSetAside,
+    TimezoneLearned,
 )
+from app.agent.slots import TzSource
 from app.database import SessionFactory
 from app.events import service as events
 from app.events.decision import Decision
@@ -38,6 +39,9 @@ from app.events.event import Event
 from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
 from app.jobs.models import JobRow
+from app.memory import service as memories
+from app.memory.events import Forgot, Remembered
+from app.memory.service import Fact, Memory, Summary
 from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
@@ -63,6 +67,7 @@ class Context:
     pipeline: Pipeline
     phone: str
     recent: list[Event]
+    tz: tzinfo  # theirs, for showing times
 
     async def record(self, origin: Origin, channel: Channel, payload: Payload) -> Event | None:
         """Save and publish an event now, without routing it."""
@@ -97,9 +102,29 @@ class Pipeline:
         async with self._db() as s, s.begin():
             return await users.ensure_user(s, phone, now=self._clock())
 
-    async def history(self, phone: str, *, limit: int | None = None) -> list[Event]:
+    async def history(
+        self, phone: str, *, limit: int | None = None, after_seq: int = 0
+    ) -> list[Event]:
         async with self._db() as s:
-            return await events.list_events(s, phone, limit=limit)
+            return await events.list_events(s, phone, limit=limit, after_seq=after_seq)
+
+    async def memory(self, phone: str) -> Memory:
+        async with self._db() as s:
+            return await memories.memory(s, phone)
+
+    async def facts(self, phone: str, *, app: str | None = None) -> tuple[Fact, ...]:
+        """What's remembered about them; with `app`, only the facts about that service."""
+        async with self._db() as s:
+            return await memories.facts(s, phone, app=app)
+
+    async def conversation(self, phone: str) -> tuple[Memory, list[Event]]:
+        """What a model sees of them: the memory, and the events its summary doesn't cover."""
+        memory = await self.memory(phone)
+        return memory, await self.history(phone, after_seq=memory.after_seq)
+
+    async def save_summary(self, phone: str, summary: Summary) -> None:
+        async with self._db() as s, s.begin():
+            await memories.set_summary(s, phone, summary, now=self._clock())
 
     def now(self) -> datetime:
         return self._clock()
@@ -174,6 +199,7 @@ class Pipeline:
         """Debug: forget everything about a user."""
         async with self._locks[phone], self._db() as s, s.begin():
             await events.delete_events(s, phone)
+            await memories.delete_memory(s, phone)
             await s.exec(delete(JobRow).where(col(JobRow.phone) == phone))  # pyright: ignore[reportArgumentType]
             await users.delete_user(s, phone)
 
@@ -212,7 +238,8 @@ class Pipeline:
             recent = await events.list_events(s, phone, limit=RECENT)
         assert user is not None
         responder = self.responders[user.floor]
-        decision = await responder.handle(event, user, Context(self, phone, recent))
+        context = Context(self, phone, recent, user.slots.zone())
+        decision = await responder.handle(event, user, context)
         if decision is not None:
             await self.record(phone, Origin.SYSTEM, Channel.SYSTEM, decision)
 
@@ -220,7 +247,8 @@ class Pipeline:
 async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -> Payload | None:
     """The events that change user state, and how. Returns the event to record (possibly
     filled in), or None to drop it: an impossible call transition, a slot set to the value
-    it already has, a second "link sent", or a second graduation."""
+    it already has, a second "link sent", a second graduation, a fact already remembered, or
+    forgetting one that isn't."""
     match payload:
         case CallEvent():
             call = next_state(user.call, payload, now)
@@ -253,14 +281,27 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.contact_name == name:
                 return None
             await users.set_slots(s, user.phone, contact_name=name)
-        case DeviceTimezone(tz=tz):
-            if user.slots.timezone == tz:
+        case TimezoneLearned(tz=tz, source=source):
+            slots = user.slots
+            if (slots.timezone, slots.timezone_source) == (tz, source):
                 return None
-            await users.set_slots(s, user.phone, timezone=tz)
+            if source is TzSource.CALENDAR and slots.timezone_source is TzSource.SAID:
+                return None  # what they said wins
+            await users.set_slots(s, user.phone, timezone=tz, timezone_source=source)
         case Graduated():
             if user.slots.graduated:
                 return None
             await users.set_slots(s, user.phone, graduated=True)
+        case Remembered(fact=fact, app=app):
+            fact_id = await memories.add_fact(s, user.phone, fact, app=app, now=now)
+            if fact_id is None:
+                return None
+            return payload.model_copy(update={"fact_id": fact_id})
+        case Forgot(fact_id=fact_id):
+            fact = await memories.forget_fact(s, user.phone, fact_id, now=now)
+            if fact is None:
+                return None
+            return payload.model_copy(update={"fact": fact})
         case Typing(active=active):
             await users.set_typing(s, user.phone, now if active else None)
         case _:

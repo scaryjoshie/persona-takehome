@@ -269,7 +269,7 @@ def _state(event: Event, call: LiveCall, ctx: Context) -> dict[str, object]:
         "channel": "voice call",
         "assistant_currently_responding": call.speaking,
         "assistant_last_turn_asked_a_question": call.asked_question,
-        "conversation": last_lines(ctx.recent),
+        "conversation": last_lines(ctx.recent, ctx.tz),
         "new_event": event.payload.describe(),
     }
 

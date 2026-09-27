@@ -17,7 +17,7 @@ import zlib
 
 import websockets
 
-PORT = 8765
+PORT = int(os.environ.get("PORT", "8765"))
 QUIET = float(os.environ.get("QUIET", "7"))  # seconds with no new bubble = done
 OUT = os.path.join(os.path.dirname(__file__), "out", "scenarios")
 
@@ -162,6 +162,25 @@ SCENARIOS: dict[str, list[str]] = {
     "call_other": ["Hey, what's a Persona?", "call this number instead: 555-867-5309"],
     "minor": ["Hey, what's a Persona?", "text", "im 14 is that ok"],
     "annoyed": ["Hey, what's a Persona?", "text", "this is annoying just let me use it"],
+    "memory_facts": [
+        "Hey, what's a Persona?",
+        "text is fine",
+        "call yourself nova",
+        "im priya",
+        "my landlord dave still hasn't fixed the heater. also i work nights, nothing before noon",
+        "what do you know about me so far?",
+        "oh actually i moved last month, dave isn't my landlord anymore. it's a company now",
+        "ok what do you know about me now",
+    ],
+    "memory_small_talk": [
+        "Hey, what's a Persona?",
+        "text",
+        "call yourself nova",
+        "im sam",
+        "lol its so hot today",
+        "haha yeah",
+        "ok cool",
+    ],
     "tangent": [
         "Hey, what's a Persona?",
         "text",
@@ -197,6 +216,10 @@ async def run(name: str, lines: list[str]) -> str:
                         log.append(f"{stamp}   · {p['name']} {json.dumps(p['args'])[:120]}")
                     elif k == "call":
                         log.append(f"{stamp}   · call {p['transition']} {p.get('reason') or ''}")
+                    elif k == "remembered":
+                        log.append(f"{stamp}   · remember [{p['fact_id']}] {p['fact']}")
+                    elif k == "forgot":
+                        log.append(f"{stamp}   · forget [{p['fact_id']}] {p['fact']}")
                     elif k == "graduated":
                         log.append(f"{stamp}   · GRADUATED")
 

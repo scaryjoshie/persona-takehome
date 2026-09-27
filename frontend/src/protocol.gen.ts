@@ -3,8 +3,13 @@
 export type ClientMessage = SendMessage | SetTyping | CallCommand | ReactCommand | SaveContact | Reset;
 export type CallAction = "start" | "accept" | "decline" | "hangup" | "failed";
 export type ServerMessage = Snapshot | EventMessage | SlotsMessage | CallMessage | TypingMessage | TranscriptPartial;
-export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "system";
+export type Origin = "user" | "text_agent" | "voice_agent" | "call" | "google" | "job" | "system";
 export type Channel = "text" | "voice" | "system";
+/**
+ * How we know their timezone. Only what a texting assistant could really know: their
+ * Google Calendar's setting, or what they told us (which wins; they may be travelling).
+ */
+export type TzSource = "calendar" | "said";
 export type Speaker = "user" | "agent";
 export type CallTransition = "ringing" | "connecting" | "connected" | "declined" | "failed" | "ended";
 export type Initiator = "agent" | "user";
@@ -24,14 +29,23 @@ export type Payload =
   | Reaction
   | ContactCard
   | ContactSaved
+  | DeviceTimezone
+  | TimezoneLearned
   | CallOptOut
   | VoiceUtterance
   | ToolCall
   | SlotChanged
+  | StepSetAside
   | Graduated
   | CallEvent
   | GmailEvent
   | EmailDraft
+  | Remembered
+  | Forgot
+  | JobStarted
+  | JobAsked
+  | JobTold
+  | JobEnded
   | Decision;
 
 export interface SendMessage {
@@ -92,14 +106,23 @@ export interface WireEvent {
     | Reaction
     | ContactCard
     | ContactSaved
+    | DeviceTimezone
+    | TimezoneLearned
     | CallOptOut
     | VoiceUtterance
     | ToolCall
     | SlotChanged
+    | StepSetAside
     | Graduated
     | CallEvent
     | GmailEvent
     | EmailDraft
+    | Remembered
+    | Forgot
+    | JobStarted
+    | JobAsked
+    | JobTold
+    | JobEnded
     | Decision;
 }
 export interface UserMessage {
@@ -179,6 +202,23 @@ export interface ContactSaved {
   name: string;
 }
 /**
+ * Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.
+ * Kept so older rows still load.
+ */
+export interface DeviceTimezone {
+  kind: "device_timezone";
+  tz: string;
+}
+/**
+ * Where they are, in time: from their Google Calendar's setting, or because they said. What
+ * they said wins over the calendar; the pipeline drops a calendar zone after one they said.
+ */
+export interface TimezoneLearned {
+  kind: "timezone_learned";
+  tz: string;
+  source: TzSource;
+}
+/**
  * They'd rather not talk on the phone. The agent stops offering a call.
  */
 export interface CallOptOut {
@@ -193,6 +233,9 @@ export interface VoiceUtterance {
   text: string | null;
   turn_id: string;
 }
+/**
+ * A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.
+ */
 export interface ToolCall {
   kind: "tool_call";
   name: string;
@@ -202,6 +245,9 @@ export interface ToolCall {
   result: {
     [k: string]: unknown;
   } | null;
+  shown: string | null;
+  app: string | null;
+  ok: boolean;
 }
 /**
  * The agent recorded a name or the help need. The pipeline fills in `old` and drops the
@@ -212,6 +258,14 @@ export interface SlotChanged {
   slot: "agent_name" | "user_name" | "help_need";
   new: string;
   old: string | null;
+}
+/**
+ * They'd rather not do a setup step (a name for you, theirs, what they need, Google). It
+ * stops being asked for; it comes back only if they bring it up.
+ */
+export interface StepSetAside {
+  kind: "step_set_aside";
+  step: "agent_name" | "user_name" | "help_need";
 }
 export interface Graduated {
   kind: "graduated";
@@ -247,6 +301,51 @@ export interface EmailDraft {
   gmail_id: string;
   status: "draft" | "sent";
 }
+/**
+ * The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.
+ */
+export interface Remembered {
+  kind: "remembered";
+  fact: string;
+  app: string | null;
+  fact_id: number | null;
+}
+/**
+ * The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the
+ * event if there is no such fact.
+ */
+export interface Forgot {
+  kind: "forgot";
+  fact_id: number;
+  fact: string | null;
+}
+export interface JobStarted {
+  kind: "job_started";
+  job: string;
+  goal: string;
+}
+/**
+ * The job needs something from them. It waits until it's told or cancelled.
+ */
+export interface JobAsked {
+  kind: "job_asked";
+  job: string;
+  question: string;
+}
+/**
+ * Their answer, or anything else they said the job should know, passed on to it.
+ */
+export interface JobTold {
+  kind: "job_told";
+  job: string;
+  text: string;
+}
+export interface JobEnded {
+  kind: "job_ended";
+  job: string;
+  outcome: "done" | "failed" | "cancelled";
+  text: string;
+}
 export interface Decision {
   kind: "decision";
   trigger_kind: string;
@@ -263,7 +362,10 @@ export interface Slots {
   gmail_email: string | null;
   graduated: boolean;
   no_calls: boolean;
+  set_aside: string[];
   contact_name: string | null;
+  timezone: string | null;
+  timezone_source: TzSource | null;
 }
 export interface CallState {
   phase: CallPhase;

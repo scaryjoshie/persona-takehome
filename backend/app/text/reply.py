@@ -17,6 +17,7 @@ from app.agent.agent import Bubbles, agent, say
 from app.agent.context import to_model_messages
 from app.agent.deps import AgentEnv
 from app.events.payload import Channel, Origin
+from app.memory.summarize import summarize_if_due
 from app.text.events import AgentMessage, Reaction, UserMessage, VoiceNote
 from app.users.user import Medium
 from app.voice.call_state import CallPhase
@@ -43,10 +44,12 @@ class Replier:
     async def reply(self, phone: str, through_seq: int) -> None:
         env = self._env
         pipeline = env.pipeline
-        events = await pipeline.history(phone)
-        first = not any(isinstance(e.payload, AgentMessage) for e in events)
+        memory, events = await pipeline.conversation(phone)
+        first = memory.summary is None and not any(
+            isinstance(e.payload, AgentMessage) for e in events
+        )
         deps = env.deps(await pipeline.user(phone), Medium.TEXT, first_reply=first)
-        history = to_model_messages(events)
+        history = to_model_messages(events, deps.user.slots.zone())
         await env.messenger.set_typing(phone, True)  # the dots cover the thinking time
         started = time.monotonic()
         try:
@@ -79,6 +82,7 @@ class Replier:
                 await say(deps, text)
         finally:
             await self._env.messenger.set_typing(phone, False)
+            pipeline.spawn(summarize_if_due(pipeline, env.model, phone))  # only when it's time
 
     async def _react(self, phone: str, through_seq: int, emoji: str) -> None:
         """Tapback on their latest message among those this reply answers."""

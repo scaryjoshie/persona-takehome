@@ -224,6 +224,16 @@ async def upcoming(client: httpx.AsyncClient, token: str, days: int) -> list[dic
     ]
 
 
+async def calendar_timezone(client: httpx.AsyncClient, token: str) -> str:
+    """The timezone their Google Calendar is set to (IANA)."""
+    response = await client.get(
+        "https://www.googleapis.com/calendar/v3/users/me/settings/timezone",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    response.raise_for_status()
+    return response.json()["value"]
+
+
 async def create_event(
     client: httpx.AsyncClient, token: str, *, title: str, start: str, end: str
 ) -> str:

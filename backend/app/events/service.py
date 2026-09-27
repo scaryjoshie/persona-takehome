@@ -44,10 +44,10 @@ async def append(
 
 
 async def list_events(
-    session: AsyncSession, phone: str, *, limit: int | None = None
+    session: AsyncSession, phone: str, *, limit: int | None = None, after_seq: int = 0
 ) -> list[Event]:
-    """All of a user's events in order, or the most recent `limit` of them."""
-    query = select(EventRow).where(EventRow.user_phone == phone)
+    """A user's events in order (those after `after_seq`), or the most recent `limit`."""
+    query = select(EventRow).where(EventRow.user_phone == phone, EventRow.seq > after_seq)
     if limit is None:
         rows = (await session.exec(query.order_by(col(EventRow.seq)))).all()
     else:

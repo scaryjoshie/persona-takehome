@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from zoneinfo import ZoneInfo
 
 from pydantic_ai.messages import (
     ModelMessage,
@@ -29,8 +28,6 @@ from app.users.user import Medium
 from app.voice.responder import VoiceResponder
 from tests.conftest import PHONE, CapturingMessenger, FakeClock, FakeTimers, reply_hi, settle
 
-TZ = ZoneInfo("America/Chicago")
-
 
 def done(summary: str = "found it") -> ModelResponse:
     return ModelResponse(parts=[ToolCallPart("final_result", {"ok": True, "summary": summary})])
@@ -43,7 +40,7 @@ def asks(question: str) -> ModelResponse:
 def jobs_with(
     pipeline: Pipeline, db: SessionFactory, timers: FakeTimers, fn: FunctionModel
 ) -> Jobs:
-    return Jobs(db, pipeline, model=fn, timers=timers, tz=TZ, web_search=False)
+    return Jobs(db, pipeline, model=fn, timers=timers, web_search=False)
 
 
 def kinds(events: list[object]) -> list[str]:

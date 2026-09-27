@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime, tzinfo
+
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-from app.agent.slots import Slots
+from app.agent.slots import DEFAULT_TZ, Slots, TzSource
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.google.events import GmailPhase
+from app.memory.service import Fact, Memory
 from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
 from app.voice.events import VoiceUtterance
 
@@ -53,35 +56,47 @@ def _turn_index(event: Event) -> int:
     return int(number) if number.isdigit() else -1
 
 
-def turns(events: tuple[Event, ...] | list[Event]) -> list[Turn]:
-    """Each event renders itself; adjacent turns with the same role merge."""
+def turns(events: tuple[Event, ...] | list[Event], tz: tzinfo) -> list[Turn]:
+    """Each event renders itself, with its time in their timezone; adjacent turns with the
+    same role merge. A conversation that spans days is marked where each day starts."""
     out: list[Turn] = []
-    for event in spoken_order(events):
-        turn = event.payload.turn(event.ts)
+    ordered = spoken_order(events)
+    days = {e.ts.astimezone(tz).date() for e in ordered}
+    day = None
+    for event in ordered:
+        at = event.ts.astimezone(tz)
+        turn = event.payload.turn(at)
         if turn is None:
             continue
-        if out and out[-1].role is turn.role:
-            out[-1] = Turn(turn.role, f"{out[-1].text}\n{turn.text}")
-        else:
-            out.append(turn)
+        if len(days) > 1 and at.date() != day:
+            day = at.date()
+            _add(out, Turn(Role.NOTE, f"{at:%A %B %-d}"))
+        _add(out, turn)
     return out
 
 
-def last_lines(events: list[Event], n: int = 12) -> list[str]:
+def _add(out: list[Turn], turn: Turn) -> None:
+    if out and out[-1].role is turn.role:
+        out[-1] = Turn(turn.role, f"{out[-1].text}\n{turn.text}")
+    else:
+        out.append(turn)
+
+
+def last_lines(events: list[Event], tz: tzinfo, n: int = 12) -> list[str]:
     """The last few events as "role: text" lines, for Jev's view of the conversation."""
     lines: list[str] = []
     for event in spoken_order(events)[-n:]:
-        turn = event.payload.turn(event.ts)
+        turn = event.payload.turn(event.ts.astimezone(tz))
         if turn is not None:
             lines.append(f"{turn.role.value}: {turn.text}")
     return lines
 
 
-def to_model_messages(events: tuple[Event, ...] | list[Event]) -> list[ModelMessage]:
+def to_model_messages(events: tuple[Event, ...] | list[Event], tz: tzinfo) -> list[ModelMessage]:
     """Notes ride as bracketed user-role parts. Adjacent request-side turns share one
     ModelRequest so requests and responses alternate."""
     messages: list[ModelMessage] = []
-    for turn in turns(events):
+    for turn in turns(events, tz):
         if turn.role is Role.ASSISTANT:
             messages.append(ModelResponse(parts=[TextPart(turn.text)]))
             continue
@@ -120,6 +135,22 @@ def _text_of(m: ModelMessage) -> str:
         for p in m.parts
         if isinstance(p, UserPromptPart | TextPart) and isinstance(p.content, str)
     )
+
+
+def their_time(slots: Slots, now: datetime) -> str:
+    """The time where they are, and how sure we are of their timezone."""
+    zone = slots.zone()
+    local = f"{now.astimezone(zone):%A %B %-d, %-I:%M %p}"
+    match slots.timezone_source:
+        case TzSource.SAID:
+            return f"It's {local} where they are ({zone.key}; they told you)."
+        case TzSource.CALENDAR:
+            return f"It's {local} where they are ({zone.key}, from their Google Calendar)."
+        case None:
+            return (
+                f"It's {local} in US Eastern time ({DEFAULT_TZ}); you don't know where they "
+                "are yet, so times here are Eastern."
+            )
 
 
 SET_ASIDE = {
@@ -181,3 +212,25 @@ def what_you_know(slots: Slots, call: CallState) -> str:
     if names_sorted and slots.help_need is None:
         lines.append("Names are sorted, so when it fits naturally, it's time for the ask.")
     return "\n".join(lines)
+
+
+def remembered(memory: Memory, *, summary: bool = True, numbered: bool = True) -> str:
+    """The summary of the conversation before the latest messages, and the facts remembered
+    about them, for the top of a prompt. Empty when there's neither. The voice gets them
+    unnumbered: it doesn't forget things (the back office does), so numbers could only leak."""
+    parts: list[str] = []
+    if summary and memory.summary:
+        parts.append(
+            "## Earlier with them\n\nThe conversation before the messages below, in short:\n"
+            + memory.summary.text
+        )
+    if memory.facts:
+        lines = "\n".join(_fact_line(f, numbered=numbered) for f in memory.facts)
+        parts.append(f"## What you remember about them\n\n{lines}")
+    return "\n\n".join(parts)
+
+
+def _fact_line(fact: Fact, *, numbered: bool) -> str:
+    about = f"({fact.app}) " if fact.app else ""
+    number = f"[{fact.id}] " if numbered else ""
+    return f"- {number}{about}{fact.text}"

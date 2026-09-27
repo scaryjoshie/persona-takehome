@@ -21,7 +21,6 @@ A web simulation of Persona's onboarding. It texts you first, gets you to name i
 
 ### Planned (not on main)
 
-- Persistent memory beyond name and the onboarding answers.
 - Background agents for browser tasks, e.g. logging into Slack and other apps.
 
 ## Notes
@@ -41,6 +40,8 @@ Notably, everything is handled as an event.
 
 - **One event stream per user** (SQLite) is the source of truth. Texts, call transcript lines, tool calls, timers and the Google sign-in are all events; each is saved, then the Router sends it to whichever side has the floor (text, or voice during a call). Text and voice read the same log, so the agent is one person across channels.
 - **Text:** a Jev filtration head decides whether to reply now or wait (debounce, or Jev says the message is clearly finished); then one agent run replies with 0–4 bubbles.
+- **Memory:** the agent remembers facts about them (`remember`/`forget`), and email and calendar lookups keep a short copy of what they showed. Past ~12k tokens, a rolling summary folds in everything but the latest ~6k, which always stays word for word; a call is never split. Known limit: forgetting marks a fact forgotten, but its "you remembered" line stays in the log, so it isn't a privacy-grade delete.
+- **Timezone:** only what a texting assistant could know: their Google Calendar's setting, or what they say (which wins). Until then it's a stated US Eastern guess. Every time a model sees is in their zone.
 - **Onboarding steps** are objectives (`backend/app/agent/objectives.py`, words in `backend/app/agent/prompts/objectives/`): only the open step's guidance is shown, with scripts reserved for fixed moments.
 
 #### Why events

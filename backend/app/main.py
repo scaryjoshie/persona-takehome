@@ -67,9 +67,7 @@ def assemble(
     pipeline = Pipeline(db, clock=clock, timers=timers)
     voice = VoiceResponder(jev=jev)
     google = google or Google(db)  # unconfigured: the Google link says so
-    jobs = Jobs(
-        db, pipeline, model=model, timers=timers, tz=google.tz, google=google, web_search=web_search
-    )
+    jobs = Jobs(db, pipeline, model=model, timers=timers, google=google, web_search=web_search)
     env = AgentEnv(
         pipeline=pipeline,
         messenger=messenger,
@@ -103,7 +101,6 @@ def from_settings(settings: Settings, messenger: Messenger) -> tuple[App, OpenAI
             if settings.google_client_id and settings.google_client_secret
             else None,
             key=settings.credentials_key.get_secret_value() if settings.credentials_key else None,
-            tz=settings.timezone,
         ),
     )
     return built, live_model(settings)

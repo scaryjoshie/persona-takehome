@@ -25,6 +25,7 @@ from app.events.models import EventRow
 from app.google.accounts import Google
 from app.google.models import GoogleAccountRow
 from app.jobs.models import JobRow
+from app.memory.service import delete_memory
 from app.settings import get_settings
 from app.users.models import UserRow
 
@@ -65,7 +66,6 @@ async def main(really: bool) -> None:
         if settings.google_client_id and settings.google_client_secret
         else None,
         key=settings.credentials_key.get_secret_value() if settings.credentials_key else None,
-        tz=settings.timezone,
     )
     for phone in phones:  # revoke at Google, then forget the token
         try:
@@ -77,6 +77,7 @@ async def main(really: bool) -> None:
                 await s.exec(gone)  # pyright: ignore[reportArgumentType]
     async with db() as s, s.begin():
         await s.exec(delete(EventRow))  # pyright: ignore[reportArgumentType]
+        await delete_memory(s)
         await s.exec(delete(UserRow))  # pyright: ignore[reportArgumentType]
         await s.exec(delete(JobRow))  # pyright: ignore[reportArgumentType]
     for path in note_files:

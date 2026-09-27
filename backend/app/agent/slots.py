@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+from zoneinfo import ZoneInfo
+
 from pydantic import BaseModel, ConfigDict
 
 from app.google.events import GmailPhase
+
+DEFAULT_TZ = "America/New_York"  # until they tell us, or their calendar does
+
+
+class TzSource(StrEnum):
+    """How we know their timezone. Only what a texting assistant could really know: their
+    Google Calendar's setting, or what they told us (which wins; they may be travelling)."""
+
+    CALENDAR = "calendar"
+    SAID = "said"
 
 
 class Slots(BaseModel):
@@ -21,7 +34,16 @@ class Slots(BaseModel):
     # Phone-only: what their phone has the agent saved as (None = not saved). Drives the
     # phone's header; the agent never sees it (not routed, not in any prompt).
     contact_name: str | None = None
-    timezone: str | None = None  # their device's (IANA); None = not known, use the default
+    timezone: str | None = None  # IANA; counts only with a source (older rows: the browser's)
+    timezone_source: TzSource | None = None
+
+    def zone(self) -> ZoneInfo:
+        """Their timezone if we know it, else the default guess."""
+        return (
+            ZoneInfo(self.timezone)
+            if self.timezone and self.timezone_source
+            else ZoneInfo(DEFAULT_TZ)
+        )
 
     def missing(self) -> tuple[str, ...]:
         out: list[str] = []

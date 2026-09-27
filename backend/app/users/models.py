@@ -22,7 +22,8 @@ class UserRow(SQLModel, table=True):
     no_calls: bool = False
     set_aside: str = ""  # setup steps they'd rather not do, comma-separated
     contact_name: str | None = None  # what the user saved the agent as
-    timezone: str | None = None  # their device's, from the browser
+    timezone: str | None = None  # IANA, see Slots.timezone_source
+    timezone_source: str | None = None
     # current call
     call_phase: str = "none"
     call_reason: str | None = None

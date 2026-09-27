@@ -24,7 +24,6 @@ import re
 import uuid
 from collections.abc import Sequence
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from pydantic_ai import DeferredToolRequests, DeferredToolResults
 from pydantic_ai.capabilities import WebSearch
@@ -64,7 +63,6 @@ class Jobs:
         *,
         model: Model,
         timers: Timers,
-        tz: ZoneInfo,
         google: Google | None = None,
         web_search: bool = True,
     ) -> None:
@@ -72,7 +70,6 @@ class Jobs:
         self._pipeline = pipeline
         self._model = model
         self._timers = timers
-        self._tz = tz
         self._google = google
         self._web_search = web_search
         self._tasks: dict[str, asyncio.Future[object]] = {}
@@ -181,7 +178,8 @@ class Jobs:
         if row is None:
             return  # forgotten (a reset)
         history = ModelMessagesTypeAdapter.validate_json(row.messages)
-        deps = JobDeps(self._pipeline, phone, job, self._tz, self._google)
+        tz = (await self._pipeline.user(phone)).slots.zone()  # theirs, as the chat agent has it
+        deps = JobDeps(self._pipeline, phone, job, tz, self._google)
         try:
             async with asyncio.timeout(RUN_SECONDS):
                 async with job_agent.iter(

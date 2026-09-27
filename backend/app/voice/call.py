@@ -40,7 +40,14 @@ from pydantic_ai.usage import UsageLimits
 
 from app.agent import prompts
 from app.agent.agent import agent
-from app.agent.context import last_lines, to_model_messages, trim_history, what_you_know
+from app.agent.context import (
+    last_lines,
+    remembered,
+    their_time,
+    to_model_messages,
+    trim_history,
+    what_you_know,
+)
 from app.agent.deps import AgentEnv
 from app.agent.objectives import guidance, settled
 from app.events.event import Event
@@ -61,6 +68,8 @@ log = logging.getLogger(__name__)
 SEED_MESSAGES, SEED_TOKENS = 128, 8192  # GPT-Live's limits on seeded history
 NOW = "Where things stand now:"
 REPLACES = f'Update: this replaces every earlier "{NOW}" section; follow this one.'
+# Not remembered/forgot: a fact learned on the call was said on the call, so the voice heard
+# it; re-sending instructions for it only adds churn (and idle appends can prompt speech).
 STATE_KINDS = {
     "slot_changed",
     "gmail",
@@ -86,18 +95,23 @@ async def run_call(
     """Run one call until it ends. The caller has accepted the websocket."""
     pipeline = env.pipeline
     user = await pipeline.user(phone)
+    memory, events = await pipeline.conversation(phone)
     history = trim_history(
-        to_model_messages(await pipeline.history(phone)),
+        to_model_messages(events, user.slots.zone()),
         max_messages=SEED_MESSAGES,
         max_tokens=SEED_TOKENS,
     )
+    # The summary goes in the instructions, not the seeded history, so trimming never drops
+    # it; nothing summarizes during a call, so it can't go stale. Facts come with the state.
+    earlier = memory.summary.text if memory.summary else ""
     deps = env.deps(user, Medium.VOICE)
     # Instructions are fixed for the whole session, so they hold nothing that changes during
     # the call. Where things stand goes in as a silent note, again after every change.
     delegation = dict((live_model.settings or {}).get("openai_live_delegation", {}))
     delegation["instructions"] = prompts.VOICE_BACKEND
     settings = OpenAILiveModelSettings(
-        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}",
+        openai_live_instructions=f"{prompts.PERSONA}\n\n{prompts.CALL}"
+        + (f"\n\n# Earlier with them\n\n{earlier}" if earlier else ""),
         openai_live_delegation=cast(OpenAILiveResponsesDelegation, delegation),
     )
 
@@ -272,7 +286,9 @@ class Transcript:
             return
         self._checking.add(turn_id)
         try:
-            recent = last_lines(list(await self._pipeline.history(self._phone, limit=RECENT)))
+            user = await self._pipeline.user(self._phone)
+            events = await self._pipeline.history(self._phone, limit=RECENT)
+            recent = last_lines(events, user.slots.zone())
             if turn_id not in self._committed and await commits(self._jev, recent, saying):
                 self._committed.add(turn_id)
                 self._listener.heard(voice=True, saying=saying)
@@ -456,10 +472,12 @@ class StateNotes:
     async def _note(self, *, scripts: bool) -> str:
         user, events = await self._state()
         stage = guidance(user, events, Medium.VOICE, scripts=scripts)
+        facts = remembered(await self._pipeline.memory(self._phone), summary=False, numbered=False)
         jobs = self._env.jobs
         open_jobs = job_lines(await jobs.open(self._phone), speaking=True) if jobs else []
-        known = "\n".join([what_you_know(user.slots, user.call), *open_jobs])
-        return f"{NOW}\n{known}\n\n{stage}".strip()
+        now = their_time(user.slots, self._pipeline.now())
+        known = "\n".join([now, what_you_know(user.slots, user.call), *open_jobs])
+        return f"{NOW}\n" + "\n\n".join(p for p in (known, facts, stage) if p)
 
 
 USER_SETTLE = 0.8  # seconds of quiet after their last piece before it counts as their turn
@@ -526,7 +544,8 @@ class Listener:
             try:
                 pipeline = self._env.pipeline
                 user = await pipeline.user(self._phone)
-                history = to_model_messages(await pipeline.history(self._phone))
+                _, events = await pipeline.conversation(self._phone)
+                history = to_model_messages(events, user.slots.zone())
                 woke = VOICE_TURN if act else THEIR_TURN
                 if saying:  # not logged yet: the voice is still talking
                     woke = f'{VOICE_SAYING} "{saying}"'

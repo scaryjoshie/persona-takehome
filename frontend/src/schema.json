@@ -550,6 +550,28 @@
         "title": "Decision",
         "type": "object"
       },
+      "DeviceTimezone": {
+        "additionalProperties": false,
+        "description": "Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.\nKept so older rows still load.",
+        "properties": {
+          "kind": {
+            "const": "device_timezone",
+            "default": "device_timezone",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "tz"
+        ],
+        "title": "DeviceTimezone",
+        "type": "object"
+      },
       "EmailDraft": {
         "additionalProperties": false,
         "properties": {
@@ -622,6 +644,41 @@
           "event"
         ],
         "title": "EventMessage",
+        "type": "object"
+      },
+      "Forgot": {
+        "additionalProperties": false,
+        "description": "The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the\nevent if there is no such fact.",
+        "properties": {
+          "kind": {
+            "const": "forgot",
+            "default": "forgot",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "integer"
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact"
+          }
+        },
+        "required": [
+          "kind",
+          "fact_id",
+          "fact"
+        ],
+        "title": "Forgot",
         "type": "object"
       },
       "GmailEvent": {
@@ -731,6 +788,123 @@
         "title": "Initiator",
         "type": "string"
       },
+      "JobAsked": {
+        "additionalProperties": false,
+        "description": "The job needs something from them. It waits until it's told or cancelled.",
+        "properties": {
+          "kind": {
+            "const": "job_asked",
+            "default": "job_asked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "question"
+        ],
+        "title": "JobAsked",
+        "type": "object"
+      },
+      "JobEnded": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_ended",
+            "default": "job_ended",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "outcome",
+          "text"
+        ],
+        "title": "JobEnded",
+        "type": "object"
+      },
+      "JobStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_started",
+            "default": "job_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "goal"
+        ],
+        "title": "JobStarted",
+        "type": "object"
+      },
+      "JobTold": {
+        "additionalProperties": false,
+        "description": "Their answer, or anything else they said the job should know, passed on to it.",
+        "properties": {
+          "kind": {
+            "const": "job_told",
+            "default": "job_told",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "text"
+        ],
+        "title": "JobTold",
+        "type": "object"
+      },
       "Medium": {
         "description": "Which medium has the floor: voice while a call is connected, text otherwise.",
         "enum": [
@@ -747,6 +921,7 @@
           "voice_agent",
           "call",
           "google",
+          "job",
           "system"
         ],
         "title": "Origin",
@@ -805,6 +980,54 @@
           "removed"
         ],
         "title": "Reaction",
+        "type": "object"
+      },
+      "Remembered": {
+        "additionalProperties": false,
+        "description": "The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.",
+        "properties": {
+          "kind": {
+            "const": "remembered",
+            "default": "remembered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact": {
+            "title": "Fact",
+            "type": "string"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact Id"
+          }
+        },
+        "required": [
+          "kind",
+          "fact",
+          "app",
+          "fact_id"
+        ],
+        "title": "Remembered",
         "type": "object"
       },
       "ReplyDue": {
@@ -962,6 +1185,14 @@
             "title": "No Calls",
             "type": "boolean"
           },
+          "set_aside": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Set Aside",
+            "type": "array"
+          },
           "contact_name": {
             "anyOf": [
               {
@@ -973,6 +1204,29 @@
             ],
             "default": null,
             "title": "Contact Name"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Timezone"
+          },
+          "timezone_source": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TzSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -983,7 +1237,10 @@
           "gmail_email",
           "graduated",
           "no_calls",
-          "contact_name"
+          "set_aside",
+          "contact_name",
+          "timezone",
+          "timezone_source"
         ],
         "title": "Slots",
         "type": "object"
@@ -1050,8 +1307,62 @@
         "title": "Speaker",
         "type": "string"
       },
+      "StepSetAside": {
+        "additionalProperties": false,
+        "description": "They'd rather not do a setup step (a name for you, theirs, what they need, Google). It\nstops being asked for; it comes back only if they bring it up.",
+        "properties": {
+          "kind": {
+            "const": "step_set_aside",
+            "default": "step_set_aside",
+            "title": "Kind",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "step"
+        ],
+        "title": "StepSetAside",
+        "type": "object"
+      },
+      "TimezoneLearned": {
+        "additionalProperties": false,
+        "description": "Where they are, in time: from their Google Calendar's setting, or because they said. What\nthey said wins over the calendar; the pipeline drops a calendar zone after one they said.",
+        "properties": {
+          "kind": {
+            "const": "timezone_learned",
+            "default": "timezone_learned",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/TzSource"
+          }
+        },
+        "required": [
+          "kind",
+          "tz",
+          "source"
+        ],
+        "title": "TimezoneLearned",
+        "type": "object"
+      },
       "ToolCall": {
         "additionalProperties": false,
+        "description": "A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.",
         "properties": {
           "kind": {
             "const": "tool_call",
@@ -1080,13 +1391,45 @@
             ],
             "default": null,
             "title": "Result"
+          },
+          "shown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Shown"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
           }
         },
         "required": [
           "kind",
           "name",
           "args",
-          "result"
+          "result",
+          "shown",
+          "app",
+          "ok"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -1173,6 +1516,15 @@
         ],
         "title": "TypingMessage",
         "type": "object"
+      },
+      "TzSource": {
+        "description": "How we know their timezone. Only what a texting assistant could really know: their\nGoogle Calendar's setting, or what they told us (which wins; they may be travelling).",
+        "enum": [
+          "calendar",
+          "said"
+        ],
+        "title": "TzSource",
+        "type": "string"
       },
       "UserMessage": {
         "additionalProperties": false,
@@ -1334,13 +1686,22 @@
                 "contact_card": "#/$defs/ContactCard",
                 "contact_saved": "#/$defs/ContactSaved",
                 "decision": "#/$defs/Decision",
+                "device_timezone": "#/$defs/DeviceTimezone",
                 "email_draft": "#/$defs/EmailDraft",
+                "forgot": "#/$defs/Forgot",
                 "gmail": "#/$defs/GmailEvent",
                 "graduated": "#/$defs/Graduated",
+                "job_asked": "#/$defs/JobAsked",
+                "job_ended": "#/$defs/JobEnded",
+                "job_started": "#/$defs/JobStarted",
+                "job_told": "#/$defs/JobTold",
                 "reaction": "#/$defs/Reaction",
+                "remembered": "#/$defs/Remembered",
                 "reply_due": "#/$defs/ReplyDue",
                 "reply_started": "#/$defs/ReplyStarted",
                 "slot_changed": "#/$defs/SlotChanged",
+                "step_set_aside": "#/$defs/StepSetAside",
+                "timezone_learned": "#/$defs/TimezoneLearned",
                 "tool_call": "#/$defs/ToolCall",
                 "typing": "#/$defs/Typing",
                 "user_message": "#/$defs/UserMessage",
@@ -1378,6 +1739,12 @@
                 "$ref": "#/$defs/ContactSaved"
               },
               {
+                "$ref": "#/$defs/DeviceTimezone"
+              },
+              {
+                "$ref": "#/$defs/TimezoneLearned"
+              },
+              {
                 "$ref": "#/$defs/CallOptOut"
               },
               {
@@ -1390,6 +1757,9 @@
                 "$ref": "#/$defs/SlotChanged"
               },
               {
+                "$ref": "#/$defs/StepSetAside"
+              },
+              {
                 "$ref": "#/$defs/Graduated"
               },
               {
@@ -1400,6 +1770,24 @@
               },
               {
                 "$ref": "#/$defs/EmailDraft"
+              },
+              {
+                "$ref": "#/$defs/Remembered"
+              },
+              {
+                "$ref": "#/$defs/Forgot"
+              },
+              {
+                "$ref": "#/$defs/JobStarted"
+              },
+              {
+                "$ref": "#/$defs/JobAsked"
+              },
+              {
+                "$ref": "#/$defs/JobTold"
+              },
+              {
+                "$ref": "#/$defs/JobEnded"
               },
               {
                 "$ref": "#/$defs/Decision"
@@ -1683,6 +2071,28 @@
         "title": "Decision",
         "type": "object"
       },
+      "DeviceTimezone": {
+        "additionalProperties": false,
+        "description": "Their browser's timezone. No longer sent or used: a texting assistant couldn't know it.\nKept so older rows still load.",
+        "properties": {
+          "kind": {
+            "const": "device_timezone",
+            "default": "device_timezone",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "tz"
+        ],
+        "title": "DeviceTimezone",
+        "type": "object"
+      },
       "EmailDraft": {
         "additionalProperties": false,
         "properties": {
@@ -1736,6 +2146,41 @@
           "status"
         ],
         "title": "EmailDraft",
+        "type": "object"
+      },
+      "Forgot": {
+        "additionalProperties": false,
+        "description": "The agent forgot a fact, by its number. The pipeline fills in `fact` and drops the\nevent if there is no such fact.",
+        "properties": {
+          "kind": {
+            "const": "forgot",
+            "default": "forgot",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "integer"
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact"
+          }
+        },
+        "required": [
+          "kind",
+          "fact_id",
+          "fact"
+        ],
+        "title": "Forgot",
         "type": "object"
       },
       "GmailEvent": {
@@ -1845,6 +2290,123 @@
         "title": "Initiator",
         "type": "string"
       },
+      "JobAsked": {
+        "additionalProperties": false,
+        "description": "The job needs something from them. It waits until it's told or cancelled.",
+        "properties": {
+          "kind": {
+            "const": "job_asked",
+            "default": "job_asked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "question"
+        ],
+        "title": "JobAsked",
+        "type": "object"
+      },
+      "JobEnded": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_ended",
+            "default": "job_ended",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "outcome",
+          "text"
+        ],
+        "title": "JobEnded",
+        "type": "object"
+      },
+      "JobStarted": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "job_started",
+            "default": "job_started",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "goal"
+        ],
+        "title": "JobStarted",
+        "type": "object"
+      },
+      "JobTold": {
+        "additionalProperties": false,
+        "description": "Their answer, or anything else they said the job should know, passed on to it.",
+        "properties": {
+          "kind": {
+            "const": "job_told",
+            "default": "job_told",
+            "title": "Kind",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job",
+          "text"
+        ],
+        "title": "JobTold",
+        "type": "object"
+      },
       "Reaction": {
         "additionalProperties": false,
         "description": "A tapback (\u2764\ufe0f \ud83d\udc4d \ud83d\ude02 \u2026) on a bubble, by either side. The user's route: a \ud83d\udc4d on\n\"want me to call?\" is an answer. The agent's are recorded only.",
@@ -1898,6 +2460,54 @@
           "removed"
         ],
         "title": "Reaction",
+        "type": "object"
+      },
+      "Remembered": {
+        "additionalProperties": false,
+        "description": "The agent remembered a fact. The pipeline fills in `fact_id` and drops a repeat.",
+        "properties": {
+          "kind": {
+            "const": "remembered",
+            "default": "remembered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fact": {
+            "title": "Fact",
+            "type": "string"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fact Id"
+          }
+        },
+        "required": [
+          "kind",
+          "fact",
+          "app",
+          "fact_id"
+        ],
+        "title": "Remembered",
         "type": "object"
       },
       "ReplyDue": {
@@ -1992,8 +2602,62 @@
         "title": "Speaker",
         "type": "string"
       },
+      "StepSetAside": {
+        "additionalProperties": false,
+        "description": "They'd rather not do a setup step (a name for you, theirs, what they need, Google). It\nstops being asked for; it comes back only if they bring it up.",
+        "properties": {
+          "kind": {
+            "const": "step_set_aside",
+            "default": "step_set_aside",
+            "title": "Kind",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "agent_name",
+              "user_name",
+              "help_need"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "step"
+        ],
+        "title": "StepSetAside",
+        "type": "object"
+      },
+      "TimezoneLearned": {
+        "additionalProperties": false,
+        "description": "Where they are, in time: from their Google Calendar's setting, or because they said. What\nthey said wins over the calendar; the pipeline drops a calendar zone after one they said.",
+        "properties": {
+          "kind": {
+            "const": "timezone_learned",
+            "default": "timezone_learned",
+            "title": "Kind",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/$defs/TzSource"
+          }
+        },
+        "required": [
+          "kind",
+          "tz",
+          "source"
+        ],
+        "title": "TimezoneLearned",
+        "type": "object"
+      },
       "ToolCall": {
         "additionalProperties": false,
+        "description": "A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.",
         "properties": {
           "kind": {
             "const": "tool_call",
@@ -2022,13 +2686,45 @@
             ],
             "default": null,
             "title": "Result"
+          },
+          "shown": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Shown"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
           }
         },
         "required": [
           "kind",
           "name",
           "args",
-          "result"
+          "result",
+          "shown",
+          "app",
+          "ok"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -2060,6 +2756,15 @@
         ],
         "title": "Typing",
         "type": "object"
+      },
+      "TzSource": {
+        "description": "How we know their timezone. Only what a texting assistant could really know: their\nGoogle Calendar's setting, or what they told us (which wins; they may be travelling).",
+        "enum": [
+          "calendar",
+          "said"
+        ],
+        "title": "TzSource",
+        "type": "string"
       },
       "UserMessage": {
         "additionalProperties": false,
@@ -2203,13 +2908,22 @@
         "contact_card": "#/$defs/ContactCard",
         "contact_saved": "#/$defs/ContactSaved",
         "decision": "#/$defs/Decision",
+        "device_timezone": "#/$defs/DeviceTimezone",
         "email_draft": "#/$defs/EmailDraft",
+        "forgot": "#/$defs/Forgot",
         "gmail": "#/$defs/GmailEvent",
         "graduated": "#/$defs/Graduated",
+        "job_asked": "#/$defs/JobAsked",
+        "job_ended": "#/$defs/JobEnded",
+        "job_started": "#/$defs/JobStarted",
+        "job_told": "#/$defs/JobTold",
         "reaction": "#/$defs/Reaction",
+        "remembered": "#/$defs/Remembered",
         "reply_due": "#/$defs/ReplyDue",
         "reply_started": "#/$defs/ReplyStarted",
         "slot_changed": "#/$defs/SlotChanged",
+        "step_set_aside": "#/$defs/StepSetAside",
+        "timezone_learned": "#/$defs/TimezoneLearned",
         "tool_call": "#/$defs/ToolCall",
         "typing": "#/$defs/Typing",
         "user_message": "#/$defs/UserMessage",
@@ -2247,6 +2961,12 @@
         "$ref": "#/$defs/ContactSaved"
       },
       {
+        "$ref": "#/$defs/DeviceTimezone"
+      },
+      {
+        "$ref": "#/$defs/TimezoneLearned"
+      },
+      {
         "$ref": "#/$defs/CallOptOut"
       },
       {
@@ -2259,6 +2979,9 @@
         "$ref": "#/$defs/SlotChanged"
       },
       {
+        "$ref": "#/$defs/StepSetAside"
+      },
+      {
         "$ref": "#/$defs/Graduated"
       },
       {
@@ -2269,6 +2992,24 @@
       },
       {
         "$ref": "#/$defs/EmailDraft"
+      },
+      {
+        "$ref": "#/$defs/Remembered"
+      },
+      {
+        "$ref": "#/$defs/Forgot"
+      },
+      {
+        "$ref": "#/$defs/JobStarted"
+      },
+      {
+        "$ref": "#/$defs/JobAsked"
+      },
+      {
+        "$ref": "#/$defs/JobTold"
+      },
+      {
+        "$ref": "#/$defs/JobEnded"
       },
       {
         "$ref": "#/$defs/Decision"

@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-from app.agent.slots import Slots
+from app.agent.slots import Slots, TzSource
 from app.database import aware
 from app.google.events import GmailPhase
 from app.users.models import UserRow
@@ -43,6 +43,7 @@ class User(BaseModel):
                 graduated=row.graduated,
                 contact_name=row.contact_name,
                 timezone=row.timezone,
+                timezone_source=TzSource(row.timezone_source) if row.timezone_source else None,
                 no_calls=row.no_calls,
                 set_aside=tuple(s for s in row.set_aside.split(",") if s),
             ),
