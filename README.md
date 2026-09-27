@@ -19,6 +19,8 @@ pnpm dev                    # http://localhost:5173, proxies to the backend on :
 
 Enter any 10-digit number on the first screen; each number is its own user. Chrome is the most reliable for the voice call (mic permission required).
 
+To start everyone over (all conversations and progress, connected Google accounts revoked at Google, voice notes): `uv run python -m app.reset --yes` in `backend/` (without `--yes` it only counts). It backs up the database first and refuses during a live call. On Fly: `fly ssh console -a persona-onboarding -C "python -m app.reset --yes"`.
+
 
 ### Google (Gmail + Calendar)
 
