@@ -57,8 +57,8 @@ export function PhoneEntry({ initial = "", error, busy = false, onSubmit }: Prop
         className="text-center"
         exit={{ y: -8, opacity: 0, filter: "blur(4px)", transition: { duration: 0.4 } }}
       >
-        <h1 className="text-2xl font-medium text-white">Enter your phone number</h1>
-        <p className="mt-2 text-sm text-neutral-400">It's how I am differentiating users for this project.</p>
+        <h1 className="text-2xl font-medium text-white">Enter your (fake) phone number</h1>
+        <p className="mt-2 text-sm text-neutral-400">I'm just using this as an easy way to differentiate users.</p>
       </motion.div>
 
       <div className="flex items-end gap-4">
