@@ -73,7 +73,8 @@ def _setup_tools(integrations: Integrations, client: httpx.AsyncClient) -> Funct
     @tools.tool
     async def request_secret(ctx: RunContext[JobDeps], integration_id: str, secret: str) -> str:
         """Text them a secure link to paste one of the integration's secrets. It goes straight
-        into an encrypted store; you never see it. You wait until they've saved it."""
+        into an encrypted store; you never see it. You wait until they've saved it. A secret
+        only ever comes this way, including a new one when a saved one didn't work."""
         if not integrations.configured or integrations.text is None:
             return (
                 "secrets can't be stored here (no CREDENTIALS_KEY); tell them it's not possible yet"
