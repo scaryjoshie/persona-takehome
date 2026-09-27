@@ -17,7 +17,7 @@ import zlib
 
 import websockets
 
-PORT = 8765
+PORT = int(os.environ.get("PORT", "8765"))
 QUIET = float(os.environ.get("QUIET", "7"))  # seconds with no new bubble = done
 OUT = os.path.join(os.path.dirname(__file__), "out", "scenarios")
 
