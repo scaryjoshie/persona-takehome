@@ -32,10 +32,10 @@ For onboarding, **the receptionist already knows the script.** Greet, ask the na
 
 ### Speaking-instruction principles
 
-- Carry the conversation yourself; the back office records things. When the user gives a name or a need, keep going to the next thing; do not wait for confirmation.
+- Carry the conversation yourself; the call agent records things. When the user gives a name or a need, keep going to the next thing; do not wait for confirmation.
 - Never say "one sec" or "let me check." If you must wait, say specifically what you are doing, or ask the next question.
 - State the known state up front: your name, what is still needed, how to explain Gmail in one sentence, what to do if they already know what they want, what to do if they decline.
-- Notes from the back office are authoritative; do not hand off for anything already noted.
+- Notes from the call agent are authoritative; do not hand off for anything already noted.
 - What stays internal (e.g. "still need Gmail") and what may be said aloud.
 - Pre-answer the common off-script questions (what the product does, why Gmail, that skipping is fine) so they need no delegation.
 
@@ -67,14 +67,14 @@ Every speculation is a `decision` event, so the debug panel shows "predicted inb
 
 **Routing rule exception.** The routing pass consumes transcript rows (normally record-only) and emits deltas with origin `system`, so the router's loop guard does not drop them. This is the one explicit exception to "transcripts are never routed."
 
-## As built (2026-09-26): the back-office listener
+## As built (2026-09-26): the call agent
 
 First real calls confirmed the field research: across three test calls GPT-Live delegated **zero** times, while saying things like "I'm texting you a link." So the design does not depend on delegation at all:
 
-- **Listener** (`app/voice/call.py`): after each finished user turn, our own agent runs once with the call so far, the same tools, and the `listener.md` instructions. Its tools record what the user said (name, need, Gmail link); its output is a short silent note to the voice ("Recorded name: Siobhan. Gmail link texted."). One run at a time; turns that arrive during a run trigger one more run.
-- **Speaking prompt** tells the voice a back office listens and records, and to say a link was texted only after a note confirms it. Observed: the voice waits for the note, then says "I just texted it."
+- **CallAgent** (`app/voice/call.py`): after each finished user turn, our own agent runs once with the call so far, the same tools, and the `call_agent.md` instructions. Its tools record what the user said (name, need, Gmail link); its output is a short silent note to the voice ("Recorded name: Siobhan. Gmail link texted."). One run at a time; turns that arrive during a run trigger one more run.
+- **Speaking prompt** tells the voice a call agent listens and records, and to say a link was texted only after a note confirms it. Observed: the voice waits for the note, then says "I just texted it."
 - **Greeting**: on connect, a speakable note tells the voice to greet (and give the reason for the call if the agent placed it). Without it the voice stayed silent until spoken to.
-- **Idempotency in the pipeline, not the prompt**: a second "link sent" is dropped, so the tool texts the link once even when two listener runs both call it (seen in testing).
+- **Idempotency in the pipeline, not the prompt**: a second "link sent" is dropped, so the tool texts the link once even when two call agent runs both call it (seen in testing).
 
 Measured on a synthesized-speech test call: connected in 1.2–1.9 s; slots recorded 2–5 s after the user finished speaking; link texted about 1 s after "text me the Gmail link".
 
@@ -83,7 +83,7 @@ Measured on a synthesized-speech test call: connected in 1.2–1.9 s; slots reco
 Full report: [research/gpt-live-behavior.md](research/gpt-live-behavior.md). What changes:
 
 - **Under-delegation is the dominant real-world failure**, not stalling. Live says "got it" and never hands off, up to ~50% of the time on bad days per one report; LiveKit measured 12 of 15 failures on confirmations. **We must not depend on Live delegating for bookkeeping.** This promotes the "routing pass + inject" path from stretch item to the primary bookkeeping mechanism, and adds a watchdog: if a user turn carried a required intent and no delegation appeared within ~6–8 s, push the work ourselves. Proposed shape, to decide: treat each inferred user voice turn as a delta to the **same agent run loop the text head uses** (same agent, same tools), with its output injected into Live as a note instead of sent as bubbles. Live's own delegation becomes a backup. Slot writes are idempotent, so double handling is harmless. This makes voice an extension of the text *handler*, not just the text agent's model.
-- **Speaking instructions need a trigger-phrase delegation policy**, per OpenAI staff: enumerate the onboarding steps and the spoken cues for each, and add "do not confirm anything before the back office returns."
+- **Speaking instructions need a trigger-phrase delegation policy**, per OpenAI staff: enumerate the onboarding steps and the spoken cues for each, and add "do not confirm anything before the call agent returns."
 - **Delegation timeout.** Time each delegation; after ~5 s inject a speakable "still on it"; after ~15 s fail the step gracefully. Live will not do this itself. (Contradicts the earlier assumption that Live covers dead air; OpenAI's own eval treats silence-during-delegation as a metric.)
 - **Verify the silent-note path** (`respond=False` must produce `thinking.append`), and put nothing secret in any note.
 - **Interruption hygiene is ours.** Flush the browser playback buffer on user speech; gate late backend results with a generation counter so a retracted request's result is not narrated; browser echo cancellation is required. Expect ~0.5 s slower stop than Realtime.

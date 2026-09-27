@@ -1,7 +1,7 @@
 """What the voice means, judged by Jev (a fast classifier with probabilities), not keywords:
 "on it" commits to something and "i'll text you later" doesn't, which no pattern gets right.
 
-Without Jev these return nothing: the back office still runs after every finished turn, just
+Without Jev these return nothing: the call agent still runs after every finished turn, just
 without the early start, and slips go uncorrected."""
 
 from __future__ import annotations

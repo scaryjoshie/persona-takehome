@@ -61,7 +61,7 @@ agent: Agent[Deps, str] = Agent(
 @agent.instructions
 async def dynamic_instructions(ctx: RunContext[Deps]) -> str:
     d = ctx.deps
-    if d.medium is Medium.VOICE and not d.back_office:
+    if d.medium is Medium.VOICE and not d.call_agent:
         return ""  # the Live backend: its snapshot would go stale; state reaches it as notes
     # Read fresh: tools earlier in this same run may have just saved a name.
     user = await d.pipeline.user(d.phone)
@@ -114,7 +114,7 @@ async def say(deps: Deps, text: str) -> None:
 
 
 # Who may use which tool. By text the agent does everything itself. On a call the voice only
-# talks (and hangs up); the back office records what was said and sends what was promised.
+# talks (and hangs up); the call agent records what was said and sends what was promised.
 
 
 Prepare = Callable[[RunContext[Deps], ToolDefinition], Awaitable[ToolDefinition | None]]
@@ -126,11 +126,11 @@ async def only_text(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefiniti
 
 async def not_the_voice(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
     d = ctx.deps
-    return tool if d.medium is Medium.TEXT or d.back_office else None
+    return tool if d.medium is Medium.TEXT or d.call_agent else None
 
 
-async def only_back_office(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    return tool if ctx.deps.back_office else None
+async def only_call_agent(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
+    return tool if ctx.deps.call_agent else None
 
 
 async def only_on_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
@@ -138,12 +138,12 @@ async def only_on_call(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefin
 
 
 def acting(inner: Prepare) -> Prepare:
-    """A tool that does something (sends, drafts, texts). On a call, the back office only gets
+    """A tool that does something (sends, drafts, texts). On a call, the call agent only gets
     it on a run after a voice turn: two keys, their ask or yes and then the voice saying it's
     on it, so nothing happens that the voice doesn't know about."""
 
     async def prepare(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-        if ctx.deps.back_office and not ctx.deps.may_act:
+        if ctx.deps.call_agent and not ctx.deps.may_act:
             return None
         return await inner(ctx, tool)
 
@@ -333,7 +333,7 @@ async def start_call(ctx: RunContext[Deps], reason: str) -> str:
     return "calling now; the user's phone is ringing"
 
 
-@agent.tool(prepare=acting(only_back_office))
+@agent.tool(prepare=acting(only_call_agent))
 async def send_text(ctx: RunContext[Deps], text: str) -> str:
     """Text the user during the call. Only what the voice said out loud it would text."""
     await say(ctx.deps, text)
@@ -367,7 +367,7 @@ async def graduate(ctx: RunContext[Deps], first_action: str) -> str:
 
 
 async def with_jobs(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    """By text or for the back office; never the voice itself."""
+    """By text or for the call agent; never the voice itself."""
     d = ctx.deps
     return None if d.env.jobs is None else await not_the_voice(ctx, tool)
 
@@ -409,9 +409,9 @@ async def cancel_job(ctx: RunContext[Deps], job: str) -> str:
 
 
 async def google_connected(ctx: RunContext[Deps], tool: ToolDefinition) -> ToolDefinition | None:
-    """Email and calendar tools: by text or for the back office, once Google is connected."""
+    """Email and calendar tools: by text or for the call agent, once Google is connected."""
     d = ctx.deps
-    speaking = d.medium is Medium.VOICE and not d.back_office
+    speaking = d.medium is Medium.VOICE and not d.call_agent
     connected = d.user.slots.gmail is GmailPhase.CONNECTED and d.env.google is not None
     return tool if connected and not speaking else None
 

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     openai_api_key: SecretStr | None = None
-    agent_model: str = "gpt-6-sol"  # texts, and the back office on calls
+    agent_model: str = "gpt-6-sol"  # texts, and the call agent on calls
     agent_reasoning_effort: str = "low"  # measured: ~25% faster than default, same replies
     openai_live_model: str = "gpt-live-1"  # the voice on calls
     openai_live_backend_model: str | None = None  # empty = Live's default backend

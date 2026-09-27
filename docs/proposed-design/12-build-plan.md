@@ -21,7 +21,7 @@ backend/app/
   users/    models.py  user.py (User, Medium)  service.py
   gmail/    events.py
   text/     events.py (incl. ReplyDue, ReplyStarted)  timing.py (pure)  responder.py  reply.py  voice_notes.py
-  voice/    events.py  call_state.py (CallEvent, CallState, next_state)  responder.py (VoiceResponder, LiveCall, call_note)  call.py (one call: audio, captions, listener)  routes.py
+  voice/    events.py  call_state.py (CallEvent, CallState, next_state)  responder.py (VoiceResponder, LiveCall, call_note)  call.py (one call: audio, captions, call agent)  routes.py
   agent/    agent.py  deps.py (incl. Messenger)  prompts.py + prompts/*.md  objectives.py  context.py  slots.py  events.py  model.py
   web/      protocol.py (every browser message)  routes.py  sockets.py  schema.py
   previews/ fetch.py  routes.py
@@ -34,7 +34,7 @@ The medium contract is one method, `handle(event, user, ctx) -> Decision | None`
 1. **Core with tests.** *Done 2026-09-25, restructured 2026-09-26 (44 tests): sections own their types and rendering; SQLite is the only data store; runtime holds live things only; actions own transactions.*
 2a. **Shared agent + text handler.** *Done 2026-09-26: markdown prompts, seven tools, bubble delivery, CLI; smoke-tested on the real model.* Deltas simulated in code, no keys. "Hangs up after giving name" is just a delta sequence, so these tests are the harness seed.
 2b. **Text-only onboarding end to end.** *Backend done 2026-09-26: session endpoint, browser WebSocket, web messenger, schema export, static serving; verified against the real model over a real socket. Remaining: point the frontend at it.* Phone UI, text handler, tools, slots, debug panel. Completes the whole flow by text, which is the fallback requirement on its own.
-3. **Voice.** *Built 2026-09-26: `/ws/audio`, GPT-Live session via pydantic-ai, captions, utterances, back-office listener, greeting, hang-up from any side. Verified with synthesized speech. Not built: the gpt-realtime fallback.* One-day spike on GPT-Live first (connect, stream mic, see transcripts, `send()` a note, close). Then call screens, the audio relay socket, injection, hang-up handling. Fallback to Realtime if the spike fails.
+3. **Voice.** *Built 2026-09-26: `/ws/audio`, GPT-Live session via pydantic-ai, captions, utterances, call agent, greeting, hang-up from any side. Verified with synthesized speech. Not built: the gpt-realtime fallback.* One-day spike on GPT-Live first (connect, stream mic, see transcripts, `send()` a note, close). Then call screens, the audio relay socket, injection, hang-up handling. Fallback to Realtime if the spike fails.
 4. **Gmail.** OAuth, the connected event injected mid-call, the mock-inbox moment.
 5. **Polish.** Graduation path, prompt tuning, stress scripts, README and write-up, video.
 

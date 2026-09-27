@@ -217,7 +217,7 @@ def what_you_know(slots: Slots, call: CallState) -> str:
 def remembered(memory: Memory, *, summary: bool = True, numbered: bool = True) -> str:
     """The summary of the conversation before the latest messages, and the facts remembered
     about them, for the top of a prompt. Empty when there's neither. The voice gets them
-    unnumbered: it doesn't forget things (the back office does), so numbers could only leak."""
+    unnumbered: it doesn't forget things (the call agent does), so numbers could only leak."""
     parts: list[str] = []
     if summary and memory.summary:
         parts.append(

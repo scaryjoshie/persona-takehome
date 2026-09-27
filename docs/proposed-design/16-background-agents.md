@@ -32,7 +32,7 @@ Open jobs come from the job table, not the recent events, and are rendered into 
 
 ## Graduation
 
-Jobs exist only after graduation. `graduate(first_action)` starts the first job on the first action. `start_job`, `tell_job`, `cancel_job` appear once they've graduated (text, and the call's back office; never the voice). On a call, starting and cancelling take the two keys like any other action; `tell_job` doesn't, since it records what they said.
+Jobs exist only after graduation. `graduate(first_action)` starts the first job on the first action. `start_job`, `tell_job`, `cancel_job` appear once they've graduated (text, and the call agent; never the voice). On a call, starting and cancelling take the two keys like any other action; `tell_job` doesn't, since it records what they said.
 
 ## Measured (live, 2026-09-27, gpt-6-sol with native web search)
 

@@ -138,26 +138,26 @@ async def tools_for(
     return seen
 
 
-async def test_on_a_call_only_the_back_office_records_and_sends(
+async def test_on_a_call_only_the_call_agent_records_and_sends(
     pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:
     voice = await tools_for(pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE))
     assert voice == {"end_call"}
     office = await tools_for(
-        pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE, back_office=True)
+        pipeline, messenger, lambda env, u: env.deps(u, Medium.VOICE, call_agent=True)
     )
     assert {"set_user_name", "send_gmail_link", "send_text", "end_call"} <= office
     assert "start_call" not in office
 
 
-async def test_the_back_office_acts_only_after_a_voice_turn(
+async def test_the_call_agent_acts_only_after_a_voice_turn(
     pipeline: Pipeline, messenger: CapturingMessenger
 ) -> None:
     """Two keys: after their turn it records facts; sending waits for the voice to say so."""
     theirs = await tools_for(
         pipeline,
         messenger,
-        lambda env, u: env.deps(u, Medium.VOICE, back_office=True, may_act=False),
+        lambda env, u: env.deps(u, Medium.VOICE, call_agent=True, may_act=False),
     )
     assert {"set_user_name", "set_agent_name", "record_help_need", "set_aside"} <= theirs
     assert not {"send_gmail_link", "send_text", "send_contact_card"} & theirs

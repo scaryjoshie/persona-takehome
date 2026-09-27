@@ -9,7 +9,7 @@ While the call is up, these run at once:
 - state: whenever a fact changes, a silent note with where things stand
 
 One brain: the voice only talks (and hangs up). After each finished turn, from either side,
-the back office (Listener) records what was said and sends what was asked for or promised.
+the call agent (CallAgent) records what was said and sends what was asked for or promised.
 
 The call ends the first time any of these happens: the browser socket closes (the user
 hung up, closed the tab, or lost the network), the agent's end_call tool fires, or the Live
@@ -149,9 +149,9 @@ async def run_call(
             await state.send_now()
             unsubscribe_state = pipeline.subscribe(phone, state.changed, kinds=STATE_KINDS)
             await session.send(_opener(user))
-            listener = Listener(env, call, phone)
-            transcript = Transcript(phone, pipeline, push, call, listener, env.jev)
-            call.wake = lambda: listener.heard(voice=False)  # a text: the voice answers it first
+            call_agent = CallAgent(env, call, phone)
+            transcript = Transcript(phone, pipeline, push, call, call_agent, env.jev)
+            call.wake = lambda: call_agent.heard(voice=False)  # a text: the voice answers it first
             tasks = [
                 asyncio.create_task(_microphone(websocket, session, end)),
                 asyncio.create_task(_speaker(websocket, session)),
@@ -238,7 +238,7 @@ def _speaker_of(raw: str) -> Speaker:
 
 class Transcript:
     """Captions and utterances for one call. Each finished turn is recorded under the id its
-    captions used (so the browser replaces the caption), and wakes the back office."""
+    captions used (so the browser replaces the caption), and wakes the call agent."""
 
     def __init__(
         self,
@@ -246,14 +246,14 @@ class Transcript:
         pipeline: Pipeline,
         push: Push,
         call: LiveCall,
-        listener: Listener,
+        call_agent: CallAgent,
         jev: Jev | None = None,
     ) -> None:
         self._phone = phone
         self._call = call
         self._pipeline = pipeline
         self._push = push
-        self._listener = listener
+        self._call_agent = call_agent
         self._open: dict[Speaker, tuple[str, str]] = {}  # speaker → (turn_id, text so far)
         self._committed: set[str] = set()  # voice turns already handed over mid-sentence
         self._checking: set[str] = set()  # voice turns with a Jev question in flight
@@ -277,11 +277,11 @@ class Transcript:
             asyncio.create_task(self._check_slip(text))  # noqa: RUF006 (short-lived)
         else:
             await self._call.user_started()  # their speech counts even if no caption came
-        self._listener.heard(voice=speaker is Speaker.AGENT)
+        self._call_agent.heard(voice=speaker is Speaker.AGENT)
 
     async def _check_commit(self, turn_id: str, saying: str) -> None:
         """At each sentence the voice finishes, ask Jev whether it just said it's on something;
-        if so, the back office acts now rather than when the whole turn ends."""
+        if so, the call agent acts now rather than when the whole turn ends."""
         if turn_id in self._checking:
             return
         self._checking.add(turn_id)
@@ -291,7 +291,7 @@ class Transcript:
             recent = last_lines(events, user.slots.zone())
             if turn_id not in self._committed and await commits(self._jev, recent, saying):
                 self._committed.add(turn_id)
-                self._listener.heard(voice=True, saying=saying)
+                self._call_agent.heard(voice=True, saying=saying)
         finally:
             self._checking.discard(turn_id)
 
@@ -426,7 +426,7 @@ async def _signals(session: RealtimeSession, call: LiveCall) -> None:
 
 class StateNotes:
     """Where things stand, as a silent note: once at the start, then after every change.
-    Changes that land together (a back-office run often records two) go as one note."""
+    Changes that land together (a call agent run often records two) go as one note."""
 
     SETTLE = 0.3  # seconds
 
@@ -493,14 +493,14 @@ THEIR_TURN = (
     "You were woken because they just finished a turn: record facts only. Anything to send "
     "or draft waits for the voice to say it's on it; you'll be woken again then."
 )
-BACK_OFFICE_STEPS = 4  # model requests per run: a runaway run must not block the next turn
-BACK_OFFICE_SECONDS = 15.0
+CALL_AGENT_STEPS = 4  # model requests per run: a runaway run must not block the next turn
+CALL_AGENT_SECONDS = 15.0
 
 
-class Listener:
-    """The back office. After each finished turn, from either side, run the agent once with
+class CallAgent:
+    """The call agent. After each finished turn, from either side, run the agent once with
     the call so far. Its tools record what the user said and do what the user asked for or
-    the voice promised; it never decides anything itself (listener.md). Its output, if any,
+    the voice promised; it never decides anything itself (call_agent.md). Its output, if any,
     goes to the voice as a silent note.
 
     GPT-Live's own delegation is not relied on: in practice it rarely delegates
@@ -552,19 +552,19 @@ class Listener:
                 run = agent.run(
                     None,
                     message_history=history,
-                    deps=self._env.deps(user, Medium.VOICE, back_office=True, may_act=act),
+                    deps=self._env.deps(user, Medium.VOICE, call_agent=True, may_act=act),
                     output_type=str,  # plain text: a structured note got answered in prose
                     model=self._env.model,
-                    instructions=f"{prompts.LISTENER}\n\n{woke}",
-                    usage_limits=UsageLimits(request_limit=BACK_OFFICE_STEPS),
+                    instructions=f"{prompts.CALL_AGENT}\n\n{woke}",
+                    usage_limits=UsageLimits(request_limit=CALL_AGENT_STEPS),
                 )
-                note = (await asyncio.wait_for(run, BACK_OFFICE_SECONDS)).output.strip()
+                note = (await asyncio.wait_for(run, CALL_AGENT_SECONDS)).output.strip()
                 if note and note.strip(".").lower() not in ("null", "none"):
                     # After acting, the note is the outcome of something they asked for ("sent"):
                     # they're waiting on it. After their turn it's only background.
                     await (self._call.tell(note) if act else self._call.whisper(note))
             except Exception:
-                log.exception("%s: listener run failed", self._phone)
-            log.info("%s: back office ran in %.1fs", self._phone, time.monotonic() - started)
+                log.exception("%s: call agent run failed", self._phone)
+            log.info("%s: call agent ran in %.1fs", self._phone, time.monotonic() - started)
             if not self._again:
                 return

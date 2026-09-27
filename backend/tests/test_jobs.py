@@ -211,7 +211,7 @@ async def test_a_restart_picks_running_jobs_back_up(
     assert (await row(db, "abc123")).status == "done"
 
 
-async def test_job_tools_are_there_by_text_and_for_the_back_office_but_not_the_voice(
+async def test_job_tools_are_there_by_text_and_for_the_call_agent_but_not_the_voice(
     app: App,
 ) -> None:
     pipeline = app.pipeline
@@ -231,8 +231,8 @@ async def test_job_tools_are_there_by_text_and_for_the_back_office_but_not_the_v
     assert {"start_job", "tell_job", "cancel_job"} <= set(
         await tools_for(app.env.deps(user, Medium.TEXT))
     )
-    back_office = await tools_for(app.env.deps(user, Medium.VOICE, back_office=True))
-    assert {"start_job", "tell_job"} <= set(back_office)
+    call_agent = await tools_for(app.env.deps(user, Medium.VOICE, call_agent=True))
+    assert {"start_job", "tell_job"} <= set(call_agent)
     voice = await tools_for(app.env.deps(user, Medium.VOICE))
     assert not {"start_job", "tell_job"} & set(voice)
 

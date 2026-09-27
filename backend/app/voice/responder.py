@@ -97,9 +97,9 @@ class LiveCall:
     hang_up_reason: str = "agent_hangup"
     last_sound: float = field(default_factory=time.monotonic)  # anyone speaking, for silence
     heard_at: float = 0.0  # when they last spoke
-    wake: Callable[[], None] = lambda: None  # run the back office (a text arrived mid-call)
+    wake: Callable[[], None] = lambda: None  # run the call agent (a text arrived mid-call)
     check_ins: int = 0  # times the voice checked in on a silent line since they last spoke
-    closed: bool = False  # the call ended; late sends (a back-office run finishing) are dropped
+    closed: bool = False  # the call ended; late sends (a call agent run finishing) are dropped
     steer_waiting: str | None = None  # the latest instructions, held while the voice speaks
 
     async def send(self, text: str, *, speak: bool) -> None:
@@ -111,7 +111,7 @@ class LiveCall:
                 return
             try:
                 await self.session.send(piece, respond=speak and i == len(pieces) - 1)
-            except UserError:  # the session closed under us (a late back-office run)
+            except UserError:  # the session closed under us (a late call agent run)
                 self.closed = True
                 return
 
@@ -154,7 +154,7 @@ class LiveCall:
         self.last_agent_line = line
 
     async def whisper(self, text: str) -> None:
-        """Background for the voice (where things stand, what the back office did). If it's
+        """Background for the voice (where things stand, what the call agent did). If it's
         the voice's turn, it goes in now so the reply uses it. Otherwise it waits until they
         next start talking: sent to a voice that has finished its turn, even silent context
         tends to make it speak up unprompted."""
@@ -221,7 +221,7 @@ class VoiceResponder:
         if call is not None:
             call.last_sound = time.monotonic()  # a text or typing counts as them being there
             if isinstance(event.payload, UserMessage):
-                call.wake()  # the back office acts on texts too ("yes send it")
+                call.wake()  # the call agent acts on texts too ("yes send it")
         note = call_note(event)
         if note is None:
             return None

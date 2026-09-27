@@ -27,7 +27,7 @@ class Messenger(Protocol):
 class AgentEnv:
     pipeline: Pipeline
     messenger: Messenger
-    model: Model  # the text model; also runs the call's back-office listener
+    model: Model  # the text model; also runs the call agent
     app_base_url: str  # for links the agent sends, like the Gmail link
     # Ask the live call to hang up once the voice's goodbye has played. False: no live call.
     hang_up: Callable[[str], bool] | None = None
@@ -41,7 +41,7 @@ class AgentEnv:
         medium: Medium,
         *,
         first_reply: bool = False,
-        back_office: bool = False,
+        call_agent: bool = False,
         may_act: bool = True,
     ) -> Deps:
         return Deps(
@@ -49,7 +49,7 @@ class AgentEnv:
             medium=medium,
             env=self,
             first_reply=first_reply,
-            back_office=back_office,
+            call_agent=call_agent,
             may_act=may_act,
         )
 
@@ -60,9 +60,9 @@ class Deps:
     medium: Medium
     env: AgentEnv
     # On a call two runs use the voice medium: the Live backend (the voice's own delegation)
-    # and the back office. Only the back office records facts and sends things.
-    back_office: bool = False
-    # Two keys for the back office's actions: it runs after a voice turn, so the voice has
+    # and the call agent. Only the call agent records facts and sends things.
+    call_agent: bool = False
+    # Two keys for the call agent's actions: it runs after a voice turn, so the voice has
     # just said it's doing the thing. After their turn it only records facts.
     may_act: bool = True
     after_reply: list[str] = field(default_factory=lambda: [])  # texts to send after the bubbles
