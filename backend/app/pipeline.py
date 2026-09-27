@@ -31,7 +31,7 @@ from app.events.payload import Channel, Origin, Payload
 from app.google.events import GmailEvent, GmailPhase
 from app.memory import service as memories
 from app.memory.events import Forgot, Remembered
-from app.memory.service import Memory, Summary
+from app.memory.service import Fact, Memory, Summary
 from app.text.events import Typing
 from app.timers import Clock, Timers
 from app.users import service as users
@@ -101,6 +101,11 @@ class Pipeline:
     async def memory(self, phone: str) -> Memory:
         async with self._db() as s:
             return await memories.memory(s, phone)
+
+    async def facts(self, phone: str, *, app: str | None = None) -> tuple[Fact, ...]:
+        """What's remembered about them; with `app`, only the facts about that service."""
+        async with self._db() as s:
+            return await memories.facts(s, phone, app=app)
 
     async def conversation(self, phone: str) -> tuple[Memory, list[Event]]:
         """What a model sees of them: the memory, and the events its summary doesn't cover."""
@@ -271,8 +276,8 @@ async def _apply(s: AsyncSession, user: User, payload: Payload, now: datetime) -
             if user.slots.graduated:
                 return None
             await users.set_slots(s, user.phone, graduated=True)
-        case Remembered(fact=fact):
-            fact_id = await memories.add_fact(s, user.phone, fact, now=now)
+        case Remembered(fact=fact, app=app):
+            fact_id = await memories.add_fact(s, user.phone, fact, app=app, now=now)
             if fact_id is None:
                 return None
             return payload.model_copy(update={"fact_id": fact_id})

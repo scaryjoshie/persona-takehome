@@ -24,21 +24,26 @@ class SlotChanged(Payload):
 
 
 class ToolCall(Payload):
+    """A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets."""
+
     kind: Literal["tool_call"] = "tool_call"
     routes = False
 
-    name: str
+    name: str  # the action, like search_email
     args: dict[str, Any]
     result: dict[str, Any] | None = None
-    # What a lookup showed the agent (email headers, calendar events), kept short, so later
-    # turns can still refer to it. Bodies aren't kept: it can open an email again by its id.
+    # What it showed or did, kept short, so later turns can still refer to it (email headers,
+    # calendar events). Bodies aren't kept: it can open an email again by its id.
     shown: str | None = None
+    app: str | None = None  # the service it used ("google"), or None for the agent's own tools
+    ok: bool = True
 
     def turn(self, at: datetime) -> Turn | None:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.items())
         result = "" if self.result is None else f" → {self.result}"
+        failed = " (failed)" if not self.ok else ""
         shown = f", and saw:\n{self.shown}" if self.shown else ""
-        return Turn(Role.NOTE, f"you called {self.name}({args}){result}{shown}")
+        return Turn(Role.NOTE, f"you called {self.name}({args}){result}{failed}{shown}")
 
 
 class Graduated(Payload):

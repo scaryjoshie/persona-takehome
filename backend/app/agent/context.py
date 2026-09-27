@@ -10,7 +10,7 @@ from app.agent.slots import DEFAULT_TZ, Slots, TzSource
 from app.events.event import Event
 from app.events.payload import Role, Turn
 from app.google.events import GmailPhase
-from app.memory.service import Memory
+from app.memory.service import Fact, Memory
 from app.voice.call_state import CallEvent, CallPhase, CallState, CallTransition
 from app.voice.events import VoiceUtterance
 
@@ -213,8 +213,12 @@ def remembered(memory: Memory, *, summary: bool = True, numbered: bool = True) -
             + memory.summary.text
         )
     if memory.facts:
-        lines = "\n".join(
-            f"- [{f.id}] {f.text}" if numbered else f"- {f.text}" for f in memory.facts
-        )
+        lines = "\n".join(_fact_line(f, numbered=numbered) for f in memory.facts)
         parts.append(f"## What you remember about them\n\n{lines}")
     return "\n\n".join(parts)
+
+
+def _fact_line(fact: Fact, *, numbered: bool) -> str:
+    about = f"({fact.app}) " if fact.app else ""
+    number = f"[{fact.id}] " if numbered else ""
+    return f"- {number}{about}{fact.text}"

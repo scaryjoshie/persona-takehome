@@ -18,6 +18,7 @@ MAX_FACTS = 50  # the most recent ones, if it ever remembers more
 class Fact:
     id: int
     text: str
+    app: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,14 +41,19 @@ class Memory:
         return self.summary.through_seq if self.summary else 0
 
 
-async def add_fact(session: AsyncSession, phone: str, text: str, *, now: datetime) -> int | None:
+async def add_fact(
+    session: AsyncSession, phone: str, text: str, *, app: str | None = None, now: datetime
+) -> int | None:
     """The new fact's id, or None if it's already remembered."""
     same = select(FactRow).where(
-        FactRow.user_phone == phone, FactRow.text == text, col(FactRow.forgotten_at).is_(None)
+        FactRow.user_phone == phone,
+        FactRow.text == text,
+        FactRow.app == app,
+        col(FactRow.forgotten_at).is_(None),
     )
     if (await session.exec(same)).first() is not None:
         return None
-    row = FactRow(user_phone=phone, text=text, created_at=now)
+    row = FactRow(user_phone=phone, text=text, app=app, created_at=now)
     session.add(row)
     await session.flush()
     return row.id
@@ -65,17 +71,21 @@ async def forget_fact(
     return row.text
 
 
+async def facts(session: AsyncSession, phone: str, *, app: str | None = None) -> tuple[Fact, ...]:
+    """What's remembered about them, oldest first (the latest MAX_FACTS); with `app`, only
+    the facts about that service."""
+    query = select(FactRow).where(FactRow.user_phone == phone, col(FactRow.forgotten_at).is_(None))
+    if app is not None:
+        query = query.where(FactRow.app == app)
+    rows = await session.exec(query.order_by(col(FactRow.id).desc()).limit(MAX_FACTS))
+    return tuple(Fact(r.id, r.text, r.app) for r in reversed(rows.all()) if r.id is not None)
+
+
 async def memory(session: AsyncSession, phone: str) -> Memory:
-    rows = await session.exec(
-        select(FactRow)
-        .where(FactRow.user_phone == phone, col(FactRow.forgotten_at).is_(None))
-        .order_by(col(FactRow.id).desc())
-        .limit(MAX_FACTS)
-    )
-    facts = tuple(Fact(r.id, r.text) for r in reversed(rows.all()) if r.id is not None)
+    facts_now = await facts(session, phone)
     row = await session.get(SummaryRow, phone)
     summary = Summary(row.through_seq, row.text) if row else None
-    return Memory(summary, facts)
+    return Memory(summary, facts_now)
 
 
 async def set_summary(

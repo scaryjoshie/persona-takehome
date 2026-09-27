@@ -15,8 +15,9 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.agent.agent import agent
-from app.agent.context import to_model_messages, turns
+from app.agent.context import remembered, to_model_messages, turns
 from app.agent.deps import AgentEnv
+from app.agent.events import ToolCall
 from app.agent.slots import DEFAULT_TZ
 from app.database import SessionFactory
 from app.events.event import Event
@@ -202,3 +203,40 @@ async def test_reset_forgets_memory(pipeline: Pipeline) -> None:
     await pipeline.reset(PHONE)
     memory = await pipeline.memory(PHONE)
     assert memory.facts == () and memory.summary is None
+
+
+# ---- facts about one service, and tool results shared with background jobs ------------
+
+
+async def test_facts_can_be_about_one_app(pipeline: Pipeline) -> None:
+    await remember(pipeline, "likes mornings")
+    order = Remembered(fact="usual order is pad see ew, no peanuts", app="DoorDash")
+    saved = await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, order)
+    assert saved is not None and isinstance(saved.payload, Remembered)
+    same_text_other_app = Remembered(fact="usual order is pad see ew, no peanuts", app="Uber Eats")
+    assert await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, same_text_other_app)
+
+    doordash = await pipeline.facts(PHONE, app="DoorDash")
+    assert [(f.text, f.app) for f in doordash] == [
+        ("usual order is pad see ew, no peanuts", "DoorDash")
+    ]
+    assert len(await pipeline.facts(PHONE)) == 3  # the chat agent sees them all
+    assert f"[{saved.payload.fact_id}] (DoorDash) usual order" in remembered(
+        await pipeline.memory(PHONE)
+    )
+    assert "you remembered (DoorDash):" in turns([saved], UTC)[0].text
+
+    gone = Forgot(fact_id=saved.payload.fact_id or 0)
+    await pipeline.submit(PHONE, Origin.TEXT_AGENT, Channel.TEXT, gone)  # one forget, everywhere
+    assert await pipeline.facts(PHONE, app="DoorDash") == ()
+
+
+async def test_google_tools_are_marked_and_failures_show(
+    db: SessionFactory, pipeline: Pipeline, messenger: CapturingMessenger
+) -> None:
+    google = await connected(db, pipeline, FakeGoogle())
+    await reply(pipeline, messenger, google, [ToolCallPart("search_email", {"query": "heater"})])
+    calls = [e.payload for e in await pipeline.history(PHONE) if isinstance(e.payload, ToolCall)]
+    assert [(c.name, c.app, c.ok) for c in calls] == [("search_email", "google", True)]
+    failed = ToolCall(name="place_order", args={}, app="DoorDash", ok=False, shown="store closed")
+    assert "place_order() (failed), and saw:\nstore closed" in failed.turn(T0).text  # pyright: ignore[reportOptionalMemberAccess]

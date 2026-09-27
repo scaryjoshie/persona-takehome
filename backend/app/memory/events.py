@@ -15,10 +15,12 @@ class Remembered(Payload):
     routes = False
 
     fact: str
+    app: str | None = None  # the service it's about, so work in that app can pull just these
     fact_id: int | None = None
 
     def turn(self, at: datetime) -> Turn | None:
-        return Turn(Role.NOTE, f"you remembered: {self.fact}")
+        about = f" ({self.app})" if self.app else ""
+        return Turn(Role.NOTE, f"you remembered{about}: {self.fact}")
 
 
 class Forgot(Payload):

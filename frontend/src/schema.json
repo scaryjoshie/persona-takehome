@@ -878,6 +878,18 @@
             "title": "Fact",
             "type": "string"
           },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
           "fact_id": {
             "anyOf": [
               {
@@ -894,6 +906,7 @@
         "required": [
           "kind",
           "fact",
+          "app",
           "fact_id"
         ],
         "title": "Remembered",
@@ -1195,6 +1208,7 @@
       },
       "ToolCall": {
         "additionalProperties": false,
+        "description": "A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.",
         "properties": {
           "kind": {
             "const": "tool_call",
@@ -1235,6 +1249,23 @@
             ],
             "default": null,
             "title": "Shown"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1242,7 +1273,9 @@
           "name",
           "args",
           "result",
-          "shown"
+          "shown",
+          "app",
+          "ok"
         ],
         "title": "ToolCall",
         "type": "object"
@@ -2152,6 +2185,18 @@
             "title": "Fact",
             "type": "string"
           },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
           "fact_id": {
             "anyOf": [
               {
@@ -2168,6 +2213,7 @@
         "required": [
           "kind",
           "fact",
+          "app",
           "fact_id"
         ],
         "title": "Remembered",
@@ -2293,6 +2339,7 @@
       },
       "ToolCall": {
         "additionalProperties": false,
+        "description": "A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.",
         "properties": {
           "kind": {
             "const": "tool_call",
@@ -2333,6 +2380,23 @@
             ],
             "default": null,
             "title": "Shown"
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "App"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2340,7 +2404,9 @@
           "name",
           "args",
           "result",
-          "shown"
+          "shown",
+          "app",
+          "ok"
         ],
         "title": "ToolCall",
         "type": "object"

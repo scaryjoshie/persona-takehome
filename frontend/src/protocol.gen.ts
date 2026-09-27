@@ -223,6 +223,9 @@ export interface VoiceUtterance {
   text: string | null;
   turn_id: string;
 }
+/**
+ * A tool the agent (or a background job) used, kept compact: no raw payloads, no secrets.
+ */
 export interface ToolCall {
   kind: "tool_call";
   name: string;
@@ -233,6 +236,8 @@ export interface ToolCall {
     [k: string]: unknown;
   } | null;
   shown: string | null;
+  app: string | null;
+  ok: boolean;
 }
 /**
  * The agent recorded a name or the help need. The pipeline fills in `old` and drops the
@@ -284,6 +289,7 @@ export interface EmailDraft {
 export interface Remembered {
   kind: "remembered";
   fact: string;
+  app: string | null;
   fact_id: number | null;
 }
 /**

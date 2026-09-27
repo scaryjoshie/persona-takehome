@@ -83,8 +83,9 @@ async def _record(
     result: dict[str, Any],
     *,
     shown: str | None = None,
+    app: str | None = None,
 ) -> None:
-    await _submit(ctx, ToolCall(name=name, args=args, result=result, shown=shown))
+    await _submit(ctx, ToolCall(name=name, args=args, result=result, shown=shown, app=app))
 
 
 async def _submit(ctx: RunContext[Deps], payload: Payload) -> bool:
@@ -223,14 +224,16 @@ async def record_help_need(ctx: RunContext[Deps], need: str) -> str:
 
 
 @agent.tool(prepare=not_the_voice)
-async def remember(ctx: RunContext[Deps], fact: str) -> str:
+async def remember(ctx: RunContext[Deps], fact: str, app: str = "") -> str:
     """Remember something about them worth knowing next week, in one short sentence: who
-    someone in their life is, a preference, a routine, a constraint, a plan. Not their name,
-    your name, or what they want help with first: those have their own tools."""
+    someone in their life is, a preference, a routine, a constraint, a plan. Only what they
+    said or agreed to, never your own guess about them. Not their name, your name, or what they
+    want help with first: those have their own tools. `app`: the service it's about, if it's
+    about one ("DoorDash" for their usual order), so work in that app can find it."""
     fact = fact.strip()
     if not fact:
         return "nothing to remember"
-    if not await _submit(ctx, Remembered(fact=fact)):
+    if not await _submit(ctx, Remembered(fact=fact, app=app.strip() or None)):
         return "you already remember that"
     return "remembered"
 
@@ -372,14 +375,16 @@ async def search_email(ctx: RunContext[Deps], query: str) -> str:
     found = await (await _account(ctx)).search(query)
     lines = "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({m.snippet})" for m in found)
     kept = "\n".join(f"[{m.id}] {m.sender}: {m.subject} ({_clip(m.snippet)})" for m in found)
-    await _record(ctx, "search_email", {"query": query}, {"found": len(found)}, shown=kept)
+    await _record(
+        ctx, "search_email", {"query": query}, {"found": len(found)}, shown=kept, app="google"
+    )
     return lines or "none"
 
 
 @agent.tool(prepare=google_connected)
 async def read_email(ctx: RunContext[Deps], message_id: str) -> str:
     """Open one email by the id from search_email."""
-    await _record(ctx, "read_email", {"message_id": message_id}, {})
+    await _record(ctx, "read_email", {"message_id": message_id}, {}, app="google")
     return await (await _account(ctx)).read(message_id)
 
 
@@ -403,7 +408,7 @@ async def draft_email(
         )
     except ValueError as exc:
         return str(exc)
-    await _record(ctx, "draft_email", {"ref": draft.ref, "subject": subject}, {})
+    await _record(ctx, "draft_email", {"ref": draft.ref, "subject": subject}, {}, app="google")
     gaps = f"; it's missing {', '.join(draft.missing)}" if draft.missing else ""
     return (
         f"draft {draft.ref} was texted to them as an image{gaps}. don't retype it; ask whether "
@@ -419,7 +424,7 @@ async def send_draft(ctx: RunContext[Deps], ref: str) -> str:
         sent = await drafts.send(d.pipeline, d.phone, await _account(ctx), ref)
     except ValueError as exc:
         return f"not sent: {exc}"
-    await _record(ctx, "send_draft", {"ref": ref}, {})
+    await _record(ctx, "send_draft", {"ref": ref}, {}, app="google")
     return f"sent to {sent.to}"
 
 
@@ -428,7 +433,9 @@ async def upcoming_events(ctx: RunContext[Deps], days: int = 7) -> str:
     """Their calendar for the next few days."""
     events = await (await _account(ctx)).upcoming(days)
     lines = "\n".join(f"{e['start']} to {e['end']}: {e['title']}" for e in events)
-    await _record(ctx, "upcoming_events", {"days": days}, {"found": len(events)}, shown=lines)
+    await _record(
+        ctx, "upcoming_events", {"days": days}, {"found": len(events)}, shown=lines, app="google"
+    )
     return lines or "nothing"
 
 
@@ -444,7 +451,7 @@ async def create_event(ctx: RunContext[Deps], title: str, start: str, minutes: i
     await (await _account(ctx)).create_event(
         title=title, start=begins, end=begins + timedelta(minutes=minutes)
     )
-    await _record(ctx, "create_event", {"title": title, "start": start}, {})
+    await _record(ctx, "create_event", {"title": title, "start": start}, {}, app="google")
     return f"added {title} at {begins:%a %b %-d %-I:%M %p}"
 
 
@@ -455,5 +462,5 @@ async def disconnect_google(ctx: RunContext[Deps]) -> str:
     assert d.env.google is not None
     await d.env.google.disconnect(d.phone)
     await _submit(ctx, GmailEvent(phase=GmailPhase.DISCONNECTED))
-    await _record(ctx, "disconnect_google", {}, {})
+    await _record(ctx, "disconnect_google", {}, {}, app="google")
     return "disconnected"

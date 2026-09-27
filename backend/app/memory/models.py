@@ -15,6 +15,7 @@ class FactRow(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_phone: str = Field(foreign_key="user.phone", index=True)
     text: str
+    app: str | None = None  # the service it's about ("DoorDash"), or None for them in general
     created_at: datetime
     forgotten_at: datetime | None = None
 
